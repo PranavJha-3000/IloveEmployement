@@ -1,0 +1,11 @@
+"use client";
+import { useState } from "react";
+import type { AiRequestConfig, ProviderId } from "@/lib/types";
+import { PROVIDER_LIST, PROVIDERS } from "@/lib/providers";
+import { ApiKeyInput } from "./ApiKeyInput";
+interface Props { config: AiRequestConfig; onChange: (config: AiRequestConfig) => void; compact?: boolean; }
+export function ProviderConfig({ config, onChange, compact = false }: Props) {
+  const provider = PROVIDERS[config.provider]; const isCustom = config.provider === "custom"; const [showAdvanced, setShowAdvanced] = useState(false); const inputClass = "field-control";
+  function chooseProvider(id: ProviderId) { const next = PROVIDERS[id]; onChange({ ...config, provider: id, model: next.defaultModel, baseUrl: next.baseUrl }); }
+  return <div className={compact ? "provider-row" : "space-y-4"}><div><label className="field-label">AI Provider</label><select value={config.provider} onChange={(e) => chooseProvider(e.target.value as ProviderId)} className={inputClass}>{PROVIDER_LIST.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div><div><label htmlFor="model" className="field-label">Model</label>{provider.models.length > 0 && !isCustom ? <select id="model" value={config.model} onChange={(e) => onChange({ ...config, model: e.target.value })} className={inputClass}>{provider.models.map((model) => <option key={model} value={model}>{model}</option>)}</select> : <input id="model" value={config.model} onChange={(e) => onChange({ ...config, model: e.target.value })} placeholder="e.g. claude-sonnet-4" className={inputClass} />}</div><ApiKeyInput value={config.apiKey} onChange={(apiKey) => onChange({ ...config, apiKey })} docsUrl={provider.docsUrl} providerLabel={provider.label} />{(isCustom || showAdvanced) && <div className="provider-advanced"><label htmlFor="baseUrl" className="field-label">Base URL</label><input id="baseUrl" type="url" value={config.baseUrl ?? ""} onChange={(e) => onChange({ ...config, baseUrl: e.target.value })} placeholder="https://api.example.com/v1" className={inputClass} /></div>}{!isCustom && <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="advanced-toggle">{showAdvanced ? "− Hide custom base URL" : "+ Custom base URL"}</button>}</div>;
+}

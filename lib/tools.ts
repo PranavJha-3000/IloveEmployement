@@ -125,6 +125,17 @@ export const TOOLS: Tool[] = [
     target: "/resume-fixer",
   },
   {
+    id: "bullet-point-fixer",
+    name: "Bullet Point Fixer",
+    description:
+      "Transform weak bullets into impact-oriented statements. Fix that bullet.",
+    category: "optimize",
+    iconPaths: I.target.split(" "),
+    accent: "#7c3aed",
+    tint: "#f5f3ff",
+    target: "/bullet-point-fixer",
+  },
+  {
     id: "job-fit",
     name: "Job Fit Checker",
     description: "Should you apply, or are you absolutely cooked?",

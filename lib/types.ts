@@ -51,7 +51,8 @@ export interface EvidenceItem {
   area?: string;
 }
 
-export type Verdict = "APPLY" | "BORDERLINE" | "LONG SHOT" | "ABSOLUTELY COOKED";
+export type Verdict =
+  "APPLY" | "BORDERLINE" | "LONG SHOT" | "ABSOLUTELY COOKED";
 
 export interface AnalysisResult {
   overallScore: number; // 0-100 composite fit score
@@ -81,12 +82,7 @@ export interface AnalysisResult {
 // ─── Resume Optimization Types ──────────────────────────────────────────────
 
 export type ChangeCategory =
-  | "structure"
-  | "wording"
-  | "keywords"
-  | "emphasis"
-  | "clarity"
-  | "relevance";
+  "structure" | "wording" | "keywords" | "emphasis" | "clarity" | "relevance";
 
 export interface ChangeEntry {
   category: ChangeCategory;
@@ -138,11 +134,17 @@ export interface YappingTranslation {
 
 export interface CorporateYappingResult {
   translations: YappingTranslation[];
+  /** 0-100: low = unusually specific JD, high = lots of generic corporate language. */
+  yappingScore?: number;
 }
 
 export interface CorporateYappingRequest {
   config: AiRequestConfig;
   jobDescription: string;
+  /** Optional context. Used only to frame the JD; never invented information. */
+  companyName?: string;
+  /** Optional context. Used only to frame the JD; never invented information. */
+  roleTitle?: string;
 }
 
 // ─── Recruiter Simulator & Cap Detector Types ──────────────────────────────
@@ -173,8 +175,6 @@ export interface ResumeCapDetector {
   claims: CapClaim[];
 }
 
-
-
 // ─── Interview Boss Fight Types ─────────────────────────────────────────────
 
 export type BossDifficulty = "EASY" | "MEDIUM" | "HARD" | "FINAL_BOSS";
@@ -190,4 +190,211 @@ export interface InterviewQuestion {
 
 export interface InterviewBossFight {
   questions: InterviewQuestion[]; // exactly 5
+}
+
+// ─── ATS Checker Types ─────────────────────────────────────────────────────
+
+export type AtsFormatStatus = "pass" | "warning" | "fail";
+
+export type AtsRiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface AtsFormatItem {
+  check: string; // e.g. "Readable section headings"
+  status: AtsFormatStatus;
+  detail: string; // concise explanation of why it passed/warned/failed
+}
+
+export interface AtsPartialMatch {
+  concept: string; // the JD concept/skill partially covered
+  evidence: string; // what the resume shows for it
+}
+
+export interface AtsCheckResult {
+  atsScore: number; // 0-100
+  riskLevel: AtsRiskLevel;
+  formatChecks: AtsFormatItem[]; // one entry per format check
+  matchedKeywords: string[]; // job-specific keywords with resume evidence
+  missingKeywords: string[]; // JD keywords with no resume evidence
+  partialMatches: AtsPartialMatch[]; // concepts only partially covered
+  requirementsNoEvidence: string[]; // important JD requirements lacking evidence
+  topFixes: string[]; // ranked top 5 problems, most important first
+  bossFightComment: string; // one short humorous line
+  strongResumeNote?: string; // present when atsScore >= 80
+}
+
+export interface AtsCheckRequestBody {
+  config: AiRequestConfig;
+  resumeText: string;
+  jobDescription?: string; // optional — enables keyword matching
+}
+
+// ─── Resume Roast Types ─────────────────────────────────────────────────────
+
+export type RoastRiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface BulletRewrite {
+  original: string; // the actual bullet from the resume
+  better: string; // improved rewrite grounded in the same facts
+}
+
+export interface NpcPhrase {
+  phrase: string; // the generic phrase (e.g. "Team player")
+  why: string; // why it is weak / says almost nothing
+}
+
+export interface BuriedGold {
+  item: string; // relevant project/experience from the resume
+  reason: string; // why it deserves more emphasis
+}
+
+export interface ResumeRoastResult {
+  roastLevel: number; // 0-100 (higher = more brutally needed)
+  verdict: string; // one concise brutal summary
+  biggestL: string; // most damaging problem
+  biggestW: string; // strongest part of the resume
+  npcContent: NpcPhrase[]; // generic phrases that say almost nothing
+  buriedGold: BuriedGold[]; // relevant experience deserving more emphasis
+  recruiterSkipRisk: RoastRiskLevel;
+  recruiterSkipWhy: string; // why that risk level
+  bulletsThatNeedHelp: BulletRewrite[]; // up to 5 original + improved pairs
+  roast: string[]; // 3-5 short humorous observations
+  topFixes: string[]; // top 5 fixes before applying, ranked
+}
+
+export interface ResumeRoastRequestBody {
+  config: AiRequestConfig;
+  resumeText: string;
+  jobDescription?: string; // optional — sharpens relevance of the roast
+}
+
+// ─── Delulu Detector Types ──────────────────────────────────────────────────
+
+export type DeluluVerdict =
+  | "APPLY"
+  | "APPLY_AS_A_STRETCH"
+  | "BUILD_MORE_EVIDENCE_FIRST"
+  | "LOW_PROBABILITY";
+
+export interface RealityComparison {
+  experienceRequired: string; // what the JD asks for
+  experienceYouHave: string; // what the resume shows
+  coreSkillsRequired: string;
+  coreSkillsYouDemonstrate: string;
+  preferredQualifications: string;
+  evidenceAvailable: string;
+}
+
+export interface DeluluCheckResult {
+  deluluScore: number; // 0-100 (higher = bigger gap vs reality)
+  interpretation: string; // band label, e.g. "Reasonable stretch"
+  realityCheck: RealityComparison;
+  whatYouHave: string[]; // real strengths from the resume
+  whatTheyWant: string[]; // what the JD is asking for
+  whatsMissing: string[]; // gaps (preferred gaps included here, not fatal)
+  whatTransfers: string[]; // adjacent experience that transfers
+  whatIsActuallyFatal: string[]; // hard blockers only — missing preferred skills do NOT belong here
+  verdict: DeluluVerdict;
+  howToBecomeLessDelulu: string[]; // 3-5 concrete improvements
+  finalLine: string; // one funny closing line
+}
+
+export interface DeluluCheckRequestBody {
+  config: AiRequestConfig;
+  resumeText: string;
+  jobDescription: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+}
+
+// ─── Resume Rewriter Types ──────────────────────────────────────────────────
+
+export interface ResumeSection {
+  title: string; // e.g. "Summary", "Experience", "Projects", "Skills", "Education"
+  content: string; // the text content for this section (single bullet / paragraph per line)
+}
+
+export interface ResumeChange {
+  section: string; // which section this change applies to
+  original: string; // the original text
+  optimized: string; // the rewritten text
+  reason: string; // why the change was made (e.g. "aligned terminology with JD", "clarified measurable outcome")
+}
+
+export interface ResumeRewriteResult {
+  truthFilter: "ON"; // always ON — signals the no-fabrication constraint was respected
+  originalResume: ResumeSection[]; // parsed original organized by section
+  optimizedResume: ResumeSection[]; // rewritten version organized by section
+  changes: ResumeChange[]; // every important change with reason
+  keywordCoverage: {
+    matched: string[]; // JD keywords present in the optimized resume
+    missing: string[]; // JD keywords with no candidate evidence (NOT inserted)
+  };
+  desperationLevel: number; // echo back the level used (0-5)
+  professionalNote: string; // one line confirming the output stays professional
+}
+
+export interface ResumeRewriteRequestBody {
+  config: AiRequestConfig;
+  resumeText: string;
+  jobDescription: string;
+  desperationLevel: number; // 0-5
+  linkedinUrl?: string;
+  githubUrl?: string;
+}
+
+// ─── Resume Fixer Types ────────────────────────────────────────────────────
+
+export type IssueSeverity = "CRITICAL" | "WARNING" | "OPTIONAL";
+
+export interface ResumeIssue {
+  category: string; // e.g. "Summary", "Experience", "Skills", "Education", "Formatting"
+  severity: IssueSeverity;
+  problem: string; // what is wrong
+  current: string; // the relevant resume text
+  fix: string; // the improved version
+  why: string; // why the change helps
+}
+
+export interface ResumeFixResult {
+  healthScore: number; // 0-100
+  issues: ResumeIssue[];
+  quickFix: string[]; // top 3 highest-impact changes
+  personalityCopy: string; // e.g. "Your resume isn't doomed. It just has a few skill issues."
+}
+
+export interface ResumeFixRequestBody {
+  config: AiRequestConfig;
+  resumeText: string;
+  jobDescription?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+}
+
+// ─── Bullet Point Fixer Types ──────────────────────────────────────────────
+
+export interface BulletScore {
+  clarity: number; // 0-100
+  specificity: number; // 0-100
+  impact: number; // 0-100
+  relevance: number; // 0-100
+}
+
+export interface BulletFixResult {
+  original: string;
+  improved: string;
+  stronger: string;
+  whyBetter: string[]; // 2-3 concise points
+  metricPlaceholder?: string; // if no measurable result, suggest adding one
+  bulletScore: BulletScore;
+  overallScore: number; // 0-100 average
+  roast: string; // small roast line
+}
+
+export interface BulletFixRequestBody {
+  config: AiRequestConfig;
+  bullet: string;
+  jobDescription?: string;
+  roleContext?: string;
+  technology?: string;
+  desperationLevel?: number; // 0-5
 }

@@ -9,7 +9,7 @@ import {
   isGitHubUrl,
   isLinkedInUrl,
   isValidUrl,
-  validateFixResult,
+  validateResumeFixResult,
 } from "@/lib/utils";
 
 export const maxDuration = 60;
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     });
 
     const parsed = extractJsonFromLlmResponse(result.text);
-    const safe = validateFixResult(parsed);
+    const safe = validateResumeFixResult(parsed);
     return NextResponse.json(safe);
   } catch (err: unknown) {
     const rawMessage = err instanceof Error ? err.message : "Fix failed.";

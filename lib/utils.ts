@@ -736,7 +736,7 @@ function safeIssues(value: unknown): ResumeIssue[] {
  * Validate resume fix output from an LLM. Mirrors the defensive approach of
  * validateAnalysisResult so a malformed model response never crashes the route.
  */
-export function validateFixResult(raw: unknown): ResumeFixResult {
+export function validateResumeFixResult(raw: unknown): ResumeFixResult {
   const obj =
     raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
@@ -747,6 +747,7 @@ export function validateFixResult(raw: unknown): ResumeFixResult {
       safeString(obj.personalityCopy) ||
       "Your resume isn't doomed. It just has a few skill issues.",
   };
+}
 
 // ─── Bullet Point Fixer validation ─────────────────────────────────────────
 

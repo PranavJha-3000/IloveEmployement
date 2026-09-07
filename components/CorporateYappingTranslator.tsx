@@ -1,84 +1,430 @@
-"use client";
-import { useRef, useState } from "react";
-import type { AiRequestConfig, CorporateYappingResult, YappingCategory } from "@/lib/types";
+﻿"use client";
+import { useState } from "react";
+import Link from "next/link";
+import type {
+  AiRequestConfig,
+  CorporateYappingResult,
+  YappingCategory,
+} from "@/lib/types";
 import { ProviderConfig } from "./ProviderConfig";
+import { LoadingState } from "./LoadingState";
+
 type Phase = "idle" | "loading" | "success" | "error";
-const CAT: { key: YappingCategory; label: string; accent: string }[] = [
-  { key: "what_they_want", label: "What they actually want", accent: "text-green-700" },
-  { key: "required_skills", label: "Required skills", accent: "text-blue-700" },
-  { key: "nice_to_have", label: "Nice-to-have", accent: "text-amber-700" },
-  { key: "likely_interview_topics", label: "Likely interview topics", accent: "text-purple-700" },
-  { key: "potential_red_flags", label: "Potential red flags", accent: "text-red-700" },
-  { key: "corporate_yapping", label: "Corporate yapping", accent: "text-zinc-500" },
+
+const LOADING_MESSAGES = [
+  "Decoding corporate speak...",
+  "Translating HR to human...",
+  "Detecting buzzwords...",
+  "Reading between the bullet points...",
 ];
-const LOAD = ["Decoding corporate speak...", "Translating HR to human...", "Detecting buzzwords...", "Reading between the bullet points..."];
-const TA = "w-full bg-white border border-zinc-300 rounded-lg px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition resize-y disabled:opacity-60";
-export function CorporateYappingTranslator() {
+
+/** Result sections in presentation order, mapped to prompt categories. */
+const SECTIONS: {
+  key: YappingCategory;
+  label: string;
+  accent: string;
+  border: string;
+  note: string;
+}[] = [
+  { key: "required_skills", label: "Must Have", accent: "text-blue-700", border: "border-blue-200", note: "Required skills." },
+  { key: "nice_to_have", label: "Nice To Have", accent: "text-amber-700", border: "border-amber-200", note: "Preferred skills." },
+  { key: "what_they_want", label: "What You'll Actually Do", accent: "text-green-700", border: "border-green-200", note: "Plain-language responsibilities." },
+  { key: "likely_interview_topics", label: "Likely Interview Topics", accent: "text-purple-700", border: "border-purple-200", note: "Based only on the JD." },
+  { key: "potential_red_flags", label: "Potential Red Flags", accent: "text-red-700", border: "border-red-200", note: "Only actual signals found in the text." },
+  { key: "corporate_yapping", label: "Corporate Yapping", accent: "text-zinc-500", border: "border-zinc-200", note: "Pure fluff." },
+];
+
+const inputClass = "field-control";
+
+interface Props {
+  /** When true (overlay context), hide the breadcrumb + page heading. */
+  embedded?: boolean;
+}
+
+export function CorporateYappingTranslator({ embedded = false }: Props) {
   const [jd, setJd] = useState("");
-  const [config, setConfig] = useState<AiRequestConfig>({ provider: "openai", apiKey: "", model: "gpt-4o-mini" });
+  const [companyName, setCompanyName] = useState("");
+  const [roleTitle, setRoleTitle] = useState("");
+  const [config, setConfig] = useState<AiRequestConfig>({
+    provider: "openai",
+    apiKey: "",
+    model: "gpt-4o-mini",
+  });
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<CorporateYappingResult | null>(null);
   const [err, setErr] = useState("");
   const [vErr, setVErr] = useState("");
   const [copied, setCopied] = useState(false);
-  const [mi, setMi] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  async function go() {
-    setVErr(""); setErr("");
-    if (!config.apiKey.trim()) { setVErr("API key is required."); return; }
-    if (!jd.trim()) { setVErr("Job description is required."); return; }
-    setPhase("loading"); setResult(null); setMi(0);
-    const t = setInterval(() => setMi((i) => (i + 1) % LOAD.length), 1500);
+
+  const canSubmit = Boolean(jd.trim() && config.apiKey.trim());
+
+  async function go(e: React.FormEvent) {
+    e.preventDefault();
+    setVErr("");
+    setErr("");
+    if (!config.apiKey.trim())
+      return setVErr("API key is required. This app runs on your key.");
+    if (!jd.trim()) return setVErr("Job description is required.");
+
+    setPhase("loading");
+    setResult(null);
     try {
-      const r = await fetch("/api/translate-jd", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config, jobDescription: jd }) });
-      const j = await r.json(); clearInterval(t);
+      const r = await fetch("/api/translate-jd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          config,
+          jobDescription: jd,
+          companyName: companyName.trim() || undefined,
+          roleTitle: roleTitle.trim() || undefined,
+        }),
+      });
+      const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Translation failed.");
-      setResult(j as CorporateYappingResult); setPhase("success");
-      setTimeout(() => ref.current?.scrollIntoView({ behavior: "smooth" }), 100);
-    } catch (e) { clearInterval(t); setErr(e instanceof Error ? e.message : "Translation failed."); setPhase("error"); }
+      setResult(j as CorporateYappingResult);
+      setPhase("success");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Translation failed.");
+      setPhase("error");
+    }
   }
+
   async function copyAll() {
     if (!result) return;
-    const lines = result.translations.map((t) => "COMPANY SAID: " + t.companySaid + "\nTHEY MEAN: " + t.theyProbablyMean + "\nWE SAY: " + t.iLoveEmploymentSays);
-    await navigator.clipboard.writeText(lines.join("\n\n")); setCopied(true); setTimeout(() => setCopied(false), 2000);
+    const lines = result.translations.map(
+      (t) =>
+        "COMPANY SAID: " +
+        t.companySaid +
+        "\nTHEY MEAN: " +
+        t.theyProbablyMean +
+        "\nWE SAY: " +
+        t.iLoveEmploymentSays
+    );
+    await navigator.clipboard.writeText(lines.join("\n\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
-  const grouped = CAT.map((m) => ({ ...m, items: result?.translations.filter((t) => t.category === m.key) ?? [] })).filter((g) => g.items.length > 0);
+
+  function reset() {
+    setResult(null);
+    setErr("");
+    setVErr("");
+    setCopied(false);
+    setPhase("idle");
+  }
+
   return (
-    <div id="translator" className="scroll-mt-20">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-zinc-900">Corporate Yapping Translator</h2>
-        <p className="mt-2 text-sm text-zinc-500 max-w-lg mx-auto">Paste a job description. We translate the corporate speak into something a human can understand.</p>
-      </div>
-      <div className="card">
-        <label htmlFor="jdTranslate" className="block text-sm font-semibold text-zinc-700 mb-2">Job Description to Translate</label>
-        <textarea id="jdTranslate" value={jd} onChange={(e) => setJd(e.target.value)} disabled={phase === "loading"} placeholder="Paste the corporate yapping here..." rows={8} className={TA} />
-        <div className="mt-4"><ProviderConfig config={config} onChange={setConfig} /></div>
-        {vErr && <p className="text-xs text-red-500 mt-2">{vErr}</p>}
-        <button onClick={go} disabled={phase === "loading"} className="cta-primary w-full mt-4">{phase === "loading" ? LOAD[mi] : "Translate the Corporate Yapping"}</button>
-      </div>
-      {phase === "loading" && <div className="text-center py-8"><div className="w-8 h-8 border-4 border-zinc-200 border-t-red-600 rounded-full animate-spin mx-auto"></div><p className="text-sm text-zinc-500 mt-3">{LOAD[mi]}</p></div>}
-      {phase === "error" && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 mt-4">{err}</div>}
-      {phase === "success" && result && (
-        <div ref={ref} className="mt-8 space-y-4 scroll-mt-6">
-          <div className="flex items-center justify-between"><p className="text-xs uppercase tracking-widest text-zinc-400 font-semibold">The Translation</p><button onClick={copyAll} className="text-xs text-zinc-500 hover:text-red-600 underline underline-offset-2 transition">{copied ? "Copied" : "Copy all"}</button></div>
-          {grouped.length === 0 ? <p className="text-sm text-zinc-500 italic">No meaningful corporate jargon detected.</p> : (
-            <div className="space-y-3">{grouped.map((g) => (
-              <div key={g.key} className="border border-zinc-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200"><span className={"text-sm font-bold " + g.accent}>{g.label}</span><span className="text-xs text-zinc-400 ml-2">{g.items.length}</span></div>
-                <div className="p-4 space-y-3">{g.items.map((t, i) => (
-                  <div key={i} className="bg-zinc-50 border border-zinc-100 rounded-lg p-4">
-                    <div className="grid sm:grid-cols-3 gap-3">
-                      <div><p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Company Said</p><p className="text-sm text-zinc-600 italic">&ldquo;{t.companySaid}&rdquo;</p></div>
-                      <div><p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">They Probably Mean</p><p className="text-sm text-zinc-700">{t.theyProbablyMean}</p></div>
-                      <div><p className="text-[10px] font-bold uppercase tracking-wider text-red-500 mb-1">IloveEmployment Says</p><p className="text-sm text-zinc-800 font-medium">{t.iLoveEmploymentSays}</p></div>
+    <TranslatorView
+      embedded={embedded}
+      phase={phase}
+      result={result}
+      err={err}
+      vErr={vErr}
+      copied={copied}
+      canSubmit={canSubmit}
+      config={config}
+      setConfig={setConfig}
+      jd={jd}
+      setJd={setJd}
+      companyName={companyName}
+      setCompanyName={setCompanyName}
+      roleTitle={roleTitle}
+      setRoleTitle={setRoleTitle}
+      onTranslate={go}
+      onReset={reset}
+      onCopy={copyAll}
+    />
+  );
+}
+
+interface ViewProps {
+  embedded: boolean;
+  phase: Phase;
+  result: CorporateYappingResult | null;
+  err: string;
+  vErr: string;
+  copied: boolean;
+  canSubmit: boolean;
+  config: AiRequestConfig;
+  setConfig: (c: AiRequestConfig) => void;
+  jd: string;
+  setJd: (v: string) => void;
+  companyName: string;
+  setCompanyName: (v: string) => void;
+  roleTitle: string;
+  setRoleTitle: (v: string) => void;
+  onTranslate: (e: React.FormEvent) => void;
+  onReset: () => void;
+  onCopy: () => void;
+}
+
+function TranslatorView(props: ViewProps) {
+  const { embedded, phase, result, copied, onReset } = props;
+
+  // ─── Loading state ───────────────────────────────────────────────────────
+  if (phase === "loading") {
+    return (
+      <main className="min-h-screen bg-white">
+        {!embedded && (
+          <div className="max-w-[1180px] mx-auto px-6 pt-6">
+            <Breadcrumb />
+          </div>
+        )}
+        <LoadingState messages={LOADING_MESSAGES} />
+      </main>
+    );
+  }
+
+  // ─── Results view ────────────────────────────────────────────────────────
+  if (phase === "success" && result) {
+    return (
+      <main className="min-h-screen bg-white">
+        <div className="max-w-[900px] mx-auto px-6 pt-6 pb-20 space-y-4">
+          {!embedded && <Breadcrumb />}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              onClick={onReset}
+              className="text-sm font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+            >
+              &larr; Translate another JD
+            </button>
+            <button
+              onClick={props.onCopy}
+              className="text-xs text-zinc-500 hover:text-red-600 underline underline-offset-2 transition"
+            >
+              {copied ? "Copied" : "Copy all"}
+            </button>
+          </div>
+          {result.yappingScore != null && <YappingScore score={result.yappingScore} />}
+          {SECTIONS.map((section) => {
+            const items = result.translations.filter((t) => t.category === section.key);
+            if (items.length === 0) return null;
+            return (
+              <section key={section.key} className="card">
+                <div className="flex items-baseline gap-2">
+                  <h3 className={"text-sm font-bold uppercase tracking-wider " + section.accent}>
+                    {section.label}
+                  </h3>
+                  <span className="text-xs text-zinc-400">{items.length}</span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">{section.note}</p>
+                <div className="mt-4 space-y-3">
+                  {items.map((t, i) => (
+                    <div key={i} className="bg-zinc-50 border border-zinc-100 rounded-lg p-4">
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                            Company Said
+                          </p>
+                          <p className="text-sm text-zinc-600 italic">
+                            &ldquo;{t.companySaid}&rdquo;
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                            They Probably Mean
+                          </p>
+                          <p className="text-sm text-zinc-700">{t.theyProbablyMean}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-red-500 mb-1">
+                            IloveEmployment Says
+                          </p>
+                          <p className="text-sm text-zinc-800 font-medium">
+                            {t.iLoveEmploymentSays}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}</div>
-              </div>
-            ))}</div>
-          )}
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+          <p className="text-xs text-zinc-400 text-center pt-4">
+            Everything above comes from the JD text itself. Nothing is inferred about company
+            culture, salary, or working hours beyond what is written.
+          </p>
         </div>
-      )}
-    </div>
+      </main>
+    );
+  }
+
+  // ─── Input workspace (defined below) ─────────────────────────────────────
+  return <InputWorkspace {...props} />;
+}
+/** Corporate Yapping Score with band explanation. */
+function YappingScore({ score }: { score: number }) {
+  const clamped = Math.min(100, Math.max(0, score));
+  let band = "";
+  let color = "";
+  let border = "";
+  let bg = "";
+  let explanation = "";
+  if (clamped <= 30) {
+    band = "Unusually specific";
+    color = "text-green-700";
+    border = "border-green-200";
+    bg = "bg-green-50";
+    explanation = "Low score: this JD is unusually specific and direct.";
+  } else if (clamped <= 69) {
+    band = "Typical corporate mix";
+    color = "text-amber-700";
+    border = "border-amber-200";
+    bg = "bg-amber-50";
+    explanation = "Mid score: a typical mix of substance and corporate language.";
+  } else {
+    band = "Heavy corporate yapping";
+    color = "text-red-700";
+    border = "border-red-200";
+    bg = "bg-red-50";
+    explanation = "High score: lots of generic corporate language.";
+  }
+  return (
+    <section className={"card text-center " + bg + " " + border}>
+      <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
+        Corporate Yapping Score
+      </p>
+      <p className={"mt-2 text-6xl font-bold tabular-nums " + color}>{clamped}</p>
+      <p className="text-xs text-zinc-400 mt-1">out of 100</p>
+      <span
+        className={
+          "inline-block mt-3 text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-md border bg-white " +
+          color +
+          " " +
+          border
+        }
+      >
+        {band}
+      </span>
+      <p className="mt-3 text-sm text-zinc-600 max-w-md mx-auto leading-relaxed">{explanation}</p>
+      <p className="mt-2 text-xs text-zinc-400">
+        Low = unusually specific JD. High = lots of generic corporate language.
+      </p>
+    </section>
+  );
+}
+
+function Breadcrumb() {
+  return (
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-400">
+      <Link href="/" className="hover:text-zinc-600 transition-colors">
+        Employment Tools
+      </Link>
+      <span aria-hidden>/</span>
+      <span className="text-zinc-600 font-medium">JD Translator</span>
+    </nav>
+  );
+}
+function InputWorkspace(props: ViewProps) {
+  const {
+    embedded,
+    phase,
+    err,
+    vErr,
+    canSubmit,
+    config,
+    setConfig,
+    jd,
+    setJd,
+    companyName,
+    setCompanyName,
+    roleTitle,
+    setRoleTitle,
+    onTranslate,
+  } = props;
+
+  return (
+    <main className="min-h-screen bg-white">
+      <div className="workflow-wrap pt-6">
+        {!embedded && <Breadcrumb />}
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900">
+          Decode the corporate yapping.
+        </h1>
+        <p className="mt-2 text-sm text-zinc-500 max-w-xl leading-relaxed">
+          Find out what they actually mean before you spend an hour applying.
+        </p>
+
+        <form onSubmit={onTranslate} className="mt-6">
+          <section className="workflow-card">
+            <div className="workflow-heading">
+              <span className="step-badge">1</span>
+              <h2>
+                The job description <span>(paste the whole thing)</span>
+              </h2>
+            </div>
+            <label htmlFor="jdTranslate" className="field-label">
+              Job Description
+            </label>
+            <textarea
+              id="jdTranslate"
+              value={jd}
+              onChange={(e) => setJd(e.target.value)}
+              disabled={phase === "loading"}
+              placeholder="Paste the job description here..."
+              rows={10}
+              className={`${inputClass} jd-input`}
+            />
+            <p className="field-help">
+              We translate what is written. We do not invent culture, salary, or hours.
+            </p>
+
+            <div className="grid sm:grid-cols-2 gap-3 mt-4">
+              <div>
+                <label htmlFor="jdCompany" className="field-label">
+                  Company name <em>(optional)</em>
+                </label>
+                <input
+                  id="jdCompany"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  disabled={phase === "loading"}
+                  placeholder="e.g. Acme Corp"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="jdRole" className="field-label">
+                  Role title <em>(optional)</em>
+                </label>
+                <input
+                  id="jdRole"
+                  value={roleTitle}
+                  onChange={(e) => setRoleTitle(e.target.value)}
+                  disabled={phase === "loading"}
+                  placeholder="e.g. Senior Frontend Engineer"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            {/* AI configuration */}
+            <div className="config-card">
+              <ProviderConfig config={config} onChange={setConfig} compact />
+            </div>
+
+            {(vErr || err) && (
+              <div className="form-error" role="alert">
+                {vErr || err}
+              </div>
+            )}
+
+            <div className="action-row">
+              <button
+                type="submit"
+                disabled={!canSubmit || phase === "loading"}
+                className="cta-primary action-primary"
+              >
+                Translate This Yapping <span aria-hidden>&rarr;</span>
+              </button>
+            </div>
+            <p className="field-help text-center">
+              Runs on your own API key. Sent per-request, never stored.
+            </p>
+          </section>
+        </form>
+      </div>
+    </main>
   );
 }

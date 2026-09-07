@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { config, jobDescription } = body;
+  const { config, jobDescription, companyName, roleTitle } = body;
 
   // ─── Validation ────────────────────────────────────────────────────────────
   if (!config?.provider || !config?.apiKey?.trim()) {
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── Build prompt ──────────────────────────────────────────────────────────
-  const { system, user } = buildYappingPrompt(jobDescription);
+  const { system, user } = buildYappingPrompt({ jobDescription, companyName: companyName?.trim() || undefined, roleTitle: roleTitle?.trim() || undefined });
 
   // ─── AI call ───────────────────────────────────────────────────────────────
   try {

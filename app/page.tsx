@@ -70,6 +70,10 @@ export default function Home() {
       router.push("/resume-fixer");
       return;
     }
+    if (tool.target === "/bullet-point-fixer") {
+      router.push("/bullet-point-fixer");
+      return;
+    }
     if (tool.target === "/job-fit-checker") {
       router.push("/job-fit-checker");
       return;

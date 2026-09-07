@@ -19,6 +19,7 @@ const NAV_LINKS: NavLink[] = [
   { label: "Resume Roast", href: "/resume-roast", navigate: true },
   { label: "Resume Rewriter", href: "/resume-rewriter", navigate: true },
   { label: "Resume Fixer", href: "/resume-fixer", navigate: true },
+  { label: "Bullet Point Fixer", href: "/bullet-point-fixer", navigate: true },
   { label: "Job Fit Checker", href: "/job-fit-checker", navigate: true },
   { label: "Delulu Detector", href: "/delulu-detector", navigate: true },
   {

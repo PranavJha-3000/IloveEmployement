@@ -87,7 +87,8 @@ Results Panel (tabbed / sectioned)
 
 | Component | Purpose |
 |-----------|---------|
-| `app/page.tsx` | Main page — orchestrates form → loading → results |
+| `app/page.tsx` | Main page — tool marketplace grid + form → loading → results |
+| `app/jd-translator/page.tsx` | Dedicated JD Translator route (direct-link fallback; home nav opens it as an overlay instead) |
 | `components/LandingHero.tsx` | Landing hero with CTA |
 | `components/InputSection.tsx` | Card-based input form (resume, JD, profiles, key, desperation) |
 | `components/ResumeCard.tsx` | Resume paste/upload with parsed-state display |
@@ -114,7 +115,10 @@ Results Panel (tabbed / sectioned)
 | `lib/ai.ts` | Multi-provider AI client factory |
 | `components/ApiKeyInput.tsx` | Password-style API key input |
 | `components/ResumeRewriteModal.tsx` | Optimizer modal: ORIGINAL / OPTIMIZED / WHAT CHANGED tabs + export |
-| `components/CorporateYappingTranslator.tsx` | Standalone JD jargon translator card |
+| `components/CorporateYappingTranslator.tsx` | JD jargon translator card (tab 1 of the JD Translator section) |
+
+| `components/JDTranslatorOverlay.tsx` | Full-viewport tool overlay hosting the JD Translator on the home page (closes on X / backdrop / Escape) |
+| `components/ContactForm.tsx` | Suggestions & feedback form on the home page (mailto draft, no backend) |
 | `lib/prompts.ts` | System + user prompt templates |
 | `lib/providers.ts` | Provider registry (models, base URLs) |
 | `lib/types.ts` | Shared TypeScript interfaces |

@@ -10,13 +10,18 @@ const MESSAGES = [
   "Calculating employment aura...",
 ];
 
-export function LoadingState() {
+interface Props {
+  /** Override the rotating status messages (e.g. tool-specific loading copy). */
+  messages?: string[];
+}
+
+export function LoadingState({ messages = MESSAGES }: Props) {
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % MESSAGES.length), 1600);
+    const t = setInterval(() => setIdx((i) => (i + 1) % messages.length), 1600);
     return () => clearInterval(t);
-  }, []);
+  }, [messages.length]);
 
   useEffect(() => {
     document.getElementById("loading")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -29,11 +34,11 @@ export function LoadingState() {
       </div>
 
       <p key={idx} className="text-lg text-zinc-800 font-semibold animate-fade-up">
-        {MESSAGES[idx]}
+        {messages[idx]}
       </p>
 
       <div className="mt-4 flex justify-center gap-1.5">
-        {MESSAGES.map((_, i) => (
+        {messages.map((_, i) => (
           <span
             key={i}
             aria-hidden

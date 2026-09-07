@@ -1,6 +1,11 @@
-"use client";
+﻿"use client";
 
-export function Footer() {
+interface FooterProps {
+  /** When provided, the JD Translator link opens the in-page overlay instead of navigating. */
+  onOpenTranslator?: () => void;
+}
+
+export function Footer({ onOpenTranslator }: FooterProps) {
   return (
     <footer className="border-t border-zinc-200 bg-zinc-50 mt-20">
       <div className="max-w-[1180px] mx-auto px-6 py-10">
@@ -22,6 +27,14 @@ export function Footer() {
             <ul className="space-y-2">
               <li>
                 <button
+                  onClick={() => document.getElementById("tools")?.scrollIntoView({ behavior: "smooth" })}
+                  className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
+                >
+                  All Tools
+                </button>
+              </li>
+              <li>
+                <button
                   onClick={() => document.getElementById("analyzer")?.scrollIntoView({ behavior: "smooth" })}
                   className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
                 >
@@ -29,20 +42,21 @@ export function Footer() {
                 </button>
               </li>
               <li>
-                <button
-                  onClick={() => document.getElementById("translator")?.scrollIntoView({ behavior: "smooth" })}
-                  className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                >
-                  JD Translator
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" })}
-                  className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                >
-                  Interview Boss Fight
-                </button>
+                {onOpenTranslator ? (
+                  <button
+                    onClick={onOpenTranslator}
+                    className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
+                  >
+                    JD Translator
+                  </button>
+                ) : (
+                  <a
+                    href="/jd-translator"
+                    className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
+                  >
+                    JD Translator
+                  </a>
+                )}
               </li>
             </ul>
           </div>
@@ -62,7 +76,7 @@ export function Footer() {
               </li>
               <li>
                 <button
-                  onClick={() => document.getElementById("about")?.scrollIntoView({ behavior: "smooth" })}
+                  onClick={() => document.getElementById("tools")?.scrollIntoView({ behavior: "smooth" })}
                   className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
                 >
                   About
@@ -75,7 +89,7 @@ export function Footer() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Security</p>
             <p className="text-xs text-zinc-500 leading-relaxed">
-              Your API key is used per-request and never stored. Nothing about you is saved. Not affiliated with Ilovepdf — we just admire the naming strategy.
+              Your API key is used per-request and never stored. Nothing about you is saved. Not affiliated with Ilovepdf &mdash; we just admire the naming strategy.
             </p>
           </div>
         </div>

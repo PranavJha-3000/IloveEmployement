@@ -38,17 +38,6 @@ export default function Home() {
   const [showInputs, setShowInputs] = useState(true);
   const [showTranslator, setShowTranslator] = useState(false);
   const inputRef = useRef<HTMLDivElement>(null);
-    setTimeout(() => {
-      document
-        .getElementById(id)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-  }
-
-  function handleGetEmployed() {
-    setState("input");
-    scrollToId("analyzer");
-  }
 
   function scrollToId(id: string) {
     setTimeout(() => {

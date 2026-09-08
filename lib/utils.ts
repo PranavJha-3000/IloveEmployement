@@ -40,6 +40,72 @@
   YappingCategory,
   YappingTranslation,
   Verdict,
+  LinkedInOptimizerResult,
+  LinkedInCompletenessItem,
+  CoverLetterResult,
+  CoverLetterTone,
+  RecruiterMessageResult,
+  RecruiterMessageContext,
+  RecruiterMessageVariantResult,
+  JdRedFlagResult,
+  JdFinding,
+  RedFlagLevel,
+  ProceedRecommendation,
+  SkillGapResult,
+  RequirementRow,
+  BigGap,
+  TransferableSkill,
+  FastestWin,
+  GapClassification,
+  GapImportance,
+  CookedLevel,
+  WinCategory,
+  GitHubResumeResult,
+  ProjectHighlight,
+  ClaimCheck,
+  ProfileQualityObservation,
+  EvidenceStrength,
+  ResumeTruthResult,
+  ClaimAssessment,
+  Contradiction,
+  CleanupItem,
+  ClaimVerdict,
+  CleanupCategory,
+  RecruiterSimulationResult,
+  TimelinePhase,
+  KeepReading,
+  RecruiterTabRisk,
+  InterviewPrepResult,
+  PrepQuestion,
+  QuestionCategory,
+  QuestionDifficulty,
+  InterviewRisk,
+  BossFightSession,
+  BossFightQuestion,
+  BossAnswerEvaluation,
+  BossVerdict,
+  StarAnswerResult,
+  StarSections,
+  StarAssessment,
+  TellMeResult,
+    WeaknessResult,
+  WeaknessItem,
+  ClaimToDefend,
+  WeaknessRisk,
+  EmploymentAuraResult,
+  RizzScoreResult,
+  RizzVerdict,
+  CookedMeterResult,
+  CookedVerdict,
+  CanApply,
+  ResumeCourtResult,
+  ResumeClaim,
+  CourtVerdict,
+  AtsBossFightResult,
+  BossAttackCategory,
+  SkillIssueResult,
+  SecondaryIssue,
+  FinalDiagnosis,
 } from "./types";
 
 export function isValidUrl(url: string): boolean {
@@ -732,6 +798,925 @@ function safeIssues(value: unknown): ResumeIssue[] {
   return items;
 }
 
+// ─── LinkedIn Optimizer validation ──────────────────────────────────────────────
+
+function safeCompletenessItem(raw: unknown): LinkedInCompletenessItem {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const status = safeString(obj.status);
+  return {
+    status: ["good", "weak", "missing"].includes(status) ? status as LinkedInCompletenessItem["status"] : "missing",
+    note: safeString(obj.note),
+  };
+}
+
+/**
+ * Validate LinkedIn Optimizer output from an LLM. Defensive — a malformed response
+ * never crashes the route.
+ */
+export function validateLinkedInOptimizerResult(raw: unknown): LinkedInOptimizerResult {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const completeness = obj.completeness && typeof obj.completeness === "object"
+    ? (obj.completeness as Record<string, unknown>)
+    : {};
+
+  return {
+    linkedinScore: clampScore(obj.linkedinScore),
+    completeness: {
+      score: clampScore(completeness.score),
+      headline: safeCompletenessItem(completeness.headline),
+      about: safeCompletenessItem(completeness.about),
+      experience: safeCompletenessItem(completeness.experience),
+      projects: safeCompletenessItem(completeness.projects),
+      skills: safeCompletenessItem(completeness.skills),
+      keywords: safeCompletenessItem(completeness.keywords),
+      resumeConsistency: safeCompletenessItem(completeness.resumeConsistency),
+    },
+    headline: {
+      current: safeString(
+        obj.headline && typeof obj.headline === "object"
+          ? (obj.headline as Record<string, unknown>).current
+          : undefined,
+      ),
+      options: {
+        professional: safeString(
+          obj.headline && typeof obj.headline === "object"
+            ? (obj.headline as Record<string, unknown>).options
+              && typeof (obj.headline as Record<string, unknown>).options === "object"
+              ? ((obj.headline as Record<string, unknown>).options as Record<string, unknown>).professional
+              : undefined
+            : undefined,
+        ),
+        recruiterFocused: safeString(
+          obj.headline && typeof obj.headline === "object"
+            ? (obj.headline as Record<string, unknown>).options
+              && typeof (obj.headline as Record<string, unknown>).options === "object"
+              ? ((obj.headline as Record<string, unknown>).options as Record<string, unknown>).recruiterFocused
+              : undefined
+            : undefined,
+        ),
+        personality: safeString(
+          obj.headline && typeof obj.headline === "object"
+            ? (obj.headline as Record<string, unknown>).options
+              && typeof (obj.headline as Record<string, unknown>).options === "object"
+              ? ((obj.headline as Record<string, unknown>).options as Record<string, unknown>).personality
+              : undefined
+            : undefined,
+        ),
+      },
+    },
+    about: {
+      current: safeString(
+        obj.about && typeof obj.about === "object"
+          ? (obj.about as Record<string, unknown>).current
+          : undefined,
+      ),
+      optimized: safeString(
+        obj.about && typeof obj.about === "object"
+          ? (obj.about as Record<string, unknown>).optimized
+          : undefined,
+      ),
+      why: safeString(
+        obj.about && typeof obj.about === "object"
+          ? (obj.about as Record<string, unknown>).why
+          : undefined,
+      ),
+    },
+    experience: {
+      current: safeString(
+        obj.experience && typeof obj.experience === "object"
+          ? (obj.experience as Record<string, unknown>).current
+          : undefined,
+      ),
+      optimized: safeString(
+        obj.experience && typeof obj.experience === "object"
+          ? (obj.experience as Record<string, unknown>).optimized
+          : undefined,
+      ),
+      why: safeString(
+        obj.experience && typeof obj.experience === "object"
+          ? (obj.experience as Record<string, unknown>).why
+          : undefined,
+      ),
+    },
+    skills: {
+      keep: safeStringArray(
+        obj.skills && typeof obj.skills === "object"
+          ? (obj.skills as Record<string, unknown>).keep
+          : undefined,
+      ),
+      add: safeStringArray(
+        obj.skills && typeof obj.skills === "object"
+          ? (obj.skills as Record<string, unknown>).add
+          : undefined,
+      ),
+      remove: safeStringArray(
+        obj.skills && typeof obj.skills === "object"
+          ? (obj.skills as Record<string, unknown>).remove
+          : undefined,
+      ),
+    },
+    resumeConsistency: {
+      contradictions: safeStringArray(
+        obj.resumeConsistency && typeof obj.resumeConsistency === "object"
+          ? (obj.resumeConsistency as Record<string, unknown>).contradictions
+          : undefined,
+      ),
+      summary: safeString(
+        obj.resumeConsistency && typeof obj.resumeConsistency === "object"
+          ? (obj.resumeConsistency as Record<string, unknown>).summary
+          : undefined,
+      ),
+    },
+    biggestL: safeString(obj.biggestL) || "No LinkedIn content provided for analysis.",
+    biggestW: safeString(obj.biggestW) || "Could not determine strongest element.",
+    funnyCopy: safeString(obj.funnyCopy) || "Your LinkedIn is giving mystery.",
+  };
+}
+
+// ─── Cover Letter validation ─────────────────────────────────────────────────
+
+const COVER_LETTER_TONES: CoverLetterTone[] = [
+  "professional",
+  "confident",
+  "direct",
+  "startup",
+  "short-punchy",
+];
+
+/**
+ * Validate cover letter output from an LLM. Defensive — a malformed response
+ * never crashes the route.
+ */
+export function validateCoverLetterResult(raw: unknown): CoverLetterResult {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const why = obj.whyThisWorks && typeof obj.whyThisWorks === "object"
+    ? (obj.whyThisWorks as Record<string, unknown>)
+    : {};
+
+  const tone = safeString(obj.tone) as CoverLetterTone;
+
+  return {
+    subject: safeString(obj.subject),
+    coverLetter: safeString(obj.coverLetter),
+    whyThisWorks: {
+      relevantExperience: safeStringArray(why.relevantExperience),
+      jdRequirementsAddressed: safeStringArray(why.jdRequirementsAddressed),
+      openingSpecificity: safeString(why.openingSpecificity),
+      lessGeneric: safeString(why.lessGeneric),
+    },
+    tone: COVER_LETTER_TONES.includes(tone) ? tone : "professional",
+    disclaimer: safeString(obj.disclaimer) || undefined,
+  };
+}
+
+// ─── Recruiter Message validation ──────────────────────────────────────────
+
+const RECRUITER_MESSAGE_CONTEXTS: RecruiterMessageContext[] = [
+  "already-applied",
+  "referral",
+  "cold-outreach",
+  "follow-up",
+];
+
+function safeRecruiterVariant(raw: unknown): RecruiterMessageVariantResult {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    message: safeString(obj.message),
+    whyThisWorks: safeString(obj.whyThisWorks),
+  };
+}
+
+/**
+ * Validate recruiter message output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateRecruiterMessageResult(raw: unknown): RecruiterMessageResult {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const variants = obj.variants && typeof obj.variants === "object"
+    ? (obj.variants as Record<string, unknown>)
+    : {};
+
+  const contextUsed = safeString(obj.contextUsed) as RecruiterMessageContext;
+
+  return {
+    subject: safeString(obj.subject),
+    variants: {
+      short: safeRecruiterVariant(variants.short),
+      confident: safeRecruiterVariant(variants.confident),
+      warm: safeRecruiterVariant(variants.warm),
+    },
+    contextUsed: RECRUITER_MESSAGE_CONTEXTS.includes(contextUsed)
+      ? contextUsed
+      : "cold-outreach",
+    disclaimer: safeString(obj.disclaimer) || undefined,
+  };
+}
+
+// ─── JD Red Flag Scanner validation ────────────────────────────────────────
+
+const RED_FLAG_LEVELS: RedFlagLevel[] = ["LOW", "MEDIUM", "HIGH"];
+const PROCEED_RECOMMENDATIONS: ProceedRecommendation[] = [
+  "YES",
+  "PROBABLY",
+  "INVESTIGATE_FIRST",
+];
+
+function safeJdFinding(raw: unknown): JdFinding {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    phrase: safeString(obj.phrase),
+    whatItCouldMean: safeString(obj.whatItCouldMean),
+    whatToAsk: safeString(obj.whatToAsk),
+  };
+}
+
+function safeJdFindings(raw: unknown): JdFinding[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(safeJdFinding)
+    .filter((f) => f.phrase || f.whatItCouldMean || f.whatToAsk);
+}
+
+function safeJdCategoryMap(raw: unknown): JdRedFlagResult["categories"] {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    vague: safeJdFindings(obj.vague),
+    overloaded: safeJdFindings(obj.overloaded),
+    missing: safeJdFindings(obj.missing),
+    concern: safeJdFindings(obj.concern),
+  };
+}
+
+function clampYappingScore(raw: unknown): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseFloat(raw)
+        : NaN;
+  if (!Number.isFinite(n)) return 50;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+/**
+ * Validate JD red flag output from an LLM. Defensive — a malformed response
+ * never crashes the route.
+ */
+export function validateJdRedFlagResult(raw: unknown): JdRedFlagResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const redFlagLevel = safeString(obj.redFlagLevel).toUpperCase() as RedFlagLevel;
+  const shouldProceedRaw = safeString(obj.shouldProceed)
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_") as ProceedRecommendation;
+
+  return {
+    redFlagLevel: RED_FLAG_LEVELS.includes(redFlagLevel) ? redFlagLevel : "MEDIUM",
+    categories: safeJdCategoryMap(obj.categories),
+    goodSignals: safeStringArray(obj.goodSignals),
+    corporateYappingScore: clampYappingScore(obj.corporateYappingScore),
+    shouldProceed: PROCEED_RECOMMENDATIONS.includes(shouldProceedRaw)
+      ? shouldProceedRaw
+      : "PROBABLY",
+    summary: safeString(obj.summary),
+  };
+}
+
+// ─── Skill Gap Analyzer validation ─────────────────────────────────────────
+
+const GAP_CLASSIFICATIONS: GapClassification[] = ["STRONG", "PARTIAL", "MISSING"];
+const GAP_IMPORTANCES: GapImportance[] = ["must-have", "nice-to-have", "specialized"];
+const COOKED_LEVELS: CookedLevel[] = ["LOW", "MEDIUM", "HIGH"];
+const WIN_CATEGORIES: WinCategory[] = [
+  "resume-positioning",
+  "project-evidence",
+  "portfolio-addition",
+  "interview-prep",
+];
+
+function safeImportance(raw: unknown): GapImportance {
+  const v = safeString(raw) as GapImportance;
+  return GAP_IMPORTANCES.includes(v) ? v : "nice-to-have";
+}
+
+function safeClassification(raw: unknown): GapClassification {
+  const v = safeString(raw).toUpperCase() as GapClassification;
+  return GAP_CLASSIFICATIONS.includes(v) ? v : "MISSING";
+}
+
+function safeWinCategory(raw: unknown): WinCategory {
+  const v = safeString(raw) as WinCategory;
+  return WIN_CATEGORIES.includes(v) ? v : "interview-prep";
+}
+
+function safePriority(raw: unknown): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseInt(raw, 10)
+        : NaN;
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(1, Math.min(5, Math.round(n)));
+}
+
+function safeRequirementRow(raw: unknown): RequirementRow {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    requirement: safeString(obj.requirement),
+    importance: safeImportance(obj.importance),
+    currentEvidence: safeString(obj.currentEvidence),
+    gap: safeString(obj.gap),
+    priority: safePriority(obj.priority),
+    classification: safeClassification(obj.classification),
+  };
+}
+
+export function validateSkillGapResult(raw: unknown): SkillGapResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const matrix = Array.isArray(obj.matrix)
+    ? obj.matrix.map(safeRequirementRow).filter((r) => r.requirement)
+    : [];
+
+  const biggestGaps: BigGap[] = Array.isArray(obj.biggestGaps)
+    ? obj.biggestGaps
+        .map((g) => {
+          const o = g && typeof g === "object" ? (g as Record<string, unknown>) : {};
+          return {
+            whatTheJdWants: safeString(o.whatTheJdWants),
+            whatTheCandidateHas: safeString(o.whatTheCandidateHas),
+            whatIsMissing: safeString(o.whatIsMissing),
+            importance: safeImportance(o.importance),
+          };
+        })
+        .filter((g) => g.whatTheJdWants)
+    : [];
+
+  const transferableSkills: TransferableSkill[] = Array.isArray(obj.transferableSkills)
+    ? obj.transferableSkills
+        .map((t) => {
+          const o = t && typeof t === "object" ? (t as Record<string, unknown>) : {};
+          return {
+            fromTheCandidate: safeString(o.fromTheCandidate),
+            compensatesFor: safeString(o.compensatesFor),
+            why: safeString(o.why),
+          };
+        })
+        .filter((t) => t.fromTheCandidate || t.compensatesFor)
+    : [];
+
+  const fastestWins: FastestWin[] = Array.isArray(obj.fastestWins)
+    ? obj.fastestWins
+        .map((w) => {
+          const o = w && typeof w === "object" ? (w as Record<string, unknown>) : {};
+          return {
+            gap: safeString(o.gap),
+            category: safeWinCategory(o.category),
+            action: safeString(o.action),
+          };
+        })
+        .filter((w) => w.gap || w.action)
+    : [];
+
+  const howCooked = safeString(obj.howCooked).toUpperCase() as CookedLevel;
+
+  return {
+    matrix,
+    biggestGaps,
+    transferableSkills,
+    fastestWins,
+    longTermGaps: safeStringArray(obj.longTermGaps),
+    howCooked: COOKED_LEVELS.includes(howCooked) ? howCooked : "MEDIUM",
+    summary: safeString(obj.summary),
+  };
+}
+
+// ─── GitHub Resume Checker validation ──────────────────────────────────────
+
+const EVIDENCE_STRENGTHS: EvidenceStrength[] = ["strong", "weak", "none"];
+
+function safeEvidenceStrength(raw: unknown): EvidenceStrength {
+  const v = safeString(raw).toLowerCase() as EvidenceStrength;
+  return EVIDENCE_STRENGTHS.includes(v) ? v : "none";
+}
+
+function clampHundred(raw: unknown, fallback: number): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseFloat(raw)
+        : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function safeProjectHighlight(raw: unknown): ProjectHighlight | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const repository = safeString(obj.repository);
+  if (!repository) return null;
+  return {
+    repository,
+    whyRelevant: safeString(obj.whyRelevant),
+    skillsDemonstrated: safeString(obj.skillsDemonstrated),
+    resumeRelevance: safeString(obj.resumeRelevance),
+  };
+}
+
+function safeClaimCheck(raw: unknown): ClaimCheck | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const claim = safeString(obj.claim);
+  if (!claim) return null;
+  return {
+    claim,
+    githubEvidence: safeString(obj.githubEvidence),
+    strength: safeEvidenceStrength(obj.strength),
+  };
+}
+
+function safeProfileObservation(raw: unknown): ProfileQualityObservation | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const area = safeString(obj.area);
+  if (!area) return null;
+  return {
+    area,
+    assessment: safeString(obj.assessment),
+    improvement: safeString(obj.improvement),
+  };
+}
+
+/**
+ * Validate GitHub resume check output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateGitHubResumeResult(raw: unknown): GitHubResumeResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const pq =
+    obj.profileQuality && typeof obj.profileQuality === "object"
+      ? (obj.profileQuality as Record<string, unknown>)
+      : {};
+
+  const roast = safeStringArray(obj.githubRoast).slice(0, 3);
+  while (roast.length < 3) roast.push("");
+
+  return {
+    githubSignal: clampHundred(obj.githubSignal, 0),
+    projectsWorthShowing: Array.isArray(obj.projectsWorthShowing)
+      ? obj.projectsWorthShowing
+          .map(safeProjectHighlight)
+          .filter((p): p is ProjectHighlight => p !== null)
+      : [],
+    missingFromResume: safeStringArray(obj.missingFromResume),
+    claims: Array.isArray(obj.claims)
+      ? obj.claims
+          .map(safeClaimCheck)
+          .filter((c): c is ClaimCheck => c !== null)
+      : [],
+    profileQuality: {
+      score: clampHundred(pq.score, 50),
+      observations: Array.isArray(pq.observations)
+        ? pq.observations
+            .map(safeProfileObservation)
+            .filter((o): o is ProfileQualityObservation => o !== null)
+        : [],
+    },
+    githubRoast: roast,
+    disclaimer: safeString(obj.disclaimer) || undefined,
+  };
+}
+
+// ─── Resume Truth Detector validation ──────────────────────────────────────
+
+const CLAIM_VERDICTS: ClaimVerdict[] = ["green", "yellow", "gray", "red"];
+const CLEANUP_CATEGORIES: CleanupCategory[] = ["clarify", "substantiate", "reword"];
+
+function safeVerdict(raw: unknown): ClaimVerdict {
+  const v = safeString(raw).toLowerCase() as ClaimVerdict;
+  return CLAIM_VERDICTS.includes(v) ? v : "gray";
+}
+
+function safeCleanupCategory(raw: unknown): CleanupCategory {
+  const v = safeString(raw).toLowerCase() as CleanupCategory;
+  return CLEANUP_CATEGORIES.includes(v) ? v : "clarify";
+}
+
+function safeClaimAssessment(raw: unknown): ClaimAssessment | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const claim = safeString(obj.claim);
+  if (!claim) return null;
+  return {
+    claim,
+    source: safeString(obj.source),
+    evidence: safeString(obj.evidence),
+    assessment: safeString(obj.assessment),
+    verdict: safeVerdict(obj.verdict),
+  };
+}
+
+function safeContradiction(raw: unknown): Contradiction | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const issue = safeString(obj.issue);
+  if (!issue) return null;
+  return {
+    sources: safeString(obj.sources),
+    issue,
+    detail: safeString(obj.detail),
+  };
+}
+
+function safeCleanupItem(raw: unknown): CleanupItem | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const claim = safeString(obj.claim);
+  if (!claim) return null;
+  return {
+    claim,
+    issue: safeString(obj.issue),
+    suggestion: safeString(obj.suggestion),
+    category: safeCleanupCategory(obj.category),
+  };
+}
+
+/**
+ * Validate resume truth detector output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateResumeTruthResult(raw: unknown): ResumeTruthResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const noCap =
+    obj.noCapMode && typeof obj.noCapMode === "object"
+      ? (obj.noCapMode as Record<string, unknown>)
+      : {};
+
+  return {
+    evidenceScore: clampHundred(obj.evidenceScore, 50),
+    claims: Array.isArray(obj.claims)
+      ? obj.claims
+          .map(safeClaimAssessment)
+          .filter((c): c is ClaimAssessment => c !== null)
+      : [],
+    contradictions: Array.isArray(obj.contradictions)
+      ? obj.contradictions
+          .map(safeContradiction)
+          .filter((c): c is Contradiction => c !== null)
+      : [],
+    cleanup: Array.isArray(obj.cleanup)
+      ? obj.cleanup
+          .map(safeCleanupItem)
+          .filter((c): c is CleanupItem => c !== null)
+      : [],
+    noCapMode: {
+      enabled: true,
+      explanation:
+        safeString(noCap.explanation) ||
+        "We can improve presentation. We cannot manufacture receipts.",
+    },
+    funnyLine:
+      safeString(obj.funnyLine) || "The evidence department has concerns.",
+    summary: safeString(obj.summary),
+  };
+}
+
+// ─── Recruiter Simulator validation ────────────────────────────────────────
+
+const KEEP_READING_VALUES: KeepReading[] = ["YES", "MAYBE", "NO"];
+const TAB_CLOSING_RISKS: RecruiterTabRisk[] = ["LOW", "MEDIUM", "HIGH"];
+
+const SIM_DISCLAIMER =
+  "This is a model-based simulation of a recruiter's scan, not a prediction of any specific recruiter's behavior.";
+
+/**
+ * Validate recruiter simulator output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateRecruiterSimulationResult(
+  raw: unknown,
+): RecruiterSimulationResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const timeline: TimelinePhase[] = Array.isArray(obj.timeline)
+    ? obj.timeline
+        .map((t) => {
+          const o = t && typeof t === "object" ? (t as Record<string, unknown>) : {};
+          const phase = safeString(o.phase);
+          if (!phase) return null;
+          return {
+            phase,
+            seconds: safeString(o.seconds),
+            observations: safeStringArray(o.observations),
+          } satisfies TimelinePhase;
+        })
+        .filter((t): t is TimelinePhase => t !== null)
+    : [];
+
+  const keepReading = safeString(obj.keepReading).toUpperCase() as KeepReading;
+  const tabClosingRisk = safeString(obj.tabClosingRisk).toUpperCase() as RecruiterTabRisk;
+
+  return {
+    timeline,
+    keepReading: KEEP_READING_VALUES.includes(keepReading) ? keepReading : "MAYBE",
+    whatTheyNoticeFirst: safeStringArray(obj.whatTheyNoticeFirst),
+    whatTheyMiss: safeStringArray(obj.whatTheyMiss),
+    whyTheyMightSkip: safeStringArray(obj.whyTheyMightSkip),
+    recruiterQuestions: safeStringArray(obj.recruiterQuestions),
+    tabClosingRisk: TAB_CLOSING_RISKS.includes(tabClosingRisk) ? tabClosingRisk : "MEDIUM",
+    tabClosingExplanation: safeString(obj.tabClosingExplanation),
+    fixes: safeStringArray(obj.fixes),
+    innerMonologue: safeStringArray(obj.innerMonologue),
+    disclaimer: safeString(obj.disclaimer) || SIM_DISCLAIMER,
+  };
+}
+
+// ─── Interview Prep validation ─────────────────────────────────────────────
+
+const QUESTION_CATEGORIES: QuestionCategory[] = [
+  "resume",
+  "technical",
+  "behavioral",
+  "role-specific",
+  "company-jd",
+  "weakness-gap",
+];
+const QUESTION_DIFFICULTIES: QuestionDifficulty[] = [
+  "Easy",
+  "Medium",
+  "Hard",
+  "Final Boss",
+];
+const INTERVIEW_RISKS: InterviewRisk[] = ["Low", "Medium", "High"];
+
+const INTERVIEW_FUNNY_LINE =
+  "Interview prep complete. Now we find out whether the resume was telling the truth.";
+
+function safeQuestionCategory(raw: unknown): QuestionCategory {
+  const v = safeString(raw) as QuestionCategory;
+  return QUESTION_CATEGORIES.includes(v) ? v : "resume";
+}
+
+function safeDifficulty(raw: unknown): QuestionDifficulty {
+  const v = safeString(raw) as QuestionDifficulty;
+  return QUESTION_DIFFICULTIES.includes(v) ? v : "Medium";
+}
+
+function safeInterviewRisk(raw: unknown): InterviewRisk {
+  const v = safeString(raw) as InterviewRisk;
+  return INTERVIEW_RISKS.includes(v) ? v : "Medium";
+}
+
+function safeInterviewQuestion(raw: unknown): PrepQuestion | null {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const question = safeString(obj.question);
+  if (!question) return null;
+  return {
+    question,
+    category: safeQuestionCategory(obj.category),
+    difficulty: safeDifficulty(obj.difficulty),
+    whyTheyAsk: safeString(obj.whyTheyAsk),
+    risk: safeInterviewRisk(obj.risk),
+    howToPrepare: safeString(obj.howToPrepare),
+  };
+}
+
+/**
+ * Validate interview prep output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateInterviewPrepResult(raw: unknown): InterviewPrepResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  return {
+    readinessScore: clampHundred(obj.readinessScore, 50),
+    questions: Array.isArray(obj.questions)
+      ? obj.questions
+          .map(safeInterviewQuestion)
+          .filter((q): q is PrepQuestion => q !== null)
+      : [],
+    questionsForThem: safeStringArray(obj.questionsForThem).slice(0, 5),
+    weakSpots: safeStringArray(obj.weakSpots),
+    funnyLine: safeString(obj.funnyLine) || INTERVIEW_FUNNY_LINE,
+    summary: safeString(obj.summary),
+  };
+}
+
+// ─── STAR Answer Builder validation ────────────────────────────────────────
+
+/**
+ * Validate STAR answer output from an LLM. Defensive — a malformed response
+ * never crashes the route.
+ */
+export function validateStarAnswerResult(raw: unknown): StarAnswerResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const sections =
+    obj.sections && typeof obj.sections === "object"
+      ? (obj.sections as Record<string, unknown>)
+      : {};
+
+  const assessment =
+    obj.assessment && typeof obj.assessment === "object"
+      ? (obj.assessment as Record<string, unknown>)
+      : {};
+
+  const followUp = safeStringArray(obj.followUpQuestions).slice(0, 3);
+  while (followUp.length < 3) followUp.push("");
+
+  return {
+    sections: {
+      situation: safeString(sections.situation),
+      task: safeString(sections.task),
+      action: safeString(sections.action),
+      result: safeString(sections.result),
+    },
+    finalAnswer: safeString(obj.finalAnswer),
+    resultWarning: safeString(obj.resultWarning) || undefined,
+    assessment: {
+      clarity: clampHundred(assessment.clarity, 50),
+      ownership: clampHundred(assessment.ownership, 50),
+      specificity: clampHundred(assessment.specificity, 50),
+      impact: clampHundred(assessment.impact, 50),
+    },
+    followUpQuestions: followUp,
+    funnyLine:
+      safeString(obj.funnyLine) ||
+      "Story upgraded from 'trust me bro' to actual structure.",
+  };
+}
+
+// ─── Tell Me About Yourself validation ─────────────────────────────────────
+
+const TELL_ME_FUNNY_LINE =
+  "Please do not start with your birth certificate.";
+
+/**
+ * Validate tell me about yourself output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateTellMeResult(raw: unknown): TellMeResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const why = safeStringArray(obj.whyThisWorks).slice(0, 3);
+  while (why.length < 3) why.push("");
+
+  const avoid = safeStringArray(obj.avoidSaying).slice(0, 3);
+  while (avoid.length < 3) avoid.push("");
+
+  return {
+    thirtySeconds: safeString(obj.thirtySeconds),
+    sixtySeconds: safeString(obj.sixtySeconds),
+    ninetySeconds: safeString(obj.ninetySeconds) || "",
+    whyThisWorks: why,
+    avoidSaying: avoid,
+    funnyLine: safeString(obj.funnyLine) || TELL_ME_FUNNY_LINE,
+  };
+}
+
+// ─── Weakness Detector validation ─────────────────────────────────────────
+
+const WEAKNESS_RISKS: WeaknessRisk[] = ["LOW", "MEDIUM", "HIGH", "FINAL BOSS"];
+
+const WEAKNESS_FUNNY_LINE =
+  "These are the areas where the interviewer may activate their trap card.";
+
+function safeWeaknessRisk(raw: unknown): WeaknessRisk {
+  const v = safeString(raw).toUpperCase() as WeaknessRisk;
+  return WEAKNESS_RISKS.includes(v) ? v : "MEDIUM";
+}
+
+/**
+ * Validate weakness detector output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateWeaknessResult(raw: unknown): WeaknessResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const weaknesses: WeaknessItem[] = Array.isArray(obj.weaknesses)
+    ? obj.weaknesses
+        .map((w) => {
+          const o = w && typeof w === "object" ? (w as Record<string, unknown>) : {};
+          const weakness = safeString(o.weakness);
+          if (!weakness) return null;
+          return {
+            weakness,
+            whyItExists: safeString(o.whyItExists),
+            evidence: safeString(o.evidence),
+            likelyQuestion: safeString(o.likelyQuestion),
+            risk: safeWeaknessRisk(o.risk),
+            howToPrepare: safeString(o.howToPrepare),
+          } satisfies WeaknessItem;
+        })
+        .filter((w): w is WeaknessItem => w !== null)
+        .slice(0, 5)
+    : [];
+
+  const claimsToDefend: ClaimToDefend[] = Array.isArray(obj.claimsToDefend)
+    ? obj.claimsToDefend
+        .map((c) => {
+          const o = c && typeof c === "object" ? (c as Record<string, unknown>) : {};
+          const claim = safeString(o.claim);
+          if (!claim) return null;
+          return {
+            claim,
+            likelyFollowUp: safeString(o.likelyFollowUp),
+            evidenceAvailable: safeString(o.evidenceAvailable),
+          } satisfies ClaimToDefend;
+        })
+        .filter((c): c is ClaimToDefend => c !== null)
+    : [];
+
+  return {
+    weaknessScore: clampHundred(obj.weaknessScore, 50),
+    weaknesses,
+    claimsToDefend,
+    gapStrategy: safeString(obj.gapStrategy),
+    funnyLine: safeString(obj.funnyLine) || WEAKNESS_FUNNY_LINE,
+  };
+}
+
+// ─── Interview Boss Fight validation ───────────────────────────────────────
+
+const BOSS_VERDICTS: BossVerdict[] = ["READY", "NEEDS WORK", "ABSOLUTELY COOKED"];
+
+/**
+ * Validate boss fight session output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateBossFightSession(raw: unknown): BossFightSession {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const questions: BossFightQuestion[] = Array.isArray(obj.questions)
+    ? obj.questions
+        .map((q) => {
+          const o = q && typeof q === "object" ? (q as Record<string, unknown>) : {};
+          const question = safeString(o.question);
+          if (!question) return null;
+          return {
+            index: typeof o.index === "number" ? Math.round(o.index) : 0,
+            question,
+            difficulty: safeString(o.difficulty).toUpperCase() as BossDifficulty,
+            category: safeString(o.category),
+          } satisfies BossFightQuestion;
+        })
+        .filter((q): q is BossFightQuestion => q !== null)
+    : [];
+
+  // Normalize to exactly 10 with sequential indices
+  while (questions.length < 10) {
+    questions.push({
+      index: questions.length + 1,
+      question: "",
+      difficulty: "MEDIUM",
+      category: "resume",
+    });
+  }
+  const trimmed = questions.slice(0, 10);
+  trimmed.forEach((q, i) => {
+    q.index = i + 1;
+    if (!BOSS_DIFFICULTIES.includes(q.difficulty)) q.difficulty = "MEDIUM";
+  });
+
+  return {
+    questions: trimmed,
+    role: safeString(obj.role) || undefined,
+    experienceLevel: safeString(obj.experienceLevel) || undefined,
+    disclaimer: safeString(obj.disclaimer),
+  };
+}
+
+/**
+ * Validate boss answer evaluation output from an LLM. Defensive — a malformed
+ * response never crashes the route.
+ */
+export function validateBossAnswerEvaluation(
+  raw: unknown,
+): BossAnswerEvaluation {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  return {
+    score: clampHundred(obj.score, 50),
+    whatWasGood: safeStringArray(obj.whatWasGood),
+    whatWasWeak: safeStringArray(obj.whatWasWeak),
+    whatTheyMightAskNext: safeString(obj.whatTheyMightAskNext),
+    betterAnswerStructure: safeString(obj.betterAnswerStructure),
+  };
+}
+
 /**
  * Validate resume fix output from an LLM. Mirrors the defensive approach of
  * validateAnalysisResult so a malformed model response never crashes the route.
@@ -785,5 +1770,319 @@ export function validateFixResult(raw: unknown): BulletFixResult {
     bulletScore: score,
     overallScore: overall,
     roast: safeString(obj.roast) || "Current version: giving NPC.",
+  };
+}
+
+// ─── Employment Aura validation ────────────────────────────────────────────
+
+function safeAuraScore(raw: unknown, fallback: number): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseFloat(raw)
+        : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+export function validateEmploymentAuraResult(raw: unknown): EmploymentAuraResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  // If overall is missing/invalid, fall back to average of components.
+  const resumeAura = safeAuraScore(obj.resumeAura, 50);
+  const skillAura = safeAuraScore(obj.skillAura, 50);
+  const experienceAura = safeAuraScore(obj.experienceAura, 50);
+  const projectAura = safeAuraScore(obj.projectAura, 50);
+  const applicationAura = safeAuraScore(obj.applicationAura, 50);
+
+  const computedOverall = Math.round(
+    (resumeAura + skillAura + experienceAura + projectAura + applicationAura) / 5,
+  );
+  const overallAura = safeAuraScore(obj.overallAura, computedOverall);
+
+    const auraType = safeString(obj.auraType) || "The Enigmatic Applicant";
+  const biggestW = safeString(obj.biggestW) || "Something";
+  const biggestL = safeString(obj.biggestL) || "Something";
+  const verdict = safeString(obj.verdict) || "Current aura: questionable but recoverable.";
+
+  return {
+    overallAura,
+    resumeAura,
+    skillAura,
+    experienceAura,
+    projectAura,
+    applicationAura,
+    auraType,
+    biggestW,
+    biggestL,
+    auraBoosters: safeStringArray(obj.auraBoosters).slice(0, 3),
+    auraDrainers: safeStringArray(obj.auraDrainers).slice(0, 3),
+    verdict,
+  };
+}
+
+// ─── Rizz Score validation ────────────────────────────────────────────────
+
+const RIZZ_VERDICTS: RizzVerdict[] = [
+  "NO RIZZ",
+  "LOW RIZZ",
+  "DECENT RIZZ",
+  "HIGH RIZZ",
+  "UNREASONABLE AURA",
+];
+
+function safeRizzScore(raw: unknown, fallback: number): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseFloat(raw)
+        : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+export function validateRizzScoreResult(raw: unknown): RizzScoreResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const relevance = safeRizzScore(obj.relevance, 50);
+  const specificity = safeRizzScore(obj.specificity, 50);
+  const credibility = safeRizzScore(obj.credibility, 50);
+  const clarity = safeRizzScore(obj.clarity, 50);
+  const differentiation = safeRizzScore(obj.differentiation, 50);
+  const evidence = safeRizzScore(obj.evidence, 50);
+
+  const computedOverall = Math.round(
+    (relevance + specificity + credibility + clarity + differentiation + evidence) / 6,
+  );
+  const rizzScore = safeRizzScore(obj.rizzScore, computedOverall);
+
+  const rawVerdict = safeString(obj.verdict).toUpperCase();
+  const verdict: RizzVerdict = RIZZ_VERDICTS.includes(rawVerdict as RizzVerdict)
+    ? (rawVerdict as RizzVerdict)
+    : "LOW RIZZ";
+
+  return {
+    rizzScore,
+    relevance,
+    specificity,
+    credibility,
+    clarity,
+    differentiation,
+    evidence,
+    rizzBoosters: safeStringArray(obj.rizzBoosters).slice(0, 5),
+    rizzKillers: safeStringArray(obj.rizzKillers).slice(0, 5),
+    recruiterPitch: safeString(obj.recruiterPitch) || "No pitch generated.",
+    verdict,
+  };
+}
+
+// ─── Cooked Meter validation ───────────────────────────────────────────────
+
+const COOKED_VERDICTS: CookedVerdict[] = [
+  "NOT COOKED",
+  "LIGHTLY COOKED",
+  "MEDIUM",
+  "WELL DONE",
+  "ABSOLUTELY COOKED",
+];
+
+const CAN_APPLY_OPTIONS: CanApply[] = [
+  "YES",
+  "YES, BUT STRETCH",
+  "PROBABLY NOT",
+];
+
+function safeCookedScore(raw: unknown): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseFloat(raw)
+        : NaN;
+  if (!Number.isFinite(n)) return 50;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+export function validateCookedMeterResult(raw: unknown): CookedMeterResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const cookedScore = safeCookedScore(obj.cookedScore);
+
+  const rawVerdict = safeString(obj.verdict).toUpperCase();
+  const verdict: CookedVerdict = COOKED_VERDICTS.includes(rawVerdict as CookedVerdict)
+    ? (rawVerdict as CookedVerdict)
+    : cookedScore <= 20
+      ? "NOT COOKED"
+      : cookedScore <= 40
+        ? "LIGHTLY COOKED"
+        : cookedScore <= 60
+          ? "MEDIUM"
+          : cookedScore <= 80
+            ? "WELL DONE"
+            : "ABSOLUTELY COOKED";
+
+  const rawCanApply = safeString(obj.canYouStillApply).toUpperCase();
+  const canYouStillApply: CanApply = CAN_APPLY_OPTIONS.includes(rawCanApply as CanApply)
+    ? (rawCanApply as CanApply)
+    : cookedScore <= 30
+      ? "YES"
+      : cookedScore <= 60
+        ? "YES, BUT STRETCH"
+        : "PROBABLY NOT";
+
+  return {
+    cookedScore,
+    verdict,
+    why: safeStringArray(obj.why).slice(0, 5),
+    whatSavesYou: safeStringArray(obj.whatSavesYou).slice(0, 5),
+    whatCookedYou: safeString(obj.whatCookedYou) || "No specific factor identified.",
+    canYouStillApply,
+    howToLower: safeStringArray(obj.howToLower).slice(0, 5),
+  };
+}
+
+// ─── Resume Court validation ───────────────────────────────────────────────
+
+const COURT_VERDICTS: CourtVerdict[] = [
+  "SUPPORTED",
+  "PARTIALLY SUPPORTED",
+  "UNVERIFIED",
+  "CONTRADICTION",
+];
+
+function safeCourtVerdict(raw: unknown): CourtVerdict {
+  const s = safeString(raw).toUpperCase();
+  return COURT_VERDICTS.includes(s as CourtVerdict)
+    ? (s as CourtVerdict)
+    : "UNVERIFIED";
+}
+
+function safeClaim(raw: unknown): ResumeClaim {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    claim: safeString(obj.claim) || "Unnamed claim",
+    evidence: safeString(obj.evidence) || "No supporting evidence was found.",
+    prosecution: safeString(obj.prosecution) || "No prosecution argument generated.",
+    defense: safeString(obj.defense) || "No defense argument generated.",
+    verdict: safeCourtVerdict(obj.verdict),
+  };
+}
+
+export function validateResumeCourtResult(raw: unknown): ResumeCourtResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const rawClaims = Array.isArray(obj.claims) ? obj.claims : [];
+  const claims = rawClaims.map(safeClaim).slice(0, 8);
+
+  return {
+    claims,
+    mostDangerousClaim:
+      safeString(obj.mostDangerousClaim) ||
+      "No dangerous claims identified.",
+    bestClaim: safeString(obj.bestClaim) || "No best claim identified.",
+    sentenceToFix:
+      safeString(obj.sentenceToFix) ||
+      "No sentence to fix identified.",
+  };
+}
+
+// ─── ATS Boss Fight validation ─────────────────────────────────────────────
+
+function safeDamage(raw: unknown): number {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? parseFloat(raw)
+        : NaN;
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function safeAttackCategory(raw: unknown): BossAttackCategory {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    name: safeString(obj.name) || "Unknown",
+    damage: safeDamage(obj.damage),
+    why: safeString(obj.why) || "No explanation provided.",
+  };
+}
+
+export function validateAtsBossFightResult(raw: unknown): AtsBossFightResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const yourDamage = safeDamage(obj.yourDamage);
+  const bossHp = Math.max(0, Math.min(100, 100 - yourDamage));
+
+  const rawCategories = Array.isArray(obj.attackCategories)
+    ? obj.attackCategories
+    : [];
+  const attackCategories = rawCategories
+    .map(safeAttackCategory)
+    .slice(0, 6);
+
+  return {
+    bossHp,
+    yourDamage,
+    attackCategories,
+    bossWeaknesses: safeStringArray(obj.bossWeaknesses).slice(0, 5),
+    yourWeapons: safeStringArray(obj.yourWeapons).slice(0, 5),
+    bossAttacks: safeStringArray(obj.bossAttacks).slice(0, 5),
+    atsBattleScore: safeDamage(obj.atsBattleScore),
+    nextMove: safeStringArray(obj.nextMove).slice(0, 3),
+  };
+}
+
+// ─── Skill Issue validation ────────────────────────────────────────────────
+
+const FINAL_DIAGNOSES: FinalDiagnosis[] = [
+  "Skill issue",
+  "Positioning issue",
+  "Experience issue",
+  "Evidence issue",
+  "Application strategy issue",
+];
+
+function safeSecondaryIssue(raw: unknown): SecondaryIssue {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    problem: safeString(obj.problem) || "No problem identified.",
+    evidence: safeString(obj.evidence) || "No evidence provided.",
+    impact: safeString(obj.impact) || "No impact identified.",
+    fix: safeString(obj.fix) || "No fix suggested.",
+  };
+}
+
+function safeFinalDiagnosis(raw: unknown): FinalDiagnosis {
+  const s = safeString(raw);
+  return FINAL_DIAGNOSES.includes(s as FinalDiagnosis)
+    ? (s as FinalDiagnosis)
+    : "Skill issue";
+}
+
+export function validateSkillIssueResult(raw: unknown): SkillIssueResult {
+  const obj =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  const rawSecondary = Array.isArray(obj.secondaryIssues)
+    ? obj.secondaryIssues
+    : [];
+  const secondaryIssues = rawSecondary.map(safeSecondaryIssue).slice(0, 5);
+
+  return {
+    primaryIssue: safeString(obj.primaryIssue) || "No primary issue identified.",
+    secondaryIssues,
+    notTheProblem: safeStringArray(obj.notTheProblem).slice(0, 5),
+    thirtyDayFix: safeStringArray(obj.thirtyDayFix).slice(0, 5),
+    finalDiagnosis: safeFinalDiagnosis(obj.finalDiagnosis),
   };
 }

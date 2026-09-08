@@ -14,7 +14,14 @@ interface NavLink {
 
 const NAV_LINKS: NavLink[] = [
   { label: "ATS Checker", href: "/ats-checker", navigate: true },
-  { label: "CV Generator", href: "analyzer" },
+  { label: "Cover Letter Generator", href: "/cover-letter-generator", navigate: true },
+  { label: "Recruiter Message", href: "/recruiter-message", navigate: true },
+  { label: "JD Red Flag Scanner", href: "/jd-red-flag-scanner", navigate: true },
+  { label: "Skill Gap Analyzer", href: "/skill-gap-analyzer", navigate: true },
+  { label: "GitHub Resume Checker", href: "/github-resume-checker", navigate: true },
+  { label: "Resume Truth Detector", href: "/resume-truth-detector", navigate: true },
+  { label: "Recruiter Simulator", href: "/recruiter-simulator", navigate: true },
+  { label: "Interview Prep", href: "/interview-prep", navigate: true },
   { label: "Resume Analyzer", href: "/resume-analyzer", navigate: true },
   { label: "Resume Roast", href: "/resume-roast", navigate: true },
   { label: "Resume Rewriter", href: "/resume-rewriter", navigate: true },
@@ -22,13 +29,17 @@ const NAV_LINKS: NavLink[] = [
   { label: "Bullet Point Fixer", href: "/bullet-point-fixer", navigate: true },
   { label: "Job Fit Checker", href: "/job-fit-checker", navigate: true },
   { label: "Delulu Detector", href: "/delulu-detector", navigate: true },
+  { label: "LinkedIn Optimizer", href: "/linkedin-optimizer", navigate: true },
   {
     label: "JD Translator",
     href: "/jd-translator",
     external: true,
     overlay: true,
   },
-  { label: "Interview Boss Fight", href: "analyzer", chevron: true },
+  { label: "Interview Boss Fight", href: "/interview-boss-fight", navigate: true },
+  { label: "STAR Answer Builder", href: "/star-answer-builder", navigate: true },
+  { label: "Tell Me About Yourself", href: "/tell-me-about-yourself", navigate: true },
+  { label: "Weakness Detector", href: "/weakness-detector", navigate: true },
 ];
 
 interface HeaderProps {

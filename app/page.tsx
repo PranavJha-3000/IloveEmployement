@@ -38,6 +38,17 @@ export default function Home() {
   const [showInputs, setShowInputs] = useState(true);
   const [showTranslator, setShowTranslator] = useState(false);
   const inputRef = useRef<HTMLDivElement>(null);
+    setTimeout(() => {
+      document
+        .getElementById(id)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
+  function handleGetEmployed() {
+    setState("input");
+    scrollToId("analyzer");
+  }
 
   function scrollToId(id: string) {
     setTimeout(() => {
@@ -52,42 +63,17 @@ export default function Home() {
     scrollToId("analyzer");
   }
 
-  /** Tool cards open the existing flows: analyzer inputs, or the JD Translator overlay. */
+  /**
+   * Tool cards open either:
+   * - their own standalone route (most tools), or
+   * - an in-page flow if a card still targets a non-route anchor.
+   *
+   * The Landing Hero CTA and the ToolGrid are wired the same way: they either
+   * navigate to a standalone route or reveal the home-page analyzer inputs.
+   */
   function handleToolSelect(tool: Tool) {
-    if (tool.target === "/resume-analyzer") {
-      router.push("/resume-analyzer");
-      return;
-    }
-    if (tool.target === "/resume-roast") {
-      router.push("/resume-roast");
-      return;
-    }
-    if (tool.target === "/resume-rewriter") {
-      router.push("/resume-rewriter");
-      return;
-    }
-    if (tool.target === "/resume-fixer") {
-      router.push("/resume-fixer");
-      return;
-    }
-    if (tool.target === "/bullet-point-fixer") {
-      router.push("/bullet-point-fixer");
-      return;
-    }
-    if (tool.target === "/job-fit-checker") {
-      router.push("/job-fit-checker");
-      return;
-    }
-    if (tool.target === "/delulu-detector") {
-      router.push("/delulu-detector");
-      return;
-    }
-    if (tool.target === "/ats-checker") {
-      router.push("/ats-checker");
-      return;
-    }
     if (tool.target.startsWith("/")) {
-      setShowTranslator(true);
+      router.push(tool.target);
       return;
     }
     // Reveal the analyzer inputs without discarding any in-progress state.

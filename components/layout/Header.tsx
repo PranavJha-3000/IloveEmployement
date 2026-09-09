@@ -136,14 +136,14 @@ export function Header({ onOpenTranslator }: HeaderProps) {
       <div className="hidden lg:flex w-full h-[64px] items-center">
         {/* Left group: logo + nav */}
         <div className="flex items-center gap-8 pl-[32px]">
-          {/* Logo */}
-          <button
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          {/* Logo — navigates home from any page */}
+          <Link
+            href="/"
             className="text-xl font-bold tracking-tight flex-shrink-0 focus:outline-none"
           >
             <span className="text-red-600">ilove</span>
             <span className="text-zinc-900">employment</span>
-          </button>
+          </Link>
 
           {/* Desktop nav */}
           <nav className="flex items-center gap-8">
@@ -165,14 +165,14 @@ export function Header({ onOpenTranslator }: HeaderProps) {
 
       {/* Mobile: left group + hamburger */}
       <div className="lg:hidden w-full h-[64px] flex items-center pl-[20px] pr-[16px]">
-        {/* Logo */}
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        {/* Logo — navigates home from any page */}
+        <Link
+          href="/"
           className="text-xl font-bold tracking-tight flex-shrink-0 focus:outline-none"
         >
           <span className="text-red-600">ilove</span>
           <span className="text-zinc-900">employment</span>
-        </button>
+        </Link>
 
         {/* Mobile hamburger pinned to right */}
         <button

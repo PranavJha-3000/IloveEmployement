@@ -1,7 +1,8 @@
 ﻿// ─── Tool Marketplace Data ──────────────────────────────────────────────────
 // Maps every tool card on the landing page to its category, icon, and the
-// existing section it activates. No new backend — targets are anchor IDs on
-// the home page (#analyzer) or internal routes (/jd-translator opens as an in-page overlay on the home page, or standalone at the route).
+// route it opens. Every tool lives at its own route under app/<tool>/ —
+// app/page.tsx pushes tool.target via the router. (JD Translator additionally
+// opens as an in-page overlay on the home page via the navbar/footer.)
 
 export type CategoryId =
   "all" | "analyze" | "optimize" | "investigate" | "prepare" | "chaos";
@@ -31,8 +32,8 @@ export interface Tool {
   accent: string;
   /** background tint behind the icon */
   tint: string;
-  /** anchor id on the page this tool activates */
-  target: string;
+  /** route path on the site this tool card opens */
+  target: `/${string}`;
 }
 
 // ─── Icon paths (24x24, stroke-based, lucide-style) ─────────────────────────
@@ -185,7 +186,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.flame.split(" "),
     accent: "#dc2626",
     tint: "#fef2f2",
-    target: "analyzer",
+    target: "/resume-roast",
   },
   {
     id: "delulu-detector",
@@ -195,7 +196,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.glasses.split(" "),
     accent: "#db2777",
     tint: "#fdf2f8",
-    target: "analyzer",
+    target: "/delulu-detector",
   },
 
   // OPTIMIZE
@@ -208,7 +209,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.penLine.split(" "),
     accent: "#059669",
     tint: "#ecfdf5",
-    target: "analyzer",
+    target: "/resume-rewriter",
   },
   {
     id: "resume-fixer",
@@ -218,7 +219,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.wrench.split(" "),
     accent: "#2563eb",
     tint: "#eff6ff",
-    target: "analyzer",
+    target: "/resume-fixer",
   },
   {
     id: "bullet-fixer",
@@ -229,7 +230,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.listChecks.split(" "),
     accent: "#0891b2",
     tint: "#ecfeff",
-    target: "analyzer",
+    target: "/bullet-point-fixer",
   },
   {
     id: "linkedin-optimizer",
@@ -239,7 +240,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.linkedin.split(" "),
     accent: "#1d4ed8",
     tint: "#eff6ff",
-    target: "analyzer",
+    target: "/linkedin-optimizer",
   },
   {
     id: "cover-letter",
@@ -250,7 +251,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.mail.split(" "),
     accent: "#d97706",
     tint: "#fffbeb",
-    target: "analyzer",
+    target: "/cover-letter-generator",
   },
   {
     id: "recruiter-message",
@@ -261,7 +262,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.messages.split(" "),
     accent: "#7c3aed",
     tint: "#f5f3ff",
-    target: "analyzer",
+    target: "/recruiter-message",
   },
 
   // INVESTIGATE
@@ -273,7 +274,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.shieldAlert.split(" "),
     accent: "#dc2626",
     tint: "#fef2f2",
-    target: "/jd-translator",
+    target: "/jd-red-flag-scanner",
   },
   {
     id: "skill-gap",
@@ -283,7 +284,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.gap.split(" "),
     accent: "#2563eb",
     tint: "#eff6ff",
-    target: "analyzer",
+    target: "/skill-gap-analyzer",
   },
   {
     id: "github-check",
@@ -293,7 +294,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.github.split(" "),
     accent: "#0f172a",
     tint: "#f1f5f9",
-    target: "analyzer",
+    target: "/github-resume-checker",
   },
   {
     id: "truth-detector",
@@ -303,7 +304,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.scale.split(" "),
     accent: "#d97706",
     tint: "#fffbeb",
-    target: "analyzer",
+    target: "/resume-truth-detector",
   },
   {
     id: "recruiter-simulator",
@@ -313,7 +314,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.eye.split(" "),
     accent: "#7c3aed",
     tint: "#f5f3ff",
-    target: "analyzer",
+    target: "/recruiter-simulator",
   },
 
   // PREPARE
@@ -325,7 +326,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.messages.split(" "),
     accent: "#0891b2",
     tint: "#ecfeff",
-    target: "analyzer",
+    target: "/interview-prep",
   },
   {
     id: "boss-fight",
@@ -335,7 +336,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.swords.split(" "),
     accent: "#dc2626",
     tint: "#fef2f2",
-    target: "analyzer",
+    target: "/interview-boss-fight",
   },
   {
     id: "star-builder",
@@ -345,7 +346,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.star.split(" "),
     accent: "#d97706",
     tint: "#fffbeb",
-    target: "analyzer",
+    target: "/star-answer-builder",
   },
   {
     id: "tell-me-about",
@@ -355,7 +356,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.userCircle.split(" "),
     accent: "#059669",
     tint: "#ecfdf5",
-    target: "analyzer",
+    target: "/tell-me-about-yourself",
   },
   {
     id: "weakness-detector",
@@ -365,7 +366,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.zap.split(" "),
     accent: "#7c3aed",
     tint: "#f5f3ff",
-    target: "analyzer",
+    target: "/weakness-detector",
   },
 
   // CHAOS
@@ -377,7 +378,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.gauge.split(" "),
     accent: "#db2777",
     tint: "#fdf2f8",
-    target: "analyzer",
+    target: "/employment-aura",
   },
   {
     id: "rizz-score",
@@ -387,7 +388,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.flame.split(" "),
     accent: "#dc2626",
     tint: "#fef2f2",
-    target: "analyzer",
+    target: "/rizz-score",
   },
   {
     id: "cooked-meter",
@@ -397,7 +398,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.skull.split(" "),
     accent: "#525252",
     tint: "#f5f5f5",
-    target: "analyzer",
+    target: "/cooked-meter",
   },
   {
     id: "resume-court",
@@ -407,7 +408,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.gavel.split(" "),
     accent: "#b45309",
     tint: "#fffbeb",
-    target: "analyzer",
+    target: "/resume-court",
   },
   {
     id: "ats-boss-fight",
@@ -417,7 +418,7 @@ export const TOOLS: Tool[] = [
     iconPaths: I.robot.split(" "),
     accent: "#4f46e5",
     tint: "#eef2ff",
-    target: "analyzer",
+    target: "/ats-boss-fight",
   },
   {
     id: "skill-issue",
@@ -427,6 +428,6 @@ export const TOOLS: Tool[] = [
     iconPaths: I.bug.split(" "),
     accent: "#059669",
     tint: "#ecfdf5",
-    target: "analyzer",
+    target: "/skill-issue",
   },
 ];

@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+import Link from "next/link";
 
 interface FooterProps {
   /** When provided, the JD Translator link opens the in-page overlay instead of navigating. */
@@ -26,20 +28,20 @@ export function Footer({ onOpenTranslator }: FooterProps) {
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Product</p>
             <ul className="space-y-2">
               <li>
-                <button
-                  onClick={() => document.getElementById("tools")?.scrollIntoView({ behavior: "smooth" })}
+                <Link
+                  href="/#tools"
                   className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
                 >
                   All Tools
-                </button>
+                </Link>
               </li>
               <li>
-                <button
-                  onClick={() => document.getElementById("analyzer")?.scrollIntoView({ behavior: "smooth" })}
+                <Link
+                  href="/resume-analyzer"
                   className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
                 >
                   Resume Analyzer
-                </button>
+                </Link>
               </li>
               <li>
                 {onOpenTranslator ? (
@@ -50,12 +52,12 @@ export function Footer({ onOpenTranslator }: FooterProps) {
                     JD Translator
                   </button>
                 ) : (
-                  <a
+                  <Link
                     href="/jd-translator"
                     className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
                   >
                     JD Translator
-                  </a>
+                  </Link>
                 )}
               </li>
             </ul>
@@ -75,12 +77,12 @@ export function Footer({ onOpenTranslator }: FooterProps) {
                 <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors">LinkedIn</a>
               </li>
               <li>
-                <button
-                  onClick={() => document.getElementById("tools")?.scrollIntoView({ behavior: "smooth" })}
+                <Link
+                  href="/#tools"
                   className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
                 >
                   About
-                </button>
+                </Link>
               </li>
             </ul>
           </div>

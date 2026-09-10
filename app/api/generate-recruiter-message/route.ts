@@ -1,34 +1,15 @@
-import { generateText } from "ai";
+/**
+ * Recruiter Message Generator.
+ * Uses the shared analysis pipeline from lib/pipeline.ts.
+ */
+
 import { NextResponse, type NextRequest } from "next/server";
 import type { RecruiterMessageRequestBody } from "@/lib/types";
-import { createModel } from "@/lib/ai";
 import { buildRecruiterMessagePrompt } from "@/lib/prompts";
-import {
-  extractJsonFromLlmResponse,
-  validateRecruiterMessageResult,
-} from "@/lib/utils";
+import { validateConfig, validateNonEmpty, validateUrl, buildProfileContexts, standardAIHandler } from "@/lib/pipeline";
+import { validateRecruiterMessageResult } from "@/lib/utils";
 
 export const maxDuration = 60;
-
-const MAX_RESUME_LENGTH = 20_000;
-const MAX_JD_LENGTH = 10_000;
-const MAX_COMPANY_LENGTH = 200;
-const MAX_TITLE_LENGTH = 200;
-const MAX_RECRUITER_LENGTH = 100;
-const MAX_CONTEXT_LENGTH = 2_000;
-const AI_TIMEOUT_MS = 55_000;
-
-const VALID_CONTEXTS = ["already-applied", "referral", "cold-outreach", "follow-up"];
-
-function redactSecrets(input: string): string {
-  return input
-    .replace(/sk-or-v1-[A-Za-z0-9]+/g, "[REDACTED]")
-    .replace(/sk-or-[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/sk-[A-Za-z0-9_-]{10,}/g, "[REDACTED]")
-    .replace(/gsk_[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/AIza[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]");
-}
 
 export async function POST(req: NextRequest) {
   let body: RecruiterMessageRequestBody;
@@ -38,155 +19,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const {
-    config,
-    resumeText,
-    jobDescription,
-    companyName,
-    jobTitle,
-    recruiterName,
-    context,
-    additionalContext,
-  } = body;
-
-  // ─── Input validation ────────────────────────────────────────────────────
-  if (!config?.provider || !config?.apiKey?.trim()) {
-    return NextResponse.json(
-      { error: "Provider and API key are required. This app runs on your own key - we never store it." },
-      { status: 400 },
-    );
-  }
-  if (!config.model?.trim() && config.provider !== "openai" && config.provider !== "google") {
-    return NextResponse.json({ error: "A model name is required." }, { status: 400 });
-  }
-  if (!resumeText?.trim()) {
-    return NextResponse.json({ error: "Resume is required. Paste text or upload a file." }, { status: 400 });
-  }
-  if (!jobDescription?.trim()) {
-    return NextResponse.json({ error: "Job description is required." }, { status: 400 });
-  }
-  if (!companyName?.trim()) {
-    return NextResponse.json({ error: "Company name is required." }, { status: 400 });
-  }
-  if (!jobTitle?.trim()) {
-    return NextResponse.json({ error: "Job title is required." }, { status: 400 });
-  }
-  if (resumeText.length > MAX_RESUME_LENGTH) {
-    return NextResponse.json(
-      { error: `Resume is too long (${resumeText.length.toLocaleString()} chars). Max is ${MAX_RESUME_LENGTH.toLocaleString()} - trim it down and retry.` },
-      { status: 400 },
-    );
-  }
-  if (jobDescription.length > MAX_JD_LENGTH) {
-    return NextResponse.json(
-      { error: `Job description is too long (${jobDescription.length.toLocaleString()} chars). Max is ${MAX_JD_LENGTH.toLocaleString()} - paste just the JD.` },
-      { status: 400 },
-    );
-  }
-  if (companyName.length > MAX_COMPANY_LENGTH) {
-    return NextResponse.json({ error: `Company name is too long. Max ${MAX_COMPANY_LENGTH} characters.` }, { status: 400 });
-  }
-  if (jobTitle.length > MAX_TITLE_LENGTH) {
-    return NextResponse.json({ error: `Job title is too long. Max ${MAX_TITLE_LENGTH} characters.` }, { status: 400 });
-  }
-  if (recruiterName && recruiterName.length > MAX_RECRUITER_LENGTH) {
-    return NextResponse.json({ error: `Recruiter name is too long. Max ${MAX_RECRUITER_LENGTH} characters.` }, { status: 400 });
-  }
-  if (additionalContext && additionalContext.length > MAX_CONTEXT_LENGTH) {
-    return NextResponse.json(
-      { error: `Additional context is too long (${additionalContext.length.toLocaleString()} chars). Max is ${MAX_CONTEXT_LENGTH.toLocaleString()} characters.` },
-      { status: 400 },
-    );
-  }
-  if (context && !VALID_CONTEXTS.includes(context)) {
-    return NextResponse.json(
-      { error: "Invalid outreach context. Use one of: already-applied, referral, cold-outreach, follow-up." },
-      { status: 400 },
-    );
-  }
-
-  // ─── Prompt ──────────────────────────────────────────────────────────────
-  const { system, user } = buildRecruiterMessagePrompt({
-    resumeText,
-    jobDescription: jobDescription.trim(),
-    companyName: companyName.trim(),
-    jobTitle: jobTitle.trim(),
-    recruiterName: recruiterName?.trim() || undefined,
-    context: context || "cold-outreach",
-    additionalContext: additionalContext?.trim() || undefined,
+  const result = await standardAIHandler(body, {
+    validateInput: (b) => {
+      { const c = validateConfig(b.config); if (c) return c; }
+      { const e = validateNonEmpty(b.resumeText, "Resume", 20000); if (e) return e; }
+      { const e = validateNonEmpty(b.jobDescription, "Job description", 10000); if (e) return e; }
+      { const e = validateNonEmpty(b.companyName, "Company name", 200); if (e) return e; }
+      { const e = validateNonEmpty(b.jobTitle, "Job title", 200); if (e) return e; }
+      { const v = b.recruiterName; if (typeof v === "string" && v.length > 100) return "Recruiter name is too long."; }
+      { const v = b.additionalContext; if (typeof v === "string" && v.length > 2000) return "Additional context is too long."; }
+      return null;
+    },
+    buildPrompts: async (b) => {
+      const { system, user } = buildRecruiterMessagePrompt({
+        resumeText: b.resumeText, jobDescription: b.jobDescription.trim(),
+        companyName: b.companyName.trim(), jobTitle: b.jobTitle.trim(),
+        recruiterName: b.recruiterName?.trim() || undefined,
+        context: b.context || "cold-outreach",
+        additionalContext: b.additionalContext?.trim() || undefined,
+      });
+      return { system, prompt: user };
+    },
+    validateOutput: (out) => validateRecruiterMessageResult(out),
+    isEmpty: (r) => !r.variants.short.message && !r.variants.confident.message && !r.variants.warm.message,
+    emptyMessage: "The message came back empty. Retry, or switch to a different model.",
+    temperature: 0.7,
   });
 
-  // ─── AI call ─────────────────────────────────────────────────────────────
-  try {
-    const model = createModel(config);
-    const result = await generateText({
-      model,
-      system,
-      prompt: user,
-      temperature: 0.7,
-      abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
-    });
-
-    const parsed = extractJsonFromLlmResponse(result.text);
-    const safe = validateRecruiterMessageResult(parsed);
-
-    const hasAnyMessage = Boolean(
-      safe.variants.short.message ||
-        safe.variants.confident.message ||
-        safe.variants.warm.message,
-    );
-    if (!hasAnyMessage) {
-      return NextResponse.json(
-        { error: "The messages came back empty. Retry, or switch to a different model." },
-        { status: 502 },
-      );
-    }
-
-    return NextResponse.json(safe);
-  } catch (err: unknown) {
-    const rawMessage =
-      err instanceof Error ? err.message : "Recruiter message generation failed.";
-    const message = redactSecrets(rawMessage);
-
-    const isAuthError = /api key|unauthorized|401|invalid[ _-]?key|authentication|permission denied/i.test(message);
-    const isRateLimit = /rate limit|429|too many requests|quota exceeded/i.test(message);
-    const isTimeout = /timeout|timed out|etimedout|econnaborted|abort/i.test(message);
-    const isModelError = /model.*(not found|does not exist|invalid)|unsupported (model|value)/i.test(message);
-    const isJsonError = /valid json|json/i.test(message);
-
-    if (isAuthError) {
-      return NextResponse.json(
-        { error: "API key rejected by the provider. Double-check the key and that it has credit." },
-        { status: 401 },
-      );
-    }
-    if (isRateLimit) {
-      return NextResponse.json(
-        { error: "Provider rate limit hit. Wait a moment and retry, or switch to a different model." },
-        { status: 429 },
-      );
-    }
-    if (isTimeout) {
-      return NextResponse.json(
-        { error: "The generation timed out. Try a faster model (e.g. gpt-4o-mini or gemini-2.0-flash)." },
-        { status: 504 },
-      );
-    }
-    if (isModelError) {
-      return NextResponse.json(
-        { error: "Model not found for this provider. Check the model name." },
-        { status: 400 },
-      );
-    }
-    if (isJsonError) {
-      return NextResponse.json(
-        { error: "The model returned a malformed response. Retry, or switch to a different model." },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json(
-      { error: message || "Recruiter message generation failed. Try again." },
-      { status: 500 },
-    );
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error.message }, { status: result.error.status });
   }
+  return NextResponse.json(result.data);
 }

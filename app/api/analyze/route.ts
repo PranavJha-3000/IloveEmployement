@@ -1,33 +1,27 @@
-﻿import { generateText } from "ai";
+/**
+ * Resume Analyzer — flagship endpoint.
+ *
+ * Pipeline: Document extraction → Normalization → JD analysis → Evidence matching →
+ * LLM reasoning → Validated structured output.
+ *
+ * Uses the shared analysis pipeline from lib/pipeline.ts.
+ */
+
 import { NextResponse, type NextRequest } from "next/server";
 import type { AnalyzeRequestBody } from "@/lib/types";
-import { createModel } from "@/lib/ai";
 import { buildSystemPrompt, buildUserPrompt } from "@/lib/prompts";
 import {
-  extractJsonFromLlmResponse,
-  fetchProfileText,
-  isGitHubUrl,
-  isLinkedInUrl,
-  isValidUrl,
-  validateAnalysisResult,
-} from "@/lib/utils";
+  validateConfig,
+  validateNonEmpty,
+  validateUrl,
+  buildProfileContexts,
+  callAI,
+  extractJson,
+  classifyAIError,
+} from "@/lib/pipeline";
+import { validateAnalysisResult } from "@/lib/utils";
 
 export const maxDuration = 60;
-
-const MAX_RESUME_LENGTH = 20_000;
-const MAX_JD_LENGTH = 10_000;
-const AI_TIMEOUT_MS = 55_000;
-
-/** Redact anything resembling an API key before an error string leaves the server. */
-function redactSecrets(input: string): string {
-  return input
-    .replace(/sk-or-v1-[A-Za-z0-9]+/g, "[REDACTED]")
-    .replace(/sk-or-[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/sk-[A-Za-z0-9_-]{10,}/g, "[REDACTED]")
-    .replace(/gsk_[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/AIza[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]");
-}
 
 export async function POST(req: NextRequest) {
   let body: AnalyzeRequestBody;
@@ -37,121 +31,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { config, resumeText, jobDescription, linkedinUrl, githubUrl } = body;
+  // ─── Input validation (shared helpers) ──
+  const configError = validateConfig(body.config);
+  if (configError) return NextResponse.json({ error: configError }, { status: 400 });
 
-  // ─── Input validation ────────────────────────────────────────────────────
-  if (!config?.provider || !config?.apiKey?.trim()) {
-    return NextResponse.json(
-      { error: "Provider and API key are required. This app runs on your own key - we never store it." },
-      { status: 400 }
-    );
-  }
-  if (!config.model?.trim() && config.provider !== "openai" && config.provider !== "google") {
-    return NextResponse.json({ error: "A model name is required." }, { status: 400 });
-  }
-  if (!resumeText?.trim()) {
-    return NextResponse.json(
-      { error: "Resume is required. Paste text or upload a PDF." },
-      { status: 400 }
-    );
-  }
-  if (!jobDescription?.trim()) {
-    return NextResponse.json(
-      { error: "Job description is required. Paste the full JD." },
-      { status: 400 }
-    );
-  }
-  if (resumeText.length > MAX_RESUME_LENGTH) {
-    return NextResponse.json(
-      { error: `Resume is too long (${resumeText.length.toLocaleString()} chars). Max is ${MAX_RESUME_LENGTH.toLocaleString()} - trim it down and retry.` },
-      { status: 400 }
-    );
-  }
-  if (jobDescription.length > MAX_JD_LENGTH) {
-    return NextResponse.json(
-      { error: `Job description is too long (${jobDescription.length.toLocaleString()} chars). Max is ${MAX_JD_LENGTH.toLocaleString()} - paste just the JD, not the whole careers page.` },
-      { status: 400 }
-    );
-  }
+  const resumeError = validateNonEmpty(body.resumeText, "Resume", 20_000);
+  if (resumeError) return NextResponse.json({ error: resumeError }, { status: 400 });
 
-  // ─── Profile fetching (best-effort, never blocks the analysis) ───────────
-  let linkedinContext = "";
-  let githubContext = "";
+  const jdError = validateNonEmpty(body.jobDescription, "Job description", 10_000);
+  if (jdError) return NextResponse.json({ error: jdError }, { status: 400 });
 
-  if (linkedinUrl?.trim() && isValidUrl(linkedinUrl) && isLinkedInUrl(linkedinUrl)) {
-    const text = await fetchProfileText(linkedinUrl);
-    linkedinContext = text
-      ? `LinkedIn public profile content (fetched live):\n${text}`
-      : `LinkedIn URL was provided (${linkedinUrl}) but could not be fetched - LinkedIn blocks most automated access. Treat its contents as unknown; do not assume anything about it.`;
-  }
+  const linkedinError = validateUrl(body.linkedinUrl, "LinkedIn URL");
+  if (linkedinError) return NextResponse.json({ error: linkedinError }, { status: 400 });
 
-  if (githubUrl?.trim() && isValidUrl(githubUrl) && isGitHubUrl(githubUrl)) {
-    const text = await fetchProfileText(githubUrl);
-    githubContext = text
-      ? `GitHub public profile content (fetched live):\n${text}`
-      : `GitHub URL was provided (${githubUrl}) but could not be fetched. Treat its contents as unknown; do not assume anything about it.`;
-  }
+  const githubError = validateUrl(body.githubUrl, "GitHub URL");
+  if (githubError) return NextResponse.json({ error: githubError }, { status: 400 });
 
-  // ─── Prompt ──────────────────────────────────────────────────────────────
+  // ─── Profile fetching (best-effort, never blocks) ──
+  const { linkedinContext, githubContext } = await buildProfileContexts({
+    linkedinUrl: body.linkedinUrl,
+    githubUrl: body.githubUrl,
+  });
+
+  // ─── Build prompts ──
   const systemPrompt = buildSystemPrompt(body.desperationLevel);
   let userPrompt = buildUserPrompt(body);
   if (linkedinContext) userPrompt += `\n\n${linkedinContext}`;
   if (githubContext) userPrompt += `\n\n${githubContext}`;
 
-  // ─── AI call ─────────────────────────────────────────────────────────────
+  // ─── AI call (shared error handling) ──
   try {
-    const model = createModel(config);
-    const result = await generateText({
-      model,
-      system: systemPrompt,
-      prompt: userPrompt,
-      temperature: 0.7,
-      abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
-    });
+    const rawText = await callAI(
+      body.config,
+      systemPrompt,
+      userPrompt,
+      { temperature: 0.7, timeoutMs: 55_000 },
+    );
 
-    const parsed = extractJsonFromLlmResponse(result.text);
+    const parsed = extractJson(rawText);
+    if (parsed === null) {
+      return NextResponse.json(
+        { error: "The model returned a malformed response. Retry, or switch to a different model." },
+        { status: 502 },
+      );
+    }
+
     const safe = validateAnalysisResult(parsed);
     return NextResponse.json(safe);
   } catch (err: unknown) {
-    const rawMessage = err instanceof Error ? err.message : "Analysis failed.";
-    const message = redactSecrets(rawMessage);
-
-    const isAuthError = /api key|unauthorized|401|invalid[ _-]?key|authentication|permission denied/i.test(message);
-    const isRateLimit = /rate limit|429|too many requests|quota exceeded/i.test(message);
-    const isTimeout = /timeout|timed out|etimedout|econnaborted|abort/i.test(message);
-    const isModelError = /model.*(not found|does not exist|invalid)|unsupported (model|value)/i.test(message);
-    const isJsonError = /valid json|json/i.test(message);
-
-    if (isAuthError) {
-      return NextResponse.json(
-        { error: "API key rejected by the provider. Double-check the key and that it has credit." },
-        { status: 401 }
-      );
-    }
-    if (isRateLimit) {
-      return NextResponse.json(
-        { error: "Provider rate limit hit. Wait a moment and retry, or switch to a different model." },
-        { status: 429 }
-      );
-    }
-    if (isTimeout) {
-      return NextResponse.json(
-        { error: "The analysis timed out. Try a faster model (e.g. gpt-4o-mini or gemini-2.0-flash)." },
-        { status: 504 }
-      );
-    }
-    if (isModelError) {
-      return NextResponse.json(
-        { error: "Model not found for this provider. Check the model name." },
-        { status: 400 }
-      );
-    }
-    if (isJsonError) {
-      return NextResponse.json(
-        { error: "The model returned a malformed response. Retry, or switch to a different model." },
-        { status: 502 }
-      );
-    }
-    return NextResponse.json({ error: message || "Analysis failed. Try again." }, { status: 500 });
+    const info = classifyAIError(err);
+    return NextResponse.json({ error: info.message }, { status: info.status });
   }
 }

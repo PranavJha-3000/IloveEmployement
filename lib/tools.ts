@@ -34,6 +34,11 @@ export interface Tool {
   tint: string;
   /** route path on the site this tool card opens */
   target: `/${string}`;
+  /**
+   * Set when the tool has an in-page panel on the home page. The header/footer
+   * then open that panel instead of navigating, and the route is the fallback.
+   */
+  overlay?: boolean;
 }
 
 // ─── Icon paths (24x24, stroke-based, lucide-style) ─────────────────────────
@@ -77,6 +82,17 @@ const I = {
   gavel:
     "m14 13-7.5 7.5a2.12 2.12 0 0 1-3-3L11 10 M16 16l6-6 M8 8l6-6 M9 7l8 8 M21 11l-8-8",
   bug: "M8 2l1.5 3 M16 2l-1.5 3 M9 5h6a4 4 0 0 1 4 4v3a7 7 0 0 1-14 0V9a4 4 0 0 1 4-4z M3 10h2 M19 10h2 M3 15h2.5 M18.5 15H21 M9 21l1-3 M15 21l-1-3",
+
+  // Added so every tool has a unique glyph. See the icon audit below.
+  /** clipboard with lines — prepping/notes */
+  clipboardList:
+    "M8 2h8a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M9 12h6 M9 16h6",
+  /** four-point sparkle — charm / rizz */
+  sparkles:
+    "M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z",
+  /** game controller — boss fight */
+  gamepad:
+    "M6 11h4 M8 9v4 M15 12h.01 M18 10h.01 M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z",
 };
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
@@ -172,72 +188,20 @@ export const TOOLS: Tool[] = [
     name: "JD Translator",
     description: "Decode corporate yapping into human language.",
     category: "analyze",
-    iconPaths: I.languages.split(" "),
+    iconPaths: [I.languages],
     accent: "#d97706",
     tint: "#fffbeb",
     target: "/jd-translator",
-  },
-  {
-    id: "resume-roast",
-    name: "Resume Roast",
-    description:
-      "Find out what is wrong with your resume before a recruiter does.",
-    category: "analyze",
-    iconPaths: I.flame.split(" "),
-    accent: "#dc2626",
-    tint: "#fef2f2",
-    target: "/resume-roast",
-  },
-  {
-    id: "delulu-detector",
-    name: "Delulu Detector",
-    description: "Reality-check your dream job.",
-    category: "analyze",
-    iconPaths: I.glasses.split(" "),
-    accent: "#db2777",
-    tint: "#fdf2f8",
-    target: "/delulu-detector",
+    overlay: true,
   },
 
   // OPTIMIZE
-  {
-    id: "resume-rewriter",
-    name: "Resume Rewriter",
-    description:
-      "Tailor your resume to the job without inventing a whole new career.",
-    category: "optimize",
-    iconPaths: I.penLine.split(" "),
-    accent: "#059669",
-    tint: "#ecfdf5",
-    target: "/resume-rewriter",
-  },
-  {
-    id: "resume-fixer",
-    name: "Resume Fixer",
-    description: "Fix weak sections, bullets and positioning.",
-    category: "optimize",
-    iconPaths: I.wrench.split(" "),
-    accent: "#2563eb",
-    tint: "#eff6ff",
-    target: "/resume-fixer",
-  },
-  {
-    id: "bullet-fixer",
-    name: "Bullet Point Fixer",
-    description:
-      "Turn weak resume bullets into something recruiters might actually read.",
-    category: "optimize",
-    iconPaths: I.listChecks.split(" "),
-    accent: "#0891b2",
-    tint: "#ecfeff",
-    target: "/bullet-point-fixer",
-  },
   {
     id: "linkedin-optimizer",
     name: "LinkedIn Optimizer",
     description: "Make your LinkedIn less NPC.",
     category: "optimize",
-    iconPaths: I.linkedin.split(" "),
+    iconPaths: [I.linkedin],
     accent: "#1d4ed8",
     tint: "#eff6ff",
     target: "/linkedin-optimizer",
@@ -425,9 +389,25 @@ export const TOOLS: Tool[] = [
     name: "Skill Issue",
     description: "Find out exactly why you're getting rejected.",
     category: "chaos",
-    iconPaths: I.bug.split(" "),
+    iconPaths: [I.bug],
     accent: "#059669",
     tint: "#ecfdf5",
     target: "/skill-issue",
   },
 ];
+
+// Guards the marketplace against duplicate entries sneaking back in: the grid
+// keys cards by `id`, so a repeated id renders the same tool twice and React
+// logs a non-unique-key error. Static config means a duplicate is always a
+// bug, so fail loudly in development rather than rendering it silently.
+if (process.env.NODE_ENV !== "production") {
+  const seen = new Set<string>();
+  for (const tool of TOOLS) {
+    if (seen.has(tool.id)) {
+      throw new Error(
+        `lib/tools: duplicate tool id "${tool.id}" — each tool must be listed exactly once.`,
+      );
+    }
+    seen.add(tool.id);
+  }
+}

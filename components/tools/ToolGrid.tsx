@@ -30,7 +30,7 @@ export function ToolGrid({ onToolSelect }: Props) {
         <div className="tool-grid" role="tabpanel">
           {visible.map((tool) => (
             <ToolCard
-              key={`${tool.id}-${tool.category}`}
+              key={tool.id}
               tool={tool}
               onSelect={onToolSelect}
             />

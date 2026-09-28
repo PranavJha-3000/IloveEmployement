@@ -2,44 +2,43 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { TOOLS, type CategoryId, type Tool } from "@/lib/tools";
+import { NavDropdown } from "./NavDropdown";
 
-interface NavLink {
+/**
+ * The header nav is derived from the single TOOLS source of truth rather than
+ * a hand-maintained list, so a tool can never be added to the marketplace and
+ * silently go missing from navigation (or vice versa).
+ */
+
+/** Promoted to always-visible links beside the logo, like iLovePDF's top picks. */
+const HERO_TOOL_IDS = ["resume-analyzer", "resume-roast"];
+
+/**
+ * Dropdown groups. The five marketplace categories collapse into three menus so
+ * the bar stays at five items (two hero links + three menus). Each menu names
+ * the categories it draws from instead of listing tools, so adding a tool to
+ * lib/tools.ts is still all it takes for it to appear here.
+ */
+const NAV_MENUS: {
+  id: string;
   label: string;
-  href: string;
-  external?: boolean;
-  overlay?: boolean;
-  navigate?: boolean;
-  chevron?: boolean;
-}
-
-const NAV_LINKS: NavLink[] = [
-  { label: "ATS Checker", href: "/ats-checker", navigate: true },
-  { label: "Cover Letter Generator", href: "/cover-letter-generator", navigate: true },
-  { label: "Recruiter Message", href: "/recruiter-message", navigate: true },
-  { label: "JD Red Flag Scanner", href: "/jd-red-flag-scanner", navigate: true },
-  { label: "Skill Gap Analyzer", href: "/skill-gap-analyzer", navigate: true },
-  { label: "GitHub Resume Checker", href: "/github-resume-checker", navigate: true },
-  { label: "Resume Truth Detector", href: "/resume-truth-detector", navigate: true },
-  { label: "Recruiter Simulator", href: "/recruiter-simulator", navigate: true },
-  { label: "Interview Prep", href: "/interview-prep", navigate: true },
-  { label: "Resume Analyzer", href: "/resume-analyzer", navigate: true },
-  { label: "Resume Roast", href: "/resume-roast", navigate: true },
-  { label: "Resume Rewriter", href: "/resume-rewriter", navigate: true },
-  { label: "Resume Fixer", href: "/resume-fixer", navigate: true },
-  { label: "Bullet Point Fixer", href: "/bullet-point-fixer", navigate: true },
-  { label: "Job Fit Checker", href: "/job-fit-checker", navigate: true },
-  { label: "Delulu Detector", href: "/delulu-detector", navigate: true },
-  { label: "LinkedIn Optimizer", href: "/linkedin-optimizer", navigate: true },
+  categories: Exclude<CategoryId, "all">[];
+  columns: 1 | 2 | 3;
+}[] = [
   {
-    label: "JD Translator",
-    href: "/jd-translator",
-    external: true,
-    overlay: true,
+    id: "resume-tools",
+    label: "Resume Tools",
+    categories: ["analyze", "optimize"],
+    columns: 2,
   },
-  { label: "Interview Boss Fight", href: "/interview-boss-fight", navigate: true },
-  { label: "STAR Answer Builder", href: "/star-answer-builder", navigate: true },
-  { label: "Tell Me About Yourself", href: "/tell-me-about-yourself", navigate: true },
-  { label: "Weakness Detector", href: "/weakness-detector", navigate: true },
+  {
+    id: "research-prep",
+    label: "Research & Prep",
+    categories: ["investigate", "prepare"],
+    columns: 2,
+  },
+  { id: "chaos", label: "Chaos", categories: ["chaos"], columns: 2 },
 ];
 
 interface HeaderProps {
@@ -47,123 +46,157 @@ interface HeaderProps {
   onOpenTranslator?: () => void;
 }
 
+const heroTools = HERO_TOOL_IDS.map((id) => TOOLS.find((t) => t.id === id)).filter(
+  (t): t is Tool => Boolean(t),
+);
+
+const menus = NAV_MENUS.map((menu) => ({
+  ...menu,
+  // Hero tools already have their own link, so don't repeat them in a menu.
+  tools: TOOLS.filter(
+    (t) =>
+      menu.categories.includes(t.category) && !HERO_TOOL_IDS.includes(t.id),
+  ),
+})).filter((m) => m.tools.length > 0);
+
+const ALL_TOOLS_ICON = (
+  <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+    <circle cx="5" cy="5" r="1.7" />
+    <circle cx="10" cy="5" r="1.7" />
+    <circle cx="15" cy="5" r="1.7" />
+    <circle cx="5" cy="10" r="1.7" />
+    <circle cx="10" cy="10" r="1.7" />
+    <circle cx="15" cy="10" r="1.7" />
+    <circle cx="5" cy="15" r="1.7" />
+    <circle cx="10" cy="15" r="1.7" />
+    <circle cx="15" cy="15" r="1.7" />
+  </svg>
+);
+
 export function Header({ onOpenTranslator }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  /** Id of the single open desktop dropdown; only one is open at a time. */
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
-  function handleNav(id: string) {
+  function openTranslator() {
     setMobileOpen(false);
-    document
-      .getElementById(id)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setOpenMenu(null);
+    onOpenTranslator?.();
   }
 
-  const chevronIcon = (
-    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden>
-      <path
-        d="M3 4.5L6 7.5L9 4.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  function renderMobileTool(tool: Tool) {
+    const className =
+      "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50";
+    const label = (
+      <>
+        <span>{tool.name}</span>
+        <span className="ml-auto text-[11px] text-zinc-400">
+          {tool.category}
+        </span>
+      </>
+    );
 
-  function renderNavItem(link: NavLink, prefix: string) {
-    const isDesktop = prefix === "desktop-";
-    const baseClass = isDesktop
-      ? "text-[13px] font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-1"
-      : "block w-full text-left text-sm font-medium text-zinc-700 hover:text-zinc-900 py-2.5";
-    const key = prefix + link.label;
-
-    if (link.overlay && onOpenTranslator) {
+    if (tool.overlay && onOpenTranslator) {
       return (
         <button
-          key={key}
-          onClick={() => {
-            setMobileOpen(false);
-            onOpenTranslator();
-          }}
-          className={baseClass}
+          key={tool.id}
+          type="button"
+          onClick={openTranslator}
+          className={className}
         >
-          {link.label}
-          {link.chevron && chevronIcon}
+          {label}
         </button>
       );
     }
-    if (link.navigate) {
-      return (
-        <Link
-          key={key}
-          href={link.href}
-          onClick={() => setMobileOpen(false)}
-          className={baseClass}
-        >
-          {link.label}
-          {link.chevron && chevronIcon}
-        </Link>
-      );
-    }
-    if (link.external) {
-      return (
-        <a
-          key={key}
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={baseClass}
-        >
-          {link.label}
-          {link.chevron && chevronIcon}
-        </a>
-      );
-    }
     return (
-      <button
-        key={key}
-        onClick={() => handleNav(link.href)}
-        className={baseClass}
+      <Link
+        key={tool.id}
+        href={tool.target}
+        onClick={() => setMobileOpen(false)}
+        className={className}
       >
-        {link.label}
-        {link.chevron && chevronIcon}
-      </button>
+        {label}
+      </Link>
     );
   }
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-zinc-200">
-      {/* Desktop layout: full-width flex, left group + right button */}
-      <div className="hidden lg:flex w-full h-[64px] items-center">
-        {/* Left group: logo + nav */}
-        <div className="flex items-center gap-8 pl-[32px]">
-          {/* Logo — navigates home from any page */}
-          <Link
-            href="/"
-            className="text-xl font-bold tracking-tight flex-shrink-0 focus:outline-none"
-          >
-            <span className="text-red-600">ilove</span>
-            <span className="text-zinc-900">employment</span>
-          </Link>
+      {/* Desktop: logo, a couple of hero links, then category dropdowns */}
+      <div className="hidden lg:flex w-full h-[64px] items-center gap-1 pl-[32px] pr-[32px]">
+        {/* Logo — navigates home from any page */}
+        <Link
+          href="/"
+          className="text-xl font-bold tracking-tight flex-shrink-0 mr-4 focus:outline-none"
+        >
+          <span className="text-red-600">ilove</span>
+          <span className="text-zinc-900">employment</span>
+        </Link>
 
-          {/* Desktop nav */}
-          <nav className="flex items-center gap-8">
-            {NAV_LINKS.map((link) => renderNavItem(link, "desktop-"))}
-          </nav>
-        </div>
+        <nav className="flex items-center gap-0.5" aria-label="Primary">
+          {heroTools.map((tool) =>
+            tool.overlay && onOpenTranslator ? (
+              <button
+                key={tool.id}
+                type="button"
+                onClick={openTranslator}
+                className="rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+              >
+                {tool.name}
+              </button>
+            ) : (
+              <Link
+                key={tool.id}
+                href={tool.target}
+                className="rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+              >
+                {tool.name}
+              </Link>
+            ),
+          )}
 
-        {/* Right: Dashboard button pinned to far right */}
-        <div className="ml-auto pr-[32px]">
+          {menus.map((menu) => (
+            <NavDropdown
+              key={menu.id}
+              label={menu.label}
+              tools={menu.tools}
+              columns={menu.columns}
+              open={openMenu === menu.id}
+              onOpenChange={(next) => setOpenMenu(next ? menu.id : null)}
+              onOpenTranslator={
+                menu.tools.some((t) => t.overlay) ? openTranslator : undefined
+              }
+            />
+          ))}
+        </nav>
+
+        {/* Right: every tool, then the Dashboard placeholder */}
+        <div className="ml-auto flex items-center gap-2">
+          <NavDropdown
+            icon={ALL_TOOLS_ICON}
+            label="All tools"
+            tools={TOOLS}
+            open={openMenu === "all"}
+            onOpenChange={(next) => setOpenMenu(next ? "all" : null)}
+            onOpenTranslator={
+              TOOLS.some((t) => t.overlay) ? openTranslator : undefined
+            }
+            alignRight
+            columns={3}
+          />
+
           <button
-            className="border border-zinc-300 text-zinc-400 rounded-lg px-4 py-2 text-[13px] font-medium hover:bg-zinc-50 transition-colors"
+            className="ml-2 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-2 text-[13px] font-medium text-zinc-400 cursor-not-allowed select-none"
             disabled
             aria-disabled
+            title="Coming soon"
           >
-            Dashboard (Coming Soon)
+            Dashboard
           </button>
         </div>
       </div>
 
-      {/* Mobile: left group + hamburger */}
+      {/* Mobile: logo + hamburger */}
       <div className="lg:hidden w-full h-[64px] flex items-center pl-[20px] pr-[16px]">
         {/* Logo — navigates home from any page */}
         <Link
@@ -220,17 +253,30 @@ export function Header({ onOpenTranslator }: HeaderProps) {
         </button>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile menu — every tool, grouped by category */}
       {mobileOpen && (
-        <div className="lg:hidden border-t border-zinc-100 bg-white px-6 py-4 space-y-0">
-          {NAV_LINKS.map((link) => (
-            <div key={"mobile-" + link.label} className="pb-1">
-              {renderNavItem(link, "mobile-")}
+        <div className="lg:hidden max-h-[calc(100vh-64px)] overflow-y-auto border-t border-zinc-100 bg-white px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            Start here
+          </p>
+          <div className="mt-1 space-y-0.5">
+            {heroTools.map((tool) => renderMobileTool(tool))}
+          </div>
+
+          {menus.map((menu) => (
+            <div key={menu.id} className="mt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                {menu.label}
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {menu.tools.map((tool) => renderMobileTool(tool))}
+              </div>
             </div>
           ))}
-          <div className="pt-3 mt-2 border-t border-zinc-100">
+
+          <div className="mt-5 border-t border-zinc-100 pt-4">
             <button
-              className="w-full border border-zinc-300 text-zinc-400 rounded-lg px-4 py-2.5 text-sm font-medium cursor-not-allowed opacity-60"
+              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-400 cursor-not-allowed select-none"
               disabled
               aria-disabled
             >

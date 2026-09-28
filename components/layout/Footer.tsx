@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TOOLS } from "@/lib/tools";
 
 interface FooterProps {
   /** When provided, the JD Translator link opens the in-page overlay instead of navigating. */
@@ -8,6 +9,10 @@ interface FooterProps {
 }
 
 export function Footer({ onOpenTranslator }: FooterProps) {
+  const featured = ["resume-analyzer", "jd-translator"]
+    .map((id) => TOOLS.find((t) => t.id === id))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+
   return (
     <footer className="border-t border-zinc-200 bg-zinc-50 mt-20">
       <div className="max-w-[1180px] mx-auto px-6 py-10">
@@ -35,31 +40,25 @@ export function Footer({ onOpenTranslator }: FooterProps) {
                   All Tools
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/resume-analyzer"
-                  className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                >
-                  Resume Analyzer
-                </Link>
-              </li>
-              <li>
-                {onOpenTranslator ? (
-                  <button
-                    onClick={onOpenTranslator}
-                    className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                  >
-                    JD Translator
-                  </button>
-                ) : (
-                  <Link
-                    href="/jd-translator"
-                    className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                  >
-                    JD Translator
-                  </Link>
-                )}
-              </li>
+              {featured.map((tool) => (
+                <li key={tool.id}>
+                  {tool.overlay && onOpenTranslator ? (
+                    <button
+                      onClick={onOpenTranslator}
+                      className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
+                    >
+                      {tool.name}
+                    </button>
+                  ) : (
+                    <Link
+                      href={tool.target}
+                      className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
+                    >
+                      {tool.name}
+                    </Link>
+                  )}
+                </li>
+              ))}
             </ul>
           </div>
 

@@ -61,6 +61,40 @@ Users bring their **own API key** and choose their provider. Supported (from `li
 
 The client sends `{ provider, apiKey, model, baseUrl? }` with each request. The server builds the right AI SDK provider instance via `lib/ai.ts`, calls the model, and **never stores the key**.
 
+### Shared Pipeline
+
+Every tool route follows the same execution pipeline, so parsing, validation, and error handling are centralized:
+
+```
+INPUT (resume + JD + optional LinkedIn/GitHub)
+  ↓
+Document extraction        lib/documents.ts (PDF via `pdf-parse`, DOCX via `mammoth`, TXT native, or pasted text)
+  ↓
+Structured normalization   lib/resume-parser.ts (contact, summary, experience, education, skills)
+  ↓
+Prompt construction        lib/prompts.ts (per-tool `build*Prompt` functions with strict JSON schemas and truth-filter rules)
+  ↓
+Unified AI call            lib/ai.ts → `createModel()` over 9 providers
+  ↓
+JSON extraction + repair   lib/utils.ts (strips markdown fences, trailing prose)
+  ↓
+Runtime validation         lib/utils.ts validators (malformed output degrades gracefully)
+  ↓
+Standardized error handling lib/pipeline.ts (`standardAIHandler` generic; auth / rate-limit / timeout / model / JSON errors)
+  ↓
+Evidence engine (when applicable)  lib/evidence.ts (STRONG / PARTIAL / MISSING / UNVERIFIED tiers with weighted scoring)
+  ↓
+Tool-specific presentation components/shared/*
+```
+
+Most of the 31 API routes are thin wrappers over `standardAIHandler` in `lib/pipeline.ts`. That generic centralizes config validation, input limits (20K char text, 10K char JD), JSON extraction, output validation via `lib/utils.ts`, and error classification. A `redactSecrets` helper strips API-key-like strings from provider error messages before they reach the client.
+
+The evidence engine (`lib/evidence.ts`) is shared across the Resume Analyzer, Job Fit Checker, Skill Gap Analyzer, Resume Truth Detector, GitHub Resume Checker and Delulu Detector. It classifies claims against resume, LinkedIn, GitHub and JD sources with explicit rules that keyword presence is not evidence and absence from one source does not mean the skill is absent.
+
+### Document Split for Bundle Safety
+
+`lib/documents.ts` imports server-only packages (`pdf-parse`, `mammoth`) and lives exclusively on the server. `lib/document-types.ts` exports client-safe helpers (`getFileType`, `isSupportedFile`, `MAX_FILE_SIZE`, `MAX_TEXT_LENGTH`) that `ResumeCard.tsx` imports. This prevents heavy server packages from leaking into the client bundle.
+
 ## Main User Flow
 
 ```
@@ -74,7 +108,7 @@ Tool Card Selected
    |
    v
 Tool Page (purpose-built component per tool)
-   |  - Resume (paste text or upload PDF)   [where applicable]
+   |  - Resume (paste text or upload PDF/DOCX/TXT)   [where applicable]
    |  - Job Description (paste)             [where applicable]
    |  - LinkedIn URL (optional)             [where applicable]
    |  - GitHub URL (optional)               [where applicable]
@@ -86,8 +120,8 @@ Tool Action ("Analyze" / "Generate" / "Fight" / "Scan" / ...)
    |
    v
 API Route: POST /api/<endpoint>
-   |  - Validates AI config; rate-limit + timeout guards
-   |  - Parses PDF if uploaded
+    |  - Validates AI config; classifies provider errors (auth, rate-limit, timeout, malformed output); timeout guards
+    |  - Parses PDF/DOCX/TXT if uploaded
    |  - Fetches LinkedIn/GitHub public data (when provided)
    |  - Builds structured prompt (lib/prompts.ts)
    |  - Calls the user's AI provider
@@ -134,11 +168,11 @@ The flagship resume-analyzer flow remains the deepest: Selection Probability, Fi
 | ATS Boss Fight | `/ats-boss-fight` | Fight the robots. Again. |
 | Skill Issue | `/skill-issue` | Find out exactly why you are getting rejected |
 
-## API Routes (30)
+## API Routes (31)
 
 | Group | Endpoints (all POST unless noted) |
 |-------|-----------------------------------|
-| Core analyzer | `/api/analyze`, `/api/parse-pdf` |
+| Core analyzer | `/api/analyze`, `/api/parse-pdf` (legacy), `/api/parse-document` |
 | Resume optimization | `/api/optimize-resume`, `/api/rewrite-resume`, `/api/fix-resume`, `/api/fix-bullet` |
 | Analysis tools | `/api/check-ats`, `/api/roast-resume`, `/api/check-delulu`, `/api/translate-jd` |
 | Job research | `/api/analyze-skill-gap`, `/api/scan-jd-red-flags` |
@@ -147,20 +181,39 @@ The flagship resume-analyzer flow remains the deepest: Selection Probability, Fi
 | Interview prep | `/api/prepare-interview`, `/api/start-boss-fight`, `/api/evaluate-boss-answer`, `/api/build-star-answer`, `/api/build-introduction`, `/api/detect-weaknesses` |
 | Chaos tools | `/api/employment-aura`, `/api/rizz-score`, `/api/cooked-meter`, `/api/resume-court`, `/api/ats-boss-fight`, `/api/skill-issue` |
 
-All AI endpoints follow the same contract: accept the tool inputs plus `config: { provider, apiKey, model, baseUrl? }`, build the prompt, call the model, validate the JSON response, and return structured data or a typed error (400 bad config, 429 rate limit, 504 timeout, 502 malformed model output, 500 unexpected).
+All AI endpoints follow the same contract: accept the tool inputs plus `config: { provider, apiKey, model, baseUrl? }`, build the prompt via a tool-specific builder in `lib/prompts.ts`, call the model, validate the JSON response via `lib/utils.ts` validators, and return structured data or a typed error (400 bad config, 429 rate limit, 504 timeout, 502 malformed model output, 500 unexpected). Most routes are thin wrappers over `standardAIHandler` in `lib/pipeline.ts`, which centralizes config validation, input limits (20K char text, 10K char JD), JSON extraction, output validation and error classification. A `redactSecrets` helper strips provider key strings from error messages before they reach the client.
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `app/page.tsx` | Home page - tool marketplace grid + embedded resume-analyzer flow |
-| `lib/tools.ts` | Tool registry: every card's name, category, icon, accent, and route (`target`) |
-| `lib/prompts.ts` | System + user prompt templates for every tool |
-| `lib/ai.ts` | Multi-provider AI model factory (`createModel`) |
+| `app/<tool>/page.tsx` | 28 standalone tool routes (server components with per-route metadata) |
+| `app/api/<endpoint>/route.ts` | 31 API routes (thin `standardAIHandler` wrappers except `/analyze` and `/parse-pdf`) |
+| `lib/tools.ts` | Tool registry: 28 entries with name, category, icon, accent, and route `target` |
+| `lib/prompts.ts` | 28 `build*Prompt` functions + system prompts with strict JSON schemas and truth-filter rules |
+| `lib/pipeline.ts` | Shared `standardAIHandler` generic; config validation, timeout guards, JSON extraction, `redactSecrets`, `classifyAIError` |
+| `lib/ai.ts` | `createModel()` — unified factory over 9 AI providers via Vercel AI SDK |
 | `lib/providers.ts` | Provider registry (models, base URLs, docs links) |
-| `lib/types.ts` | Shared TypeScript interfaces (incl. `AiRequestConfig`) |
-| `lib/utils.ts` | Helpers (HTML extraction, JSON parsing, URL validation, response validation) |
-| `components/layout/Header.tsx` | Sticky navbar + mobile menu (logo links home) |
-| `components/layout/Footer.tsx` | Footer links (real `<Link>` navigation on every page) |
+| `lib/evidence.ts` | 4-tier evidence engine (STRONG / PARTIAL / MISSING / UNVERIFIED) with weighted strength scoring |
+| `lib/resume-parser.ts` | Heuristic section normalization (contact, summary, experience, education, skills) |
+| `lib/documents.ts` | Server-side document extraction (PDF via `pdf-parse`, DOCX via `mammoth`, TXT native) |
+| `lib/document-types.ts` | Client-safe file-type detection and size limits (kept separate from server-only `documents.ts`) |
+| `lib/types.ts` | Shared TypeScript interfaces (incl. `AiRequestConfig`, result types) |
+| `lib/utils.ts` | ~30 runtime validators, HTML extraction, JSON parsing, URL validation, `fetchProfileText` |
+| `components/layout/Header.tsx` | Sticky navbar with 2 hero links + 3 category menus (derived from `lib/tools.ts`) |
+| `components/layout/NavDropdown.tsx` | Category dropdown menus in the navbar |
+| `components/layout/Footer.tsx` | Footer links (real `<Link>` navigation) |
+| `components/LandingHero.tsx` | Hero section on the home page |
+| `components/shared/ToolShell.tsx` | Reusable render-prop shell for tool page layout |
+| `components/shared/ToolHeader.tsx` | Per-tool header with title, description, and provider config |
+| `components/shared/ResultSection.tsx` | Wrapper for tool-specific result blocks |
+| `components/shared/ScoreCard.tsx` | Reusable score/rating display |
+| `components/shared/EvidenceTable.tsx` | Evidence tier table (green/yellow/red) |
+| `components/shared/ErrorState.tsx` | Standardized error display |
+| `components/shared/CopyButton.tsx` | Copy-to-clipboard action |
+| `components/shared/AnalyzeButton.tsx` | Primary action button with loading state |
+| `components/shared/JobDescriptionInput.tsx` | JD paste/upload field |
+| `components/shared/VerdictCard.tsx` | Verdict badge (APPLY / BORDERLINE / LONG SHOT / ABSOLUTELY COOKED, etc.) |
 | `components/tools/ToolGrid.tsx` | Category-tabbed tool grid |
 | `components/tools/ToolCard.tsx` | Marketplace card (icon tile, accent, description) |
 | `components/tools/CategoryTabs.tsx` | Category filter tabs with counts |
@@ -172,11 +225,12 @@ All AI endpoints follow the same contract: accept the tool inputs plus `config: 
 | `components/LoadingState.tsx` | Rotating status messages + shimmer (per-tool copy) |
 | `components/ResultsPanel.tsx` | Tabbed results container (analyzer) |
 | `components/ResumeRewriteModal.tsx` | Optimizer modal: ORIGINAL / OPTIMIZED / WHAT CHANGED tabs + export |
-| `components/JDTranslatorOverlay.tsx` | Full-viewport JD Translator overlay (closes on X / backdrop / Escape) |
+| `components/JDTranslatorOverlay.tsx` | Full-viewport JD Translator overlay |
 | `components/CorporateYappingTranslator.tsx` | JD jargon translator card (JD Translator, tab 1) |
 | `components/ContactForm.tsx` | Suggestions form on the home page (mailto draft, no backend) |
 | `components/<Tool>Page.tsx` | One purpose-built page component per tool (28 total) |
-| `components/sections/*` | Result sections - shared (ReportHeader, VerdictCard, ScoreBreakdown, ...) and tool-specific (RoastLevel, DeluluScore, FitVerdict, AtsScore, ...) |
+| `components/sections/*` | ~40 result-section components — shared (ReportHeader, ScoreBreakdown, ...) and tool-specific (RoastLevel, DeluluScore, FitVerdict, AtsScore, ResumeCapDetector, ...) |
+| `scripts/gen-routes.mjs` | One-shot code generator for API routes from a declarative spec |
 
 ## Data & Privacy Approach
 
@@ -184,20 +238,20 @@ All AI endpoints follow the same contract: accept the tool inputs plus `config: 
 - **No Persistence:** No database. No session storage. No cookies. Everything is ephemeral - refresh the page and it's gone.
 - **No Tracking:** No analytics, no telemetry, no fingerprinting.
 - **Resume/Job Data:** Processed in-memory per request. Never logged, never stored.
-- **LinkedIn/GitHub:** Only public profile data is fetched via the provided URL. No OAuth, no scraping behind auth walls.
+- **LinkedIn/GitHub:** Only public profile data is fetched via the provided URL. No OAuth, no scraping behind auth walls. Provider error messages are scanned and API-key-like strings are redacted before anything reaches the client.
 
 ## Shipped (Current MVP)
 
 - [x] Multi-provider AI integration (OpenAI, Gemini, OpenRouter, Groq, DeepSeek, Mistral, Together, xAI, custom)
 - [x] 28 standalone tool routes + tool marketplace with category filtering
 - [x] Flagship resume analyzer (selection probability, fit analysis, rewrite, strategy)
-- [x] Resume input (paste text or upload PDF)
+- [x] Resume input (paste text or upload PDF, DOCX, or TXT)
 - [x] Job description input (paste)
 - [x] LinkedIn URL synthesis (optional)
 - [x] GitHub URL synthesis (optional)
 - [x] Desperation Level selector (0-5)
 - [x] Selection chance estimate + verdict labels (APPLY / BORDERLINE / LONG SHOT / ABSOLUTELY COOKED)
-- [x] Evidence-based fit analysis (strong / weak / none classifications)
+- [x] Evidence-based fit analysis (4-tier: STRONG / PARTIAL / MISSING / UNVERIFIED; keyword presence is never treated as proof)
 - [x] Resume problems + concrete change list (strict no-fabrication rules)
 - [x] One-click resume optimizer (Truth Filter: structure/wording/keywords only, never fabrication)
 - [x] JD Translator (corporate yapping decoder - overlay + standalone route)
@@ -210,6 +264,9 @@ All AI endpoints follow the same contract: accept the tool inputs plus `config: 
 - [x] Single troll comment; all other analysis strictly professional
 - [x] Clean, modern, professional UI
 - [x] Copy-to-clipboard + .txt download for rewritten resume
+- [x] Secret redaction (API-key-like strings stripped from provider error messages before reaching client)
+- [x] Document split for bundle safety (`lib/documents.ts` server-only, `lib/document-types.ts` client-safe)
+- [x] Reusable tool shell (`ToolShell`) for consistent page layout across all 28 tools
 
 ## Out of Scope (Explicitly NOT Building)
 

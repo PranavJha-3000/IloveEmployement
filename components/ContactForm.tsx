@@ -277,22 +277,44 @@ export function ContactForm() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Tell us what to build, what to fix, or how the job hunt is going..."
-              rows={6}
-              className={TA}
+              rows={8}
+              className={`${TA} resize-y`}
             />
           </div>
 
-          {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+          {error && (
+            <p role="alert" className="mt-3 text-xs font-medium text-red-600">
+              {error}
+            </p>
+          )}
 
-          {/* Submit */}
-          <button type="submit" className="cta-primary w-full mt-6">
-            Send Feedback &rarr;
+          <button type="submit" className="cta-primary cta-lg mt-6 w-full">
+            <LineIcon d={ICON.mail} size={18} strokeWidth={2} className="flex-none" />
+            <span>
+              Open my mail app <span aria-hidden>&rarr;</span>
+            </span>
           </button>
-          <p className="text-xs text-zinc-400 text-center mt-3">
-            Nothing is stored. Nothing is tracked. Your email is only used if
-            you ask for a reply.
-          </p>
         </form>
+
+        {/* Compact privacy notes under the CTA */}
+        <ul className="mx-auto mt-5 flex max-w-[900px] flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-9 sm:gap-y-2">
+          {PROMISES.map((p) => (
+            <li
+              key={p.text}
+              className="flex items-center gap-2 text-center sm:text-left"
+            >
+              <LineIcon
+                d={p.icon}
+                size={16}
+                strokeWidth={1.7}
+                className="flex-none text-zinc-400"
+              />
+              <span className="text-[12px] leading-snug text-zinc-500">
+                {p.text}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

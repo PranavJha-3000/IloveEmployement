@@ -32,11 +32,11 @@ The tool marketplace displays 28 cards, one per unique tool route. The registry 
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 15.3+ (App Router, React 19) |
+| Framework | Next.js 15.5+ (App Router, React 19) |
 | Language | TypeScript 5.7+ |
 | Styling | Tailwind CSS v4.1+ |
 | AI Integration | Vercel AI SDK (`ai` ^4.3) with multi-provider support |
-| PDF Parsing | `pdf-parse` (server-side) |
+| Document Processing | `pdf-parse` (PDF), `mammoth` (DOCX), native `file.text()` (TXT) — all server-side |
 | Deployment | Vercel (`iloveemployement.vercel.app`) |
 
 ### Routing Model

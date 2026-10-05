@@ -264,11 +264,9 @@ export function ContactForm() {
                 autoComplete="email"
                 className={TA}
               />
-              <p className="field-help">Only if you want a reply.</p>
             </div>
           </div>
 
-          {/* Message */}
           <div className="mt-6">
             <label htmlFor="contactMessage" className="field-label">
               Message <span className="text-red-500">*</span>

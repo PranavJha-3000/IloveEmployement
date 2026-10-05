@@ -148,22 +148,23 @@ export function ContactForm() {
 
   if (phase === "success") {
     return (
-      <section className="w-full py-14 px-5">
-        <div className="max-w-[880px] mx-auto">
-          <div className="bg-white border border-zinc-200 rounded-xl px-8 py-10 text-center">
-            <h3 className="text-2xl font-bold text-zinc-900">
+      <section id="feedback" className="w-full bg-white px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="mx-auto w-full max-w-[1280px] rounded-2xl bg-[#FAFAFA] px-5 py-16 sm:px-8 sm:py-20 lg:px-16">
+          <div className="mx-auto max-w-[520px] text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <LineIcon d={ICON.check} size={22} strokeWidth={2.4} />
+            </span>
+            <h3 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">
               Feedback locked in.
             </h3>
-            <p className="mt-3 text-sm text-zinc-600 max-w-md mx-auto leading-relaxed">
+            <p className="mt-2.5 text-sm leading-relaxed text-zinc-500">
               Your email draft should be open and ready to send to{" "}
-              <span className="font-semibold text-zinc-800">
-                {CONTACT_EMAIL}
-              </span>
-              . If nothing opened, copy your message below and send it manually.
+              <span className="font-semibold text-zinc-800">{CONTACT_EMAIL}</span>
+              . If nothing opened, copy the draft and send it yourself.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
               <button onClick={copyDraft} className="cta-primary">
-                {copied ? "Copied" : "Copy my message"}
+                {copied ? "Copied to clipboard" : "Copy my message"}
               </button>
               <button onClick={reset} className="cta-secondary">
                 Write another

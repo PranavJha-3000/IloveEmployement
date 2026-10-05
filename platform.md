@@ -8,7 +8,7 @@ IloveEmployement is an absurdly high-quality, humorous **employment tool suite**
 
 Users bring their own AI API key and pick their provider. Each tool takes what it needs (resume text, job description, LinkedIn/GitHub URLs, desperation level) and returns structured, evidence-based AI output with witty, contextual commentary. The suite shares one design system, but every tool feels purpose-built - from the 30-second recruiter scan simulation to the interview boss fight.
 
-The tool marketplace displays 33 cards: several flagship tools are intentionally listed in more than one category, so 33 cards map to 28 unique tool routes.
+The tool marketplace displays 28 cards, one per unique tool route. The registry in `lib/tools.ts` contains exactly 28 entries, and a dev-mode guard throws on duplicate tool IDs.
 
 ### Tool Categories
 

@@ -134,6 +134,15 @@ export interface AgreementSummary {
   iterations: number;
 }
 
+/** What the run result and the report carry once hand labels have been compared with the judge. */
+export interface AgreementBlock {
+  labeller: string;
+  labelledAt: string;
+  rubricHash: string;
+  items: number;
+  summary: AgreementSummary;
+}
+
 const ci = (r: BootstrapResult): Ci => ({ lo: r.lo, hi: r.hi, skipped: r.skipped });
 
 /** [human strict, judge strict] for every unit index both raters labelled. */

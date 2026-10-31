@@ -15,6 +15,7 @@ import { runPreset, setModelFactory } from "../../lib/engine/run";
 import type { RunMeta } from "../../lib/engine/types";
 import type { AiRequestConfig } from "../../lib/types";
 import { CASES, type EvalCase } from "../cases";
+import { computeAgreement, type AgreementBlock, type AgreementPair, type Rating } from "./agreement";
 import { createDiskCache, HARNESS_VERSION, type DiskCache } from "./cache";
 import { prepareCase } from "./caseRun";
 import { extractCitationUnits, finalDraftText, type CitationUnit } from "./citations";
@@ -22,6 +23,7 @@ import { defaultModelSpecs, describeConfig, loadDotEnv, parseModelList, parseMod
 import { estimateRequests, formatEstimate, type Estimate } from "./estimate";
 import { caseFingerprint } from "./fingerprint";
 import { runJudge } from "./judge";
+import { buildLabelItems, parseHandLabels, renderLabelSheet, selectLabelItems, type LabelItem, type LabelKey } from "./labels";
 import { modelSummary, type CaseOutcome, type ModelSummary } from "./metrics";
 import { listGoogleModels } from "./models";
 import { lookupPrice, PRICE_TABLE_RETRIEVED } from "./prices";
@@ -74,8 +76,8 @@ export interface LlmRunResult {
   outcomes: RunOutcome[];
   summaries: Record<string, ModelSummary>;
   estimate: Estimate;
-  /** Filled by the judge-agreement step (plan 06). */
-  agreement?: Record<string, unknown>;
+  /** Filled by `--agreement` once hand labels exist. */
+  agreement?: AgreementBlock;
 }
 
 export interface RunEvalOptions {
@@ -430,6 +432,8 @@ export interface EvalArgs {
   probe: boolean;
   noDotenv: boolean;
   noJudge: boolean;
+  labelsSheet: boolean;
+  agreement: boolean;
   cases: string[] | null;
   limit: number | null;
   models: ModelSpec[] | null;
@@ -442,7 +446,7 @@ export interface EvalArgs {
 export function parseArgs(argv: string[]): EvalArgs {
   const a: EvalArgs = {
     dry: false, estimate: false, listModels: false, probe: false, noDotenv: false, noJudge: false,
-    cases: null, limit: null, models: null, judge: null, rpm: null, maxRequests: 300, report: null,
+    labelsSheet: false, agreement: false, cases: null, limit: null, models: null, judge: null, rpm: null, maxRequests: 300, report: null,
   };
   const value = (i: number, flag: string): string => {
     const v = argv[i + 1];
@@ -463,6 +467,8 @@ export function parseArgs(argv: string[]): EvalArgs {
       case "--probe": a.probe = true; break;
       case "--no-dotenv": a.noDotenv = true; break;
       case "--no-judge": a.noJudge = true; break;
+      case "--labels-sheet": a.labelsSheet = true; break;
+      case "--agreement": a.agreement = true; break;
       case "--cases": a.cases = value(i++, f).split(",").map((s) => s.trim()).filter(Boolean); break;
       case "--limit": a.limit = posInt(value(i++, f), f); break;
       case "--models": a.models = parseModelList(value(i++, f)); break;
@@ -474,6 +480,107 @@ export function parseArgs(argv: string[]): EvalArgs {
     }
   }
   return a;
+}
+
+// ─── Judge calibration: labelling sheet and agreement (no model calls) ──────
+
+export interface LabelPaths {
+  /** Saved run, input to both steps. */
+  latest: string;
+  /** Holds items.json, key.json, sheet.html, hand-labels.json and agreement.json. */
+  dir: string;
+  /** Where the re-rendered report goes when the saved run is complete. */
+  report: string;
+  rubric?: string;
+}
+
+export const DEFAULT_LABEL_PATHS: LabelPaths = {
+  latest: path.join("evals", "results", "llm-latest.json"),
+  dir: path.join("evals", "llm", "labels"),
+  report: path.join("evals", "LLM.md"),
+};
+
+export type StepResult = { ok: true; message: string } | { ok: false; problems: string[] };
+
+function readJson(file: string): { ok: true; value: unknown } | { ok: false; problem: string } {
+  if (!fs.existsSync(file)) return { ok: false, problem: `${file} not found` };
+  try {
+    return { ok: true, value: JSON.parse(fs.readFileSync(file, "utf8")) };
+  } catch (err) {
+    return { ok: false, problem: `${file} is not valid JSON: ${(err as Error).message}` };
+  }
+}
+
+/** Reads the saved run, selects items without looking at judge scores, and writes items.json, key.json and sheet.html. */
+export function writeLabelSheet(paths: LabelPaths = DEFAULT_LABEL_PATHS): StepResult {
+  const latest = readJson(paths.latest);
+  if (!latest.ok) return { ok: false, problems: [latest.problem, "Run `npm run eval` first."] };
+  const result = latest.value as LlmRunResult;
+  if (!result.complete) return { ok: false, problems: [`${paths.latest} is from a run that was not complete; finish the run before labelling.`] };
+  const selected = selectLabelItems(result.outcomes);
+  if (!selected.length) return { ok: false, problems: ["No judged outputs in the saved run to label."] };
+  const { items, key } = buildLabelItems(selected);
+  const rubricText = loadRubric(paths.rubric);
+  fs.mkdirSync(paths.dir, { recursive: true });
+  fs.writeFileSync(path.join(paths.dir, "items.json"), JSON.stringify(items, null, 2));
+  fs.writeFileSync(path.join(paths.dir, "key.json"), JSON.stringify(key, null, 2));
+  const sheet = path.join(paths.dir, "sheet.html");
+  fs.writeFileSync(sheet, renderLabelSheet(items, rubricText));
+  return {
+    ok: true,
+    message: `${items.length} item(s) written. Open ${path.resolve(sheet)} in a browser, label every item, download hand-labels.json and save it to ${path.join(paths.dir, "hand-labels.json")}.`,
+  };
+}
+
+/** Compares hand labels with the judge, writes agreement.json, attaches the result to the saved run and re-renders the report. */
+export function applyAgreement(paths: LabelPaths = DEFAULT_LABEL_PATHS): StepResult {
+  const latest = readJson(paths.latest);
+  const items = readJson(path.join(paths.dir, "items.json"));
+  const key = readJson(path.join(paths.dir, "key.json"));
+  const hand = readJson(path.join(paths.dir, "hand-labels.json"));
+  const missing = [latest, items, key, hand].flatMap((r) => (r.ok ? [] : [r.problem]));
+  if (missing.length) return { ok: false, problems: [...missing, "Run `npm run eval -- --labels-sheet` and label the sheet first."] };
+
+  const result = (latest as { value: LlmRunResult }).value;
+  const itemList = (items as { value: LabelItem[] }).value;
+  const keyMap = (key as { value: LabelKey }).value;
+  const parsed = parseHandLabels((hand as { value: unknown }).value, itemList, rubricHash(loadRubric(paths.rubric)));
+  if (!parsed.ok) return { ok: false, problems: parsed.problems };
+  const labels = parsed.labels;
+  if (result.rubricHash !== labels.rubricHash) {
+    return { ok: false, problems: [`The saved run used rubric ${result.rubricHash} but the labels use ${labels.rubricHash}.`] };
+  }
+
+  const problems: string[] = [];
+  const pairs: AgreementPair[] = [];
+  const detail: Array<Record<string, unknown>> = [];
+  for (const li of labels.items) {
+    const k = keyMap[li.itemId];
+    const outcome = k && result.outcomes.find((o) => o.caseId === k.caseId && o.modelKey === k.modelKey);
+    if (!outcome || !outcome.judge || !outcome.judge.ok) {
+      problems.push(`item ${li.itemId}: no judged outcome in the saved run`);
+      continue;
+    }
+    const j = outcome.judge;
+    const human: Rating = {
+      scores: { groundedness: li.groundedness, task_fit: li.task_fit, clarity: li.clarity },
+      fabricationPresent: li.fabricationPresent,
+      citations: Object.fromEntries(li.citations.map((c) => [c.index, c.verdict])),
+    };
+    const judge: Rating = { scores: j.scores, fabricationPresent: j.claims.some((c) => c.status === "unsupported"), citations: j.citationVerdicts };
+    pairs.push({ itemId: li.itemId, human, judge });
+    detail.push({ itemId: li.itemId, caseId: k.caseId, modelKey: k.modelKey, human, judge, notes: li.notes });
+  }
+  if (problems.length) return { ok: false, problems };
+
+  const summary = computeAgreement(pairs);
+  const block: AgreementBlock = { labeller: labels.labeller, labelledAt: labels.labelledAt, rubricHash: labels.rubricHash, items: pairs.length, summary };
+  fs.writeFileSync(path.join(paths.dir, "agreement.json"), JSON.stringify({ ...block, pairs: detail }, null, 2));
+  result.agreement = block;
+  fs.writeFileSync(paths.latest, JSON.stringify(result, null, 2));
+  const target = result.complete && !result.caseSubset ? paths.report : path.join(path.dirname(paths.latest), "LLM.preview.md");
+  fs.writeFileSync(target, renderLlmReport(result));
+  return { ok: true, message: `Agreement computed over ${pairs.length} item(s); report written to ${target}.` };
 }
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -503,6 +610,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   } catch (err) {
     console.error((err as Error).message);
     process.exitCode = 2;
+    return;
+  }
+  if (args.labelsSheet || args.agreement) {
+    // Offline steps over saved files: no .env, no keys, no model is ever constructed.
+    const step = args.labelsSheet ? writeLabelSheet() : applyAgreement();
+    if (step.ok) console.log(step.message);
+    else {
+      for (const p of step.problems) console.error(p);
+      process.exitCode = 2;
+    }
     return;
   }
   if (!args.noDotenv) {

@@ -185,3 +185,120 @@ test("parseHandLabels defaults to the current RUBRIC.md hash", () => {
   assert.ok(parseHandLabels(g, ITEMS).ok);
   assert.ok(!parseHandLabels(good(), ITEMS).ok);
 });
+
+// ─── --labels-sheet and --agreement (temp directory, synthetic fixtures) ─────
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { applyAgreement, writeLabelSheet, type LlmRunResult } from "../evals/llm/run";
+
+function fixtureRun(complete = true): LlmRunResult {
+  const outs = outcomes().map((o, i) => ({
+    ...o,
+    judge: {
+      ok: true as const,
+      scores: { groundedness: ((i % 4) + 1) as 1 | 2 | 3 | 4, task_fit: 3 as const, clarity: 4 as const },
+      reasons: { groundedness: "", task_fit: "", clarity: "" },
+      claims: i % 3 === 0 ? [{ claim: "c", status: "unsupported" as const, evidence: "" }] : [{ claim: "c", status: "supported" as const, evidence: "input" }],
+      citationVerdicts: Object.fromEntries(o.units.filter((u) => u.idValid).map((u) => [u.index, (u.index + i) % 2 ? "supports" : "partial"])),
+      unjudged: [], ignoredVerdicts: 0,
+    },
+  }));
+  return {
+    generatedAt: "2026-11-01T00:00:00.000Z", gitSha: "x", command: "synthetic", node: "v", platform: "p", harnessVersion: "h",
+    caseFingerprint: "fp", caseCount: CASES.length, rubricHash: rubricHash(loadRubric()), priceTableRetrieved: "2026-11-01",
+    models: [], judge: null,
+    sampling: { observedTemperatures: {}, judgeTemperature: 0, note: "n" }, retrieval: "r", complete, caseSubset: false,
+    outcomes: outs, summaries: {}, estimate: { perModel: [], judgeKey: null, judgeProbeCalls: 0, lower: 0, upper: 0, fallbackWorstCase: 0 },
+  } as unknown as LlmRunResult;
+}
+
+function tempPaths() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-labels-"));
+  return { latest: path.join(dir, "llm-latest.json"), dir: path.join(dir, "labels"), report: path.join(dir, "LLM.md") };
+}
+
+test("writeLabelSheet: fails clearly without a complete saved run, then writes items, key and sheet", () => {
+  const paths = tempPaths();
+  let r = writeLabelSheet(paths);
+  assert.ok(!r.ok && r.problems[0].includes("not found"));
+  fs.writeFileSync(paths.latest, JSON.stringify(fixtureRun(false)));
+  r = writeLabelSheet(paths);
+  assert.ok(!r.ok && r.problems[0].includes("not complete"));
+
+  fs.writeFileSync(paths.latest, JSON.stringify(fixtureRun()));
+  r = writeLabelSheet(paths);
+  assert.ok(r.ok);
+  const items = JSON.parse(fs.readFileSync(path.join(paths.dir, "items.json"), "utf8"));
+  const keyFile = JSON.parse(fs.readFileSync(path.join(paths.dir, "key.json"), "utf8"));
+  const sheet = fs.readFileSync(path.join(paths.dir, "sheet.html"), "utf8");
+  assert.strictEqual(items.length, 30);
+  assert.strictEqual(Object.keys(keyFile).length, 30);
+  assert.ok(Object.values(keyFile).every((v) => Object.keys(v as object).sort().join() === "caseId,modelKey"));
+  assert.ok(!/gen-alpha|gen-beta/.test(sheet) && !/gen-alpha|gen-beta/.test(JSON.stringify(items)));
+  assert.ok(sheet.startsWith("<!doctype html>"));
+});
+
+// Synthetic labels derived from items.json; they exist only inside the temp directory of this test.
+function syntheticLabels(dir: string, rubric: string) {
+  const items = JSON.parse(fs.readFileSync(path.join(dir, "items.json"), "utf8")) as Array<{ id: string; units: Array<{ index: number }> }>;
+  return {
+    labeller: "Synthetic Test Labeller",
+    labelledAt: "2026-11-01T12:00:00.000Z",
+    rubricHash: rubric,
+    items: items.map((it, i) => ({
+      itemId: it.id, groundedness: (i % 4) + 1, task_fit: 3, clarity: 4, fabricationPresent: i % 2 === 0,
+      citations: it.units.map((u, j) => ({ index: u.index, verdict: (i + j) % 3 === 0 ? "does_not_support" : "supports" })),
+    })),
+  };
+}
+
+test("applyAgreement: rejects bad labels with a problem list, then writes agreement.json and the report section", () => {
+  const paths = tempPaths();
+  fs.writeFileSync(paths.latest, JSON.stringify(fixtureRun()));
+  assert.ok(writeLabelSheet(paths).ok);
+
+  let r = applyAgreement(paths);
+  assert.ok(!r.ok && r.problems[0].includes("hand-labels.json not found"));
+
+  const labels = syntheticLabels(paths.dir, rubricHash(loadRubric()));
+  const incomplete = { ...labels, items: labels.items.slice(1) };
+  fs.writeFileSync(path.join(paths.dir, "hand-labels.json"), JSON.stringify(incomplete));
+  r = applyAgreement(paths);
+  assert.ok(!r.ok && r.problems.some((p) => p.includes("missing item L01")));
+
+  fs.writeFileSync(path.join(paths.dir, "hand-labels.json"), JSON.stringify(labels));
+  r = applyAgreement(paths);
+  assert.ok(r.ok, JSON.stringify(r));
+  const agreement = JSON.parse(fs.readFileSync(path.join(paths.dir, "agreement.json"), "utf8"));
+  assert.strictEqual(agreement.pairs.length, 30);
+  assert.strictEqual(agreement.summary.seed, 20261101);
+  assert.strictEqual(agreement.summary.iterations, 10000);
+  const saved = JSON.parse(fs.readFileSync(paths.latest, "utf8"));
+  assert.strictEqual(saved.agreement.items, 30);
+
+  const md = fs.readFileSync(paths.report, "utf8");
+  const section = md.slice(md.indexOf("## Judge agreement with human labels"));
+  assert.ok(section.includes("- Labeller: Synthetic Test Labeller"));
+  assert.ok(section.includes("- Items labelled: 30"));
+  assert.ok(section.includes(`- Rubric hash: ${rubricHash(loadRubric())}`));
+  for (const row of ["| groundedness |", "| task_fit |", "| clarity |", "| fabrication present |", "| citation support, strict"]) assert.ok(section.includes(row), row);
+  assert.ok(section.includes("n/a (no variance)"), "constant task_fit/clarity have no variance");
+  assert.ok(section.includes("seed 20261101 and 10000 resamples"));
+  assert.ok(!section.includes("Pending"));
+
+  // Same inputs, same output: re-running is deterministic.
+  const before = fs.readFileSync(path.join(paths.dir, "agreement.json"), "utf8");
+  assert.ok(applyAgreement(paths).ok);
+  assert.strictEqual(fs.readFileSync(path.join(paths.dir, "agreement.json"), "utf8"), before);
+});
+
+test("applyAgreement rejects labels made against another rubric", () => {
+  const paths = tempPaths();
+  fs.writeFileSync(paths.latest, JSON.stringify(fixtureRun()));
+  assert.ok(writeLabelSheet(paths).ok);
+  fs.writeFileSync(path.join(paths.dir, "hand-labels.json"), JSON.stringify(syntheticLabels(paths.dir, "stale")));
+  const r = applyAgreement(paths);
+  assert.ok(!r.ok && r.problems.some((p) => p.includes("rubricHash")));
+});

@@ -1,5 +1,6 @@
 // Renders evals/LLM.md purely from an LlmRunResult. No clock, no fs, no hand-typed numbers.
 import { redactSecrets } from "../../lib/pipeline";
+import type { AgreementBlock } from "./agreement";
 import { caseMetrics, type CaseMetrics } from "./metrics";
 import { lookupPrice, PRICE_TABLE_NOTE } from "./prices";
 import type { LlmRunResult, ModelInfo, RunOutcome } from "./run";
@@ -15,6 +16,41 @@ const usd = (n: number | null) => (n === null ? NA : `$${n.toFixed(4)}`);
 const score = (n: number | null) => (n === null ? NA : n.toFixed(2));
 const rate = (num: number, den: number) => (den > 0 ? `${((num / den) * 100).toFixed(1)}% (${num}/${den})` : NA);
 const esc = (s: string) => redactSecrets(s).replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+
+const pct = (n: number | null) => (n === null ? NA : `${(n * 100).toFixed(1)}%`);
+const kappa = (n: number | null) => (n === null ? "n/a (no variance)" : n.toFixed(2));
+const interval = (c: { lo: number | null; hi: number | null }) => (c.lo === null || c.hi === null ? NA : `${c.lo.toFixed(2)} to ${c.hi.toFixed(2)}`);
+
+function agreementLines(a: AgreementBlock): string[] {
+  const s = a.summary;
+  const dim = (name: string, d: AgreementBlock["summary"]["dimensions"]["groundedness"]) =>
+    [name, String(d.n), pct(d.exact), pct(d.withinOne), kappa(d.weightedKappa), interval(d.ci)];
+  const skipped = [
+    ...Object.entries(s.dimensions).map(([k, d]) => [k, d.ci.skipped] as const),
+    ["fabrication present", s.fabrication.ci.skipped] as const,
+    ["citation support", s.citationSupport.ci.skipped] as const,
+  ].filter(([, n]) => n > 0);
+  return [
+    `- Labeller: ${esc(a.labeller)}`,
+    `- Items labelled: ${a.items}`,
+    `- Rubric hash: ${a.rubricHash}`,
+    "",
+    ...table(
+      ["Measure", "n", "Exact / raw agreement", "Within 1", "Kappa (dimensions: quadratic-weighted)", "95% CI of kappa"],
+      [
+        dim("groundedness", s.dimensions.groundedness),
+        dim("task_fit", s.dimensions.task_fit),
+        dim("clarity", s.dimensions.clarity),
+        ["fabrication present", String(s.fabrication.n), pct(s.fabrication.raw), NA, kappa(s.fabrication.kappa), interval(s.fabrication.ci)],
+        [`citation support, strict (${s.citationSupport.nUnits} units)`, String(s.citationSupport.nUnits), pct(s.citationSupport.raw), NA, kappa(s.citationSupport.kappa), interval(s.citationSupport.ci)],
+      ],
+    ),
+    "",
+    `Intervals are 95% percentile bootstrap intervals resampling outputs (not individual units), seed ${s.seed} and ${s.iterations} resamples.` +
+      (skipped.length ? ` Resamples with no variance were left out of the interval: ${skipped.map(([k, n]) => `${k} ${n}`).join(", ")}.` : ""),
+    "",
+  ];
+}
 
 interface Row {
   outcome: RunOutcome;
@@ -209,12 +245,8 @@ export function renderLlmReport(result: LlmRunResult): string {
 
   // ── Agreement ──
   out.push("## Judge agreement with human labels", "");
-  out.push(
-    result.agreement
-      ? "Computed from hand labels; see the agreement block in evals/results/llm-latest.json."
-      : "Pending: hand labels not yet collected (see evals/llm/labels/).",
-    "",
-  );
+  if (result.agreement) out.push(...agreementLines(result.agreement));
+  else out.push("Pending: hand labels not yet collected (see evals/llm/labels/).", "");
 
   // ── Definitions ──
   out.push("## Definitions", "");

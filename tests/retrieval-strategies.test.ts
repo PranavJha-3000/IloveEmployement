@@ -1,5 +1,6 @@
 // Offline parity tests: strategies must equal the app's own retrieval calls.
 import assert from "node:assert";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { VaultChunk } from "../lib/engine/types";
 import { cosine, semanticRanking } from "../lib/retrieval/fusion";
@@ -71,5 +72,9 @@ test("embeddings without vectors throws", () => {
 });
 
 test("strategies module does not load transformers", () => {
-  assert.ok(!Object.keys(require.cache).some((k) => k.includes("@huggingface")));
+  const source = readFileSync(require.resolve("../evals/retrieval/strategies.js"), "utf8");
+  assert.ok(
+    !/require\(["'](@huggingface\/transformers|\.\/embedder|\.\/reranker)/.test(source),
+    "strategies.ts must not statically import the embedder, reranker or transformers",
+  );
 });

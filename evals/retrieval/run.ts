@@ -1,10 +1,10 @@
-// Retrieval eval runner. Flags: --ci, --update-baseline, --strategies a,b,
-// --report <path>, --repeat <n>. Keyword-only runs never load the embedder.
+// Retrieval eval runner. Flags: --ci, --update-baseline, --allow-regression,
+// --strategies a,b, --report <path>, --repeat <n>. Keyword-only runs never load the embedder.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { BASELINE_EPSILON, compareToBaseline, type KeywordBaseline } from "./baseline";
+import { BASELINE_EPSILON, compareToBaseline, planBaselineUpdate, validateBaseline, type KeywordBaseline } from "./baseline";
 import { DatasetError, loadDataset } from "./dataset/load";
 import { METRIC_KEYS, PRIMARY_METRIC, RELEVANCE_THRESHOLD, aggregate, percentile, scoreQuery, type MetricSet } from "./metrics";
 import { renderReport } from "./report";
@@ -61,6 +61,7 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const ci = args.includes("--ci");
   const update = args.includes("--update-baseline");
+  const allowRegression = args.includes("--allow-regression");
   const repeat = Math.max(1, Number(argValue(args, "--repeat") ?? 3) || 3);
   const reportPath = argValue(args, "--report") ?? path.join("evals", "RETRIEVAL.md");
   const requested = ci || update ? ["keyword"] : argValue(args, "--strategies")?.split(",").map((s) => s.trim()).filter(Boolean);
@@ -218,6 +219,23 @@ async function main(): Promise<void> {
       overall: round4(kw.overall),
       byType: { lexical: round4(kw.byType.lexical), paraphrase: round4(kw.byType.paraphrase) },
     };
+    let oldRaw: unknown = null;
+    if (fs.existsSync(BASELINE_PATH)) {
+      const text = fs.readFileSync(BASELINE_PATH, "utf8");
+      try {
+        oldRaw = JSON.parse(text);
+      } catch {
+        oldRaw = text;
+      }
+    }
+    const plan = planBaselineUpdate(oldRaw, baseline, allowRegression);
+    for (const w of plan.warnings) console.log(`WARNING ${w}`);
+    for (const i of plan.improvements) console.log(`improvement ${i}`);
+    if (!plan.write) {
+      for (const e of plan.errors) console.error(e);
+      process.exitCode = 1;
+      return;
+    }
     fs.writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + "\n");
     console.log(`Baseline written to ${BASELINE_PATH}. Commit it with an explanation of why it changed.`);
     return;
@@ -229,8 +247,23 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8")) as KeywordBaseline;
-    const cmp = compareToBaseline(baseline, {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8"));
+    } catch (err) {
+      console.error(`INVALID BASELINE could not parse ${BASELINE_PATH}: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Run ${UPDATE_CMD}`);
+      process.exitCode = 1;
+      return;
+    }
+    const valid = validateBaseline(parsed);
+    if (!valid.ok) {
+      for (const p of valid.problems) console.error(`INVALID BASELINE ${p}`);
+      console.error(`Run ${UPDATE_CMD}`);
+      process.exitCode = 1;
+      return;
+    }
+    const cmp = compareToBaseline(valid.baseline, {
       strategy: "keyword",
       fingerprint: result.dataset.fingerprint,
       overall: kw!.overall,

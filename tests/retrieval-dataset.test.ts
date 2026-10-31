@@ -1,7 +1,7 @@
 // Validation tests for the retrieval eval dataset resolver. Inline fixtures only.
 import assert from "node:assert";
 import { test } from "node:test";
-import { DatasetError, MIN_CHUNKS_PER_RESUME, resolveDataset } from "../evals/retrieval/dataset/load";
+import { DatasetError, MIN_CHUNKS_PER_RESUME, loadDataset, resolveDataset } from "../evals/retrieval/dataset/load";
 import { RESUMES } from "../evals/retrieval/dataset/resumes";
 import type { RetrievalQuery, SyntheticResume } from "../evals/retrieval/dataset/types";
 import { chunkResume } from "../lib/vault/chunker";
@@ -129,4 +129,29 @@ test("RESUMES: unique ids, >= min chunks, core kinds present", () => {
       assert.ok(chunks.some((c) => c.kind === kind), `${r.id} missing ${kind}`);
     }
   }
+});
+
+test("committed retrieval dataset validates", () => {
+  let ds: ReturnType<typeof loadDataset> | undefined;
+  assert.doesNotThrow(() => {
+    ds = loadDataset();
+  });
+  const queries = ds!.queries;
+  assert.ok(queries.length >= 60, `only ${queries.length} queries`);
+
+  const breakdown: string[] = [];
+  for (const r of RESUMES) {
+    const mine = queries.filter((q) => q.resumeId === r.id);
+    assert.ok(mine.length >= 18, `${r.id} has ${mine.length} queries`);
+    const lex = mine.filter((q) => q.type === "lexical").length;
+    breakdown.push(`${r.id}=${mine.length} (lexical ${lex}, paraphrase ${mine.length - lex})`);
+  }
+  const lexical = queries.filter((q) => q.type === "lexical").length;
+  const paraphrase = queries.filter((q) => q.type === "paraphrase").length;
+  assert.ok(lexical >= 24, `only ${lexical} lexical queries`);
+  assert.ok(paraphrase >= 24, `only ${paraphrase} paraphrase queries`);
+  for (const q of queries) {
+    assert.ok(q.labels.some((l) => l.grade === 3), `${q.id} has no grade-3 label`);
+  }
+  console.log(`retrieval dataset: ${queries.length} queries; ${breakdown.join("; ")}; lexical ${lexical}, paraphrase ${paraphrase}`);
 });

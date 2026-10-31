@@ -1,6 +1,7 @@
 // Renders evals/RETRIEVAL.md purely from a RetrievalRunResult. No hand-typed numbers.
 import { METRIC_KEYS } from "./metrics";
 import type { MetricSet } from "./metrics";
+import { ADDED_LATENCY_BUDGET_MS, type PairedComparison } from "./decision";
 import type { RetrievalRunResult } from "./run";
 
 const f3 = (n: number) => n.toFixed(3);
@@ -29,6 +30,14 @@ export function renderReport(result: RetrievalRunResult): string {
     `- Node: ${result.node}`,
     `- Platform: ${result.platform}`,
     `- Embedding model: ${result.embeddingModel ? `${result.embeddingModel.id} (${result.embeddingModel.dtype})` : "not used in this run"}`,
+    `- Reranker model: ${
+      result.rerankModel
+        ? `${result.rerankModel.id} (${result.rerankModel.dtype}), transformers ${result.rerankModel.transformersVersion}, load ${Math.round(result.rerankModel.loadMs)} ms, top N ${result.rerankModel.topN.join(", ")}`
+        : "not used in this run"
+    }`,
+    ...(result.embeddingCache
+      ? [`- Embedding cache config: ${Object.entries(result.embeddingCache).map(([k, v]) => `${k}=${v}`).join(", ")}`]
+      : []),
     `- Dataset fingerprint: ${d.fingerprint}`,
     "",
   );
@@ -47,6 +56,7 @@ export function renderReport(result: RetrievalRunResult): string {
     `- Relevance grades 1-3; recall and MRR count grade >= ${result.relevanceThreshold}; nDCG gain is 2^g - 1. MRR is effectively MRR@8.`,
     `- Latency is the median of ${result.repeat} timed retrieve() calls per query. For embedding strategies one query-embedding timing per query is added to that median, and the same query-embedding timing sample is shared by every embedding strategy for that query; chunk vectors are precomputed as in the app's index.`,
     "- The summary chunk is always placed at rank 1, so unless a query labels the summary at a grade >= the relevance threshold, MRR is at most 0.5; IDCG ignores the summary anchor and the 3-per-role cap, so nDCG@k cannot reach 1. Compare strategies with each other, not against 1.0.",
+    "- Rerank strategies take the top N of their base ranking before the 3-per-role cap, score (query, passage) pairs with the cross-encoder on CPU in Node, then apply the same summary anchor and 3-per-role cap. That latency is Node CPU; a browser (WASM) will be slower. The top 30 rows are sensitivity rows that the decision rule never adopts.",
     `- Primary metric is ${result.primaryMetric}: it is graded, covers the full 8-chunk context and is order-sensitive.`,
     "",
   );
@@ -73,6 +83,48 @@ export function renderReport(result: RetrievalRunResult): string {
   out.push("## Latency", "", "| Strategy | p50 ms | p95 ms | Query-embed p50 ms |", "| --- | ---: | ---: | ---: |");
   for (const s of result.strategies) out.push(`| ${s.label} | ${f2(s.latency.p50)} | ${f2(s.latency.p95)} | ${f2(s.latency.embedP50)} |`);
   out.push("");
+
+  const label = (id: string) => result.strategies.find((s) => s.id === id)?.label ?? id;
+  const sgn = (n: number) => (n >= 0 ? "+" : "-") + Math.abs(n).toFixed(3);
+  if (result.comparisons.length) {
+    out.push(
+      "## Paired deltas (ndcg@8)",
+      "",
+      `Per-query paired differences in ${result.primaryMetric}; percentile bootstrap, ${result.bootstrap.iterations} resamples, seed ${result.bootstrap.seed}, ${Math.round(result.bootstrap.confidence * 100)}% interval.`,
+      "",
+    );
+    const scopeTitles: [PairedComparison["scope"], string][] = [["overall", "Overall"], ["lexical", "Lexical"], ["paraphrase", "Paraphrase"]];
+    for (const [scope, title] of scopeTitles) {
+      out.push(`### ${title}`, "", "| Strategy | versus | mean delta | 95% CI | wins / ties / losses | n |", "| --- | --- | ---: | ---: | ---: | ---: |");
+      for (const c of result.comparisons.filter((x) => x.scope === scope)) {
+        out.push(`| ${label(c.a)} | ${label(c.b)} | ${sgn(c.meanDelta)} | [${sgn(c.lo)}, ${sgn(c.hi)}] | ${c.wins} / ${c.ties} / ${c.losses} | ${c.n} |`);
+      }
+      out.push("");
+    }
+  }
+
+  if (result.addedLatency.length) {
+    out.push("## Added latency", "", "| Strategy | versus | added p50 ms | added p95 ms |", "| --- | --- | ---: | ---: |");
+    for (const a of result.addedLatency) out.push(`| ${label(a.id)} | ${label(a.baseId)} | ${f2(a.p50)} | ${f2(a.p95)} |`);
+    out.push("", `The ${ADDED_LATENCY_BUDGET_MS} ms budget applies to the top 20 p50 added latency.`, "");
+  }
+
+  out.push("## Decision", "");
+  if (result.decision) {
+    out.push(
+      "The rule was committed before measurement: see evals/retrieval/DECISION.md.",
+      "",
+      `Rule version: ${result.decision.ruleVersion}`,
+      "",
+      ...result.decision.reasons.map((r) => `- ${r}`),
+      "",
+      `- RERANK_ADOPTED: ${result.decision.rerankAdopted ?? "none"}`,
+      `- APP_BASE_MODE: ${result.decision.baseMode}`,
+      "",
+    );
+  } else {
+    out.push("No decision in this run (requires keyword, embeddings, hybrid, hybrid+rerank and embeddings+rerank).", "");
+  }
 
   out.push("## Misses", "", "Queries where every strategy has recall@8 = 0.", "");
   const queryCount = result.strategies[0]?.perQuery.length ?? 0;

@@ -8,7 +8,22 @@ import { BASELINE_EPSILON, compareToBaseline, planBaselineUpdate, validateBaseli
 import { DatasetError, loadDataset } from "./dataset/load";
 import { METRIC_KEYS, PRIMARY_METRIC, RELEVANCE_THRESHOLD, aggregate, percentile, scoreQuery, type MetricSet } from "./metrics";
 import { renderReport } from "./report";
-import { STRATEGIES, type EmbeddingInput } from "./strategies";
+import {
+  BOOTSTRAP_CONFIDENCE,
+  BOOTSTRAP_ITERATIONS,
+  BOOTSTRAP_SEED,
+  RERANK_CANDIDATES,
+  SENSITIVITY_STRATEGIES,
+  addedLatency,
+  decide,
+  pairedComparison,
+  type AddedLatency,
+  type Decision,
+  type PairedComparison,
+  type Scope,
+} from "./decision";
+import type { EmbeddingCacheConfig } from "./embedder";
+import { STRATEGIES, getRerankInfo, type EmbeddingInput } from "./strategies";
 import { RESUMES } from "./dataset/resumes";
 import type { QueryType } from "./dataset/types";
 import type { VaultChunk } from "../../lib/engine/types";
@@ -28,6 +43,12 @@ export interface RetrievalRunResult {
     paraphrase: number;
   };
   embeddingModel: { id: string; dtype: string } | null;
+  embeddingCache: EmbeddingCacheConfig | null;
+  rerankModel: { id: string; dtype: string; transformersVersion: string; loadMs: number; topN: number[] } | null;
+  bootstrap: { iterations: number; seed: number; confidence: number };
+  comparisons: PairedComparison[];
+  addedLatency: AddedLatency[];
+  decision: Decision | null;
   primaryMetric: string;
   relevanceThreshold: number;
   strategies: {
@@ -95,6 +116,7 @@ async function main(): Promise<void> {
     dtype: string;
     embedChunks(chunks: VaultChunk[]): Promise<{ id: string; vector: number[] }[]>;
     embedQuery(query: string): Promise<number[]>;
+    cacheConfig?: EmbeddingCacheConfig;
   } | null = null;
   const chunkVectors = new Map<string, { id: string; vector: number[] }[]>();
   if (needsEmbed) {
@@ -164,6 +186,31 @@ async function main(): Promise<void> {
     };
   });
 
+  // Paired statistics, added latency and the mechanical decision.
+  const runById = new Map(strategies.map((s) => [s.id, s]));
+  const rerankIds = STRATEGIES.map((s) => s.id).filter((id) => id.includes("+rerank") && runById.has(id));
+  const scopes: Scope[] = ["overall", "lexical", "paraphrase"];
+  const comparisons: PairedComparison[] = [];
+  for (const id of rerankIds) {
+    for (const vs of ["hybrid", "embeddings"]) {
+      if (!runById.has(vs)) continue;
+      for (const sc of scopes) comparisons.push(pairedComparison(runById.get(id)!, runById.get(vs)!, sc));
+    }
+  }
+  if (runById.has("embeddings") && runById.has("hybrid")) {
+    for (const sc of scopes) comparisons.push(pairedComparison(runById.get("embeddings")!, runById.get("hybrid")!, sc));
+  }
+  const baseOf = new Map<string, string>([...RERANK_CANDIDATES, ...SENSITIVITY_STRATEGIES].map((c) => [c.id, c.base]));
+  const added: AddedLatency[] = [];
+  for (const id of rerankIds) {
+    const base = baseOf.get(id);
+    if (base && runById.has(base)) added.push(addedLatency(runById.get(id)!, runById.get(base)!));
+  }
+  const decisionIds = ["keyword", "embeddings", "hybrid", "hybrid+rerank", "embeddings+rerank"];
+  const decision = decisionIds.every((id) => runById.has(id)) ? decide(strategies) : null;
+  const rerankInfo = rerankIds.length ? getRerankInfo() : null;
+  const topNs = [...new Set(selected.filter((s) => s.id.includes("+rerank")).map((s) => (s.id.includes("@") ? Number(s.id.split("@")[1]) : 20)))].sort((a, b) => a - b);
+
   let gitSha = "unknown";
   try {
     gitSha = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
@@ -189,6 +236,14 @@ async function main(): Promise<void> {
       paraphrase: dataset.queries.filter((q) => q.type === "paraphrase").length,
     },
     embeddingModel: embedder ? { id: embedder.model, dtype: embedder.dtype } : null,
+    embeddingCache: embedder?.cacheConfig ?? null,
+    rerankModel: rerankInfo
+      ? { id: rerankInfo.model, dtype: rerankInfo.dtype, transformersVersion: rerankInfo.transformersVersion, loadMs: rerankInfo.loadMs, topN: topNs }
+      : null,
+    bootstrap: { iterations: BOOTSTRAP_ITERATIONS, seed: BOOTSTRAP_SEED, confidence: BOOTSTRAP_CONFIDENCE },
+    comparisons,
+    addedLatency: added,
+    decision,
     primaryMetric: PRIMARY_METRIC,
     relevanceThreshold: RELEVANCE_THRESHOLD,
     strategies,
@@ -202,6 +257,11 @@ async function main(): Promise<void> {
 
   console.log(["strategy", ...METRIC_KEYS].join("\t"));
   for (const s of strategies) console.log([s.id, ...METRIC_KEYS.map((k) => s.overall[k].toFixed(3))].join("\t"));
+
+  if (decision) {
+    for (const r of decision.reasons) console.log(r);
+    console.log(`DECISION rerank=${decision.rerankAdopted ?? "none"} baseMode=${decision.baseMode}`);
+  }
 
   if (!ci && !update) {
     fs.mkdirSync(path.dirname(reportPath), { recursive: true });

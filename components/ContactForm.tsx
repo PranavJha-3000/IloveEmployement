@@ -149,7 +149,7 @@ export function ContactForm() {
   if (phase === "success") {
     return (
       <section id="feedback" className="w-full bg-white px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto w-full max-w-[1280px] rounded-2xl bg-[#FAFAFA] px-5 py-16 sm:px-8 sm:py-20 lg:px-16">
+        <div className="mx-auto w-full max-w-[1280px] rounded-3xl bg-[#f3f4f7] px-5 py-16 sm:px-8 sm:py-20 lg:px-16">
           <div className="mx-auto max-w-[520px] text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
               <LineIcon d={ICON.check} size={22} strokeWidth={2.4} />
@@ -179,11 +179,10 @@ export function ContactForm() {
   return (
     <section id="feedback" className="w-full bg-white px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       {/* Light-gray feedback panel — the surrounding page stays white. */}
-      <div className="mx-auto w-full max-w-[1280px] rounded-2xl bg-[#FAFAFA] px-5 py-14 sm:px-8 sm:py-16 lg:px-12 lg:py-20 xl:px-16">
-        {/* Centered header: eyebrow → heading → supporting copy */}
+      <div className="mx-auto w-full max-w-[1280px] rounded-3xl bg-[#f3f4f7] px-5 py-14 sm:px-8 sm:py-16 lg:px-12 lg:py-20 xl:px-16">
+        {/* Centered header: heading → supporting copy */}
         <header className="text-center">
-          <p className="eyebrow text-center">SUGGESTIONS, BUGS &amp; RANTS</p>
-          <h2 className="text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
+          <h2 className="text-[32px] font-extrabold tracking-[-0.03em] text-zinc-900 sm:text-[44px]">
             Tell us what to build next
           </h2>
           <p className="mx-auto mt-4 max-w-[640px] text-[15px] leading-relaxed text-zinc-500 sm:text-base">
@@ -214,7 +213,7 @@ export function ContactForm() {
                       selected
                         ? "border-red-500 bg-red-50/70 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
                         : "border-zinc-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:border-zinc-300 hover:shadow-[0_4px_10px_rgba(16,24,40,0.07)]"
-                    } peer-focus-visible:ring-2 peer-focus-visible:ring-red-500/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#FAFAFA]`}
+                    } peer-focus-visible:ring-2 peer-focus-visible:ring-red-500/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#f3f4f7]`}
                   >
                     <LineIcon
                       d={t.icon}
@@ -291,7 +290,7 @@ export function ContactForm() {
           <button type="submit" className="cta-primary cta-lg mt-6 w-full">
             <LineIcon d={ICON.mail} size={18} strokeWidth={2} className="flex-none" />
             <span>
-              Open my mail app <span aria-hidden>&rarr;</span>
+              Open my mail app
             </span>
           </button>
         </form>

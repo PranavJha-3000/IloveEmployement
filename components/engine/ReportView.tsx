@@ -26,7 +26,7 @@ function Card({ title, children, right }: { title: string; children: ReactNode; 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[12px] font-bold uppercase tracking-wider text-zinc-500">{title}</h3>
+        <h3 className="text-[15px] font-semibold text-zinc-900">{title}</h3>
         {right}
       </div>
       {children}
@@ -664,7 +664,7 @@ function StarView({ r, chunks, onSave }: { r: ReportResult<"star">; onSave?: (ti
             ] as const
           ).map(([k, v]) => (
             <div key={k}>
-              <dt className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{k}</dt>
+              <dt className="text-[13px] font-semibold text-zinc-500">{k}</dt>
               <dd className="text-zinc-800">{v}</dd>
             </div>
           ))}

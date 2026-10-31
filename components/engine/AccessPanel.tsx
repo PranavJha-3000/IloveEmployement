@@ -62,13 +62,13 @@ export function AccessPanel({ access, remaining }: { access: ReturnType<typeof u
   if (!info) return <div className="h-10 animate-pulse rounded-lg bg-zinc-100" />;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+    <div className="rounded-xl border border-zinc-200 bg-[#f3f4f7] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-[13px] font-semibold text-zinc-800">
-            {useOwnKey ? "Using your own API key" : `Free tier · ${info.model}`}
+          <p className="text-[14px] font-semibold text-zinc-900">
+            {useOwnKey ? "Using your own API key" : `Free tier, running ${info.model}`}
           </p>
-          <p className="text-[11.5px] text-zinc-500">
+          <p className="text-[12.5px] text-zinc-500">
             {useOwnKey
               ? "Sent with each run, never stored on our server. Cleared when you close this tab."
               : remaining === null
@@ -80,7 +80,7 @@ export function AccessPanel({ access, remaining }: { access: ReturnType<typeof u
           <button
             type="button"
             onClick={() => setUseOwnKey(!useOwnKey)}
-            className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900"
           >
             {useOwnKey ? "Use free tier" : "Use my own key"}
           </button>

@@ -304,7 +304,7 @@ export function VaultManager() {
         <div className="mt-4 space-y-5">
           {grouped.map((g) => (
             <div key={g.kind}>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+              <p className="text-[14px] font-semibold text-zinc-400">
                 {KIND_LABEL[g.kind]} · {g.items.length}
               </p>
               <ul className="mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200">

@@ -62,7 +62,7 @@ function ResumeField({ field, value, onChange, disabled, vaultCount, pasted }: F
         <label htmlFor="field-resume" className="field-label">
           {field.label}
         </label>
-        <div className="mb-1.5 flex gap-2 text-[11.5px] font-semibold">
+        <div className="mb-1.5 flex gap-3 text-[13px] font-semibold">
           <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="text-zinc-600 hover:text-red-600">
             Upload PDF/DOCX
           </button>
@@ -258,7 +258,7 @@ export function PresetRunner({ presetId }: { presetId: string }) {
         {preset.usesVault && loaded && !pastedChunks && (
           <div className="rounded-xl border border-zinc-200 p-4">
             {chunks.length === 0 ? (
-              <p className="text-[12.5px] text-zinc-600">
+              <p className="text-[14px] text-zinc-600">
                 <span className="font-semibold text-zinc-800">Make it about you.</span>{" "}
                 {hasResumeField ? "Paste your resume above, or add it to your " : "Add your resume to your "}
                 <Link href="/vault" className="font-semibold text-red-600 hover:underline">
@@ -314,7 +314,7 @@ export function PresetRunner({ presetId }: { presetId: string }) {
                       : "Analyze"}
         </button>
         {(missing.length > 0 || missingProfile) && (
-          <p className="text-center text-[11.5px] text-zinc-400">
+          <p className="text-center text-[13px] text-zinc-500">
             Still needed: {[...missing.map((f) => f.label), ...(missingProfile && !missing.some((f) => f.kind === "resume") ? ["your resume"] : [])].join(", ")}
           </p>
         )}
@@ -322,12 +322,12 @@ export function PresetRunner({ presetId }: { presetId: string }) {
 
       <div id="result" className="scroll-mt-24">
         {phase === "loading" && (
-          <div className="space-y-3 rounded-xl border border-zinc-200 p-5">
+          <div className="space-y-3 rounded-2xl border border-zinc-200 p-6">
             <div className="h-4 w-1/3 animate-pulse rounded bg-zinc-100" />
             <div className="h-3 w-full animate-pulse rounded bg-zinc-100" />
             <div className="h-3 w-5/6 animate-pulse rounded bg-zinc-100" />
             <div className="h-3 w-4/6 animate-pulse rounded bg-zinc-100" />
-            <p className="pt-2 text-[12px] text-zinc-400">{steps}</p>
+            <p className="pt-2 text-[13px] text-zinc-500">{steps}</p>
           </div>
         )}
         {phase !== "loading" && result?.kind === "message" && (
@@ -359,8 +359,8 @@ export function PresetRunner({ presetId }: { presetId: string }) {
           />
         )}
         {phase === "idle" && !result && (
-          <div className="rounded-xl border border-dashed border-zinc-200 p-6 text-[13px] leading-relaxed text-zinc-500">
-            <p className="font-semibold text-zinc-700">How this tool stays honest</p>
+          <div className="rounded-2xl bg-[#f3f4f7] p-6 text-[14px] leading-relaxed text-zinc-600">
+            <p className="text-[16px] font-semibold text-zinc-900">How this tool stays honest</p>
             <ul className="mt-2 space-y-1">
               <li>• It works only from what you give it and your Career Vault. Unknowns become highlighted [placeholders].</li>
               <li>• Claims about you cite the exact part of your resume they came from.</li>

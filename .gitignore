@@ -16,3 +16,4 @@ graphify-out/
 .test-build/
 .eval-build/
 evals/results/
+.env

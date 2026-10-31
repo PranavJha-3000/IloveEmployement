@@ -66,13 +66,11 @@ export function Header() {
 
   function renderMobileTool(tool: Tool) {
     const className =
-      "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50";
+      "flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left text-[15px] font-medium text-zinc-800 transition-colors hover:bg-[#f3f4f7]";
     const label = (
       <>
         <span>{tool.name}</span>
-        <span className="ml-auto text-[11px] text-zinc-400">
-          {tool.category}
-        </span>
+
       </>
     );
 
@@ -89,16 +87,16 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white border-b border-zinc-200">
+    <header className="sticky top-0 z-50 w-full border-b border-[#e4e6eb] bg-white/95 backdrop-blur">
       {/* Desktop: logo, a couple of hero links, then category dropdowns */}
-      <div className="hidden lg:flex w-full h-[64px] items-center gap-1 pl-[32px] pr-[32px]">
+      <div className="hidden xl:flex w-full h-[64px] items-center gap-1 pl-[32px] pr-[32px]">
         {/* Logo — navigates home from any page */}
         <Link
           href="/"
-          className="text-xl font-bold tracking-tight flex-shrink-0 mr-4 focus:outline-none"
+          className="mr-5 flex-shrink-0 text-[21px] font-extrabold tracking-[-0.03em]"
         >
           <span className="text-red-600">ilove</span>
-          <span className="text-zinc-900">employment</span>
+          <span className="text-[#15171c]">employment</span>
         </Link>
 
         <nav className="flex items-center gap-0.5" aria-label="Primary">
@@ -106,7 +104,7 @@ export function Header() {
               <Link
                 key={tool.id}
                 href={tool.target}
-                className="whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+                className="whitespace-nowrap rounded-lg px-3 py-2 text-[14px] font-medium text-zinc-700 transition-colors hover:bg-[#f3f4f7] hover:text-zinc-950"
               >
                 {tool.name}
               </Link>
@@ -138,7 +136,7 @@ export function Header() {
 
           <Link
             href="/vault"
-            className="ml-2 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-4 py-2 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:text-zinc-900"
+            className="ml-2 whitespace-nowrap rounded-[10px] bg-[#e5322d] px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-[#c4241f]"
           >
             Career Vault
           </Link>
@@ -146,14 +144,14 @@ export function Header() {
       </div>
 
       {/* Mobile: logo + hamburger */}
-      <div className="lg:hidden w-full h-[64px] flex items-center pl-[20px] pr-[16px]">
+      <div className="xl:hidden w-full h-[64px] flex items-center pl-[20px] pr-[16px]">
         {/* Logo — navigates home from any page */}
         <Link
           href="/"
-          className="text-xl font-bold tracking-tight flex-shrink-0 focus:outline-none"
+          className="flex-shrink-0 text-[20px] font-extrabold tracking-[-0.03em]"
         >
           <span className="text-red-600">ilove</span>
-          <span className="text-zinc-900">employment</span>
+          <span className="text-[#15171c]">employment</span>
         </Link>
 
         {/* Mobile hamburger pinned to right */}
@@ -161,6 +159,7 @@ export function Header() {
           onClick={() => setMobileOpen(!mobileOpen)}
           className="ml-auto p-2 rounded-lg hover:bg-zinc-100 transition-colors"
           aria-label="Toggle menu"
+          aria-expanded={mobileOpen}
         >
           <svg
             width="20"
@@ -204,8 +203,15 @@ export function Header() {
 
       {/* Mobile menu — every tool, grouped by category */}
       {mobileOpen && (
-        <div className="lg:hidden max-h-[calc(100vh-64px)] overflow-y-auto border-t border-zinc-100 bg-white px-5 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+        <div className="xl:hidden max-h-[calc(100vh-64px)] overflow-y-auto border-t border-zinc-100 bg-white px-5 py-4">
+          <Link
+            href="/#tools"
+            onClick={() => setMobileOpen(false)}
+            className="mb-3 block w-full rounded-[10px] border border-[#e4e6eb] px-4 py-3 text-center text-[15px] font-semibold text-zinc-900"
+          >
+            Search all {TOOLS.length} tools
+          </Link>
+          <p className="text-[13px] font-semibold text-zinc-500">
             Start here
           </p>
           <div className="mt-1 space-y-0.5">
@@ -214,7 +220,7 @@ export function Header() {
 
           {menus.map((menu) => (
             <div key={menu.id} className="mt-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              <p className="text-[13px] font-semibold text-zinc-500">
                 {menu.label}
               </p>
               <div className="mt-1 space-y-0.5">
@@ -227,7 +233,7 @@ export function Header() {
             <Link
               href="/vault"
               onClick={() => setMobileOpen(false)}
-              className="block w-full rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-zinc-700"
+              className="block w-full rounded-[10px] bg-[#e5322d] px-4 py-3 text-center text-[15px] font-semibold text-white"
             >
               Career Vault
             </Link>

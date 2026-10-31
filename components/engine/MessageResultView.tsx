@@ -77,7 +77,7 @@ export function MessageResultView({ result, meta, sentChunks }: Props) {
 
       {result.notes.length > 0 && (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
-          <p className="text-[12px] font-bold uppercase tracking-wider text-zinc-500">Why it's written this way</p>
+          <p className="text-[14px] font-semibold text-zinc-500">Why it's written this way</p>
           <ul className="mt-2 space-y-1.5 text-[13px] text-zinc-700">
             {result.notes.map((n) => (
               <li key={n}>• {n}</li>
@@ -88,7 +88,7 @@ export function MessageResultView({ result, meta, sentChunks }: Props) {
 
       {result.citations.length > 0 && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-          <p className="text-[12px] font-bold uppercase tracking-wider text-emerald-800">Grounded in your Career Vault</p>
+          <p className="text-[14px] font-semibold text-emerald-800">Grounded in your Career Vault</p>
           <ul className="mt-2 space-y-1.5 text-[13px] text-emerald-950">
             {result.citations.map((c, i) => (
               <li key={c.chunkId + i}>

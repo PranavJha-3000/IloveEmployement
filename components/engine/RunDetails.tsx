@@ -9,7 +9,7 @@ export function RunWarnings({ meta }: { meta: RunMeta }) {
   if (!warnings.length && !failedSources.length) return null;
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-      <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800">Check before using</p>
+      <p className="text-[14px] font-semibold text-amber-800">Check before using</p>
       <ul className="mt-2 space-y-1 text-[13px] text-amber-900">
         {failedSources.map((s) => (
           <li key={s.id}>• {s.title}: {s.detail}</li>

@@ -15,15 +15,15 @@ export const PRESETS: Preset[] = [...MATCH_PRESETS, ...TAILOR_PRESETS, ...INTERV
 export const PUBLIC_PRESETS = PRESETS.filter((p) => !p.hidden);
 
 export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
-  target: "Target",
-  materials: "Resume & Profile",
-  outreach: "Outreach",
+  target: "Find jobs",
+  materials: "Resume",
+  outreach: "Reach out",
   interview: "Interview",
   offer: "Offer",
-  transition: "Join & Leave",
-  work: "At Work",
-  growth: "Growth",
-  fun: "Fun",
+  transition: "Join & leave",
+  work: "At work",
+  growth: "Grow",
+  fun: "Just for fun",
 };
 
 const bySlug = new Map(PRESETS.map((p) => [p.slug, p]));

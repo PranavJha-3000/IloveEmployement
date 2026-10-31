@@ -1,32 +1,40 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 import { CATEGORIES, type CategoryId } from "@/lib/tools";
 
 interface Props {
   active: CategoryId;
   onChange: (id: CategoryId) => void;
-  /** tools remaining per category, shown as a small count */
-  counts?: Partial<Record<CategoryId, number>>;
+  /** tools per category, shown as a small count */
+  counts: Partial<Record<CategoryId, number>>;
 }
 
 export function CategoryTabs({ active, onChange, counts }: Props) {
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+
+  // A zero-height marker just above the bar tells us when it has stuck under the header.
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), { rootMargin: "-65px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <div className="tool-tabs" role="tablist" aria-label="Filter tools by category">
-      {CATEGORIES.map((cat) => {
-        const selected = cat.id === active;
-        const count = counts?.[cat.id];
-        return (
-          <button
-            key={cat.id}
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onChange(cat.id)}
-            className={`tool-tab ${selected ? "tool-tab-active" : ""}`}
-          >
-            {cat.label}
-            {count != null && <span className="tool-tab-count">{count}</span>}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div ref={sentinel} aria-hidden />
+      <div className={`chip-bar${stuck ? " is-stuck" : ""}`}>
+        <div className="chips" role="toolbar" aria-label="Filter tools by stage">
+          {CATEGORIES.map((cat) => (
+            <button key={cat.id} type="button" aria-pressed={cat.id === active} onClick={() => onChange(cat.id)} className="chip">
+              {cat.label}
+              <span className="chip-count">{counts[cat.id]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

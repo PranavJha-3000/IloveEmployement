@@ -1,4 +1,13 @@
-"use client";
-interface Props { onCta: () => void; }
-const TRUST = [["♙", "No sign-up", "Free daily runs, or bring your key"], ["⌘", "Stays on your device", "Your Career Vault lives in your browser"], ["♢", "Nothing invented", "Every claim cites its source"]];
-export function LandingHero({ onCta }: Props) { return <section className="hero-shell"><div className="hero-copy"><p className="eyebrow">EVERY JOB TOOL, WITHOUT THE CORPORATE YAPPING</p><h1>Get hired.<br />Or at least stop getting <span>ignored</span>.</h1><p className="hero-description">Add your resume once. Then check your fit for any job, tailor your resume, and write every email from the cold DM to the resignation. Every claim is traced to your real experience. Nothing invented.</p><button onClick={onCta} className="cta-primary hero-cta">Check My Fit for a Job <span aria-hidden>→</span></button><div className="trust-list">{TRUST.map(([icon, title, description]) => <div className="trust-item" key={title}><span className="trust-icon" aria-hidden>{icon}</span><span><strong>{title}</strong><small>{description}</small></span></div>)}</div></div><div className="hero-art" aria-hidden><div className="paper paper-back" /><div className="paper paper-front"><span className="avatar">●</span><i /><i /><i /><i /></div><div className="aura-card"><small>Employment Aura</small><strong>72%</strong></div><div className="magnifier" /><span className="sparkle sparkle-one">✦</span><span className="sparkle sparkle-two">✧</span></div></section>; }
+import { TOOLS } from "@/lib/tools";
+
+export function LandingHero() {
+  return (
+    <>
+      <h1>Every tool for getting hired</h1>
+      <p className="hero-sub">
+        {TOOLS.length} free tools to check your fit, fix your resume, prep for interviews and write every email from the
+        first cold message to the resignation letter.
+      </p>
+    </>
+  );
+}

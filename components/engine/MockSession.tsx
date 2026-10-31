@@ -106,7 +106,7 @@ export function MockSession({
     return (
       <div className="space-y-4">
         <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <p className="text-[12px] font-bold uppercase tracking-wider text-zinc-500">Session summary</p>
+          <p className="text-[14px] font-semibold text-zinc-500">Session summary</p>
           <p className={`mt-2 text-[40px] font-bold leading-none ${overall >= 70 ? "text-emerald-600" : overall >= 50 ? "text-amber-600" : "text-red-600"}`}>{overall}</p>
           <p className="mt-1 text-[13px] text-zinc-600">
             Average over {turns.length} answer{turns.length === 1 ? "" : "s"}.

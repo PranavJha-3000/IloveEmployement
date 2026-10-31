@@ -14,14 +14,16 @@ export default function VaultPage() {
     <>
       <Header />
       <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-[1000px] px-6 pb-20 pt-8">
-          <header className="mb-8 max-w-2xl">
-            <h1 className="text-[28px] font-bold tracking-tight text-zinc-900">Career Vault</h1>
-            <p className="mt-2 text-[15px] leading-relaxed text-zinc-600">
-              Your career history, stored only in this browser. Add your resume once and it's split into roles, bullets,
+        <div className="tool-hero">
+          <div className="tool-hero-inner">
+            <h1 className="text-[clamp(28px,4vw,40px)] font-extrabold leading-[1.08] tracking-[-0.03em]">Career Vault</h1>
+            <p className="tool-lede">
+              Your career history, stored only in this browser. Add your resume once and it&apos;s split into roles, bullets,
               projects and wins. Each tool retrieves just the pieces it needs, cites them, and never invents the rest.
             </p>
-          </header>
+          </div>
+        </div>
+        <div className="mx-auto max-w-[1000px] px-5 pb-20 pt-8">
           <VaultManager />
         </div>
       </main>

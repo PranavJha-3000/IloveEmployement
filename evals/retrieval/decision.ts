@@ -109,8 +109,10 @@ export function pairedComparison(
 }
 
 export function addedLatency(s: StrategyRun, base: StrategyRun): AddedLatency {
-  if (s.perQuery.length !== base.perQuery.length) {
-    throw new Error(`addedLatency: ${s.id} and ${base.id} have different query counts`);
+  // Same guard as pairedComparison: differences are taken by position, so the
+  // query ids must line up one to one.
+  if (s.perQuery.length !== base.perQuery.length || s.perQuery.some((q, i) => q.id !== base.perQuery[i].id)) {
+    throw new Error(`addedLatency: ${s.id} and ${base.id} have different query order or length`);
   }
   const diffs = s.perQuery.map((q, i) => q.totalMs - base.perQuery[i].totalMs);
   return { id: s.id, baseId: base.id, p50: percentile(diffs, 50), p95: percentile(diffs, 95) };

@@ -122,6 +122,18 @@ test("addedLatency p50/p95 of per-query differences", () => {
   assert.strictEqual(l.baseId, "base");
 });
 
+test("addedLatency throws on mismatched query order or length", () => {
+  const s = mk("s", flat(0.5), flat(100));
+  const reordered = mk("base", flat(0.5), flat(90));
+  reordered.perQuery.reverse();
+  assert.throws(() => addedLatency(s, reordered), /different query order or length/);
+  const filtered = mk("base", flat(0.5).slice(0, N - 1), flat(90));
+  assert.throws(() => addedLatency(s, filtered), /different query order or length/);
+  const renamed = mk("base", flat(0.5), flat(90));
+  renamed.perQuery[3] = { ...renamed.perQuery[3], id: "other" };
+  assert.throws(() => addedLatency(s, renamed), /different query order or length/);
+});
+
 test("decide adopts hybrid+rerank when all checks pass", () => {
   const d = decide(run({ hyb: noisy(0.6, 0.05), hrMs: 40 }));
   assert.strictEqual(d.rerankAdopted, "hybrid+rerank");

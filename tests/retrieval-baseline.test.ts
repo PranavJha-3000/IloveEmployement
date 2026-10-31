@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   BASELINE_EPSILON,
+  GATED_SCOPES,
   compareToBaseline,
   planBaselineUpdate,
   validateBaseline,
@@ -38,9 +39,20 @@ describe("compareToBaseline", () => {
     const res = compareToBaseline(baseline, { ...same, overall });
     assert.equal(res.ok, false);
     assert.deepEqual(res.regressions, ["overall ndcg@8: 0.4000 < 0.5000"]);
-    const para = compareToBaseline(baseline, { ...same, byType: { lexical: set(0.6), paraphrase: { ...set(0.4), mrr: 0.1 } } });
-    assert.equal(para.ok, false);
-    assert.ok(para.regressions[0].startsWith("paraphrase mrr:"));
+    const lex = compareToBaseline(baseline, { ...same, byType: { lexical: { ...set(0.6), mrr: 0.1 }, paraphrase: set(0.4) } });
+    assert.equal(lex.ok, false);
+    assert.deepEqual(lex.regressions, ["lexical mrr: 0.1000 < 0.6000"]);
+  });
+
+  it("gates overall and lexical only; paraphrase is reported, not gated", () => {
+    assert.deepEqual([...GATED_SCOPES], ["overall", "lexical"]);
+    const para = compareToBaseline(baseline, { ...same, byType: { lexical: set(0.6), paraphrase: set(0) } });
+    assert.equal(para.ok, true);
+    assert.deepEqual(para.regressions, []);
+    assert.deepEqual(para.improvements, []);
+    // A NaN in the ungated scope does not trip the gate either; validateBaseline still requires it in the file.
+    const nan = compareToBaseline(baseline, { ...same, byType: { lexical: set(0.6), paraphrase: { ...set(0.4), mrr: NaN } } });
+    assert.equal(nan.ok, true);
   });
 
   it("fails on fingerprint mismatch with update instructions", () => {

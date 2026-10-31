@@ -3,6 +3,14 @@ import { METRIC_KEYS, type MetricSet } from "./metrics";
 
 export const BASELINE_EPSILON = 0.005;
 
+/**
+ * Scopes the keyword gate checks. Paraphrase is deliberately not gated: the dataset
+ * validator guarantees paraphrase queries share no BM25 token with their labelled
+ * chunks, so keyword scores ~0 there by construction and `cur < ~0 - epsilon` can
+ * never fire. Paraphrase stays in baseline.json (and is still validated) for reporting.
+ */
+export const GATED_SCOPES = ["overall", "lexical"] as const;
+
 export interface KeywordBaseline {
   strategy: "keyword";
   fingerprint: string;
@@ -26,12 +34,11 @@ export function compareToBaseline(
   const improvements: string[] = [];
   const fingerprintMismatch = baseline.fingerprint !== current.fingerprint;
 
-  const scopes: [string, MetricSet, MetricSet][] = [
-    ["overall", baseline.overall, current.overall],
-    ["lexical", baseline.byType.lexical, current.byType.lexical],
-    ["paraphrase", baseline.byType.paraphrase, current.byType.paraphrase],
-  ];
-  for (const [scope, base, cur] of scopes) {
+  const pick = (src: Pick<KeywordBaseline, "overall" | "byType">, scope: (typeof GATED_SCOPES)[number]): MetricSet | undefined =>
+    scope === "overall" ? src?.overall : src?.byType?.[scope];
+  for (const scope of GATED_SCOPES) {
+    const base = pick(baseline, scope);
+    const cur = pick(current, scope);
     for (const key of METRIC_KEYS) {
       const b = base?.[key];
       const c = cur?.[key];
@@ -39,10 +46,10 @@ export function compareToBaseline(
         regressions.push(`${scope} ${key}: non-numeric (baseline=${String(b)}, current=${String(c)})`);
         continue;
       }
-      if (cur[key] < base[key] - BASELINE_EPSILON) {
-        regressions.push(`${scope} ${key}: ${cur[key].toFixed(4)} < ${base[key].toFixed(4)}`);
-      } else if (cur[key] > base[key] + BASELINE_EPSILON) {
-        improvements.push(`${scope} ${key}: ${cur[key].toFixed(4)} > ${base[key].toFixed(4)}`);
+      if (c < b - BASELINE_EPSILON) {
+        regressions.push(`${scope} ${key}: ${c.toFixed(4)} < ${b.toFixed(4)}`);
+      } else if (c > b + BASELINE_EPSILON) {
+        improvements.push(`${scope} ${key}: ${c.toFixed(4)} > ${b.toFixed(4)}`);
       }
     }
   }

@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { BASELINE_EPSILON, compareToBaseline, planBaselineUpdate, validateBaseline, type KeywordBaseline } from "./baseline";
+import { BASELINE_EPSILON, GATED_SCOPES, compareToBaseline, planBaselineUpdate, validateBaseline, type KeywordBaseline } from "./baseline";
 import { DatasetError, loadDataset } from "./dataset/load";
 import { METRIC_KEYS, PRIMARY_METRIC, RELEVANCE_THRESHOLD, aggregate, percentile, scoreQuery, type MetricSet } from "./metrics";
 import { renderReport } from "./report";
@@ -332,7 +332,12 @@ async function main(): Promise<void> {
     });
     for (const r of cmp.regressions) console.error(`REGRESSION ${r}`);
     for (const i of cmp.improvements) console.log(`improvement ${i} (consider ${UPDATE_CMD})`);
-    if (cmp.ok) console.log(`Baseline gate passed (epsilon ${BASELINE_EPSILON}).`);
+    if (cmp.ok) {
+      console.log(
+        `Baseline gate passed for keyword scopes ${GATED_SCOPES.join(", ")} (epsilon ${BASELINE_EPSILON}); ` +
+          "paraphrase is not gated (keyword ~0 by construction).",
+      );
+    }
     else process.exitCode = 1;
   }
 }

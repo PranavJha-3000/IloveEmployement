@@ -66,7 +66,7 @@ export function renderReport(result: RetrievalRunResult): string {
   out.push(
     "## Paraphrase queries",
     "",
-    `Paraphrase queries share no BM25 tokens with any chunk labelled for them; the dataset validator enforces this by construction. Keyword retrieval therefore scores ~0 on them as a property of the dataset, not as a finding. The Overall table depends on the lexical/paraphrase query mix (${d.lexical} lexical, ${d.paraphrase} paraphrase), so read the per-type tables first.`,
+    `Paraphrase queries share no BM25 tokens with any chunk labelled for them; the dataset validator enforces this by construction. Keyword retrieval therefore scores ~0 on them as a property of the dataset, not as a finding. The Overall table depends on the lexical/paraphrase query mix (${d.lexical} lexical, ${d.paraphrase} paraphrase), so read the per-type tables first. For the same reason the offline keyword gate (\`--ci\`) checks only the overall and lexical scopes; the paraphrase keyword numbers stay in baseline.json for reporting only.`,
     "",
     ...metricTable(result, (s) => s.byType.paraphrase),
     "",

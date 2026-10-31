@@ -77,6 +77,7 @@ describe("renderReport method notes", () => {
   const md = renderReport(makeResult());
   it("states paraphrase BM25 ~0 is by construction", () => {
     assert.ok(md.includes("by construction"));
+    assert.ok(md.includes("checks only the overall and lexical scopes"));
     assert.ok(md.includes("## Paraphrase queries"));
   });
   it("states the summary anchor caps MRR and nDCG", () => {

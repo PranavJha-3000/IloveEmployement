@@ -70,10 +70,38 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| REVAL-01 | Phase 1 | Pending |
+| REVAL-02 | Phase 1 | Pending |
+| REVAL-03 | Phase 1 | Pending |
+| REVAL-04 | Phase 1 | Pending |
+| RERANK-01 | Phase 2 | Pending |
+| RERANK-02 | Phase 2 | Pending |
+| RERANK-03 | Phase 2 | Pending |
+| LEVAL-01 | Phase 3 | Pending |
+| LEVAL-02 | Phase 3 | Pending |
+| LEVAL-03 | Phase 3 | Pending |
+| LEVAL-04 | Phase 3 | Pending |
+| LEVAL-05 | Phase 3 | Pending |
+| LEVAL-06 | Phase 3 | Pending |
+| AGENT-01 | Phase 4 | Pending |
+| AGENT-02 | Phase 4 | Pending |
+| AGENT-03 | Phase 4 | Pending |
+| AGENT-04 | Phase 4 | Pending |
+| AGENT-05 | Phase 4 | Pending |
+| AGENT-06 | Phase 4 | Pending |
+| DOC-01 | Phase 5 | Pending |
+| DOC-02 | Phase 5 | Pending |
+| DOC-03 | Phase 5 | Pending |
+| DOC-04 | Phase 5 | Pending |
+| OBS-01 | Phase 6 | Pending |
+| OBS-02 | Phase 6 | Pending |
+| OBS-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 26 total
-- Mapped to phases: 0 (roadmap pending)
+- Mapped to phases: 26
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-31*
+*Last updated: 2026-10-31 after roadmap creation*

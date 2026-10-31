@@ -97,13 +97,26 @@ const build = (base: "hybrid" | "embeddings", topN: number, scorer: PairScorer) 
   createRerankStrategy({ id: `r-${base}`, label: "r", base, topN, loadScorer: async () => scorer });
 
 test("order-preserving scorer reproduces the base strategy", async () => {
-  for (const base of ["hybrid", "embeddings"] as const) {
-    const s = build(base, 20, orderPreserving);
-    await s.prepare!();
-    const out = await s.retrieve({ chunks, query, limit: 8, embeddings });
-    const expected = await get(base).retrieve({ chunks, query, limit: 8, embeddings });
-    assert.deepStrictEqual(ids(out), ids(expected));
+  for (const limit of [5, 8, 12, 13, 20]) {
+    for (const base of ["hybrid", "embeddings"] as const) {
+      const s = build(base, 20, orderPreserving);
+      await s.prepare!();
+      const out = await s.retrieve({ chunks, query, limit, embeddings });
+      const expected = await get(base).retrieve({ chunks, query, limit, embeddings });
+      assert.deepStrictEqual(ids(out), ids(expected), `${base} at limit ${limit}`);
+    }
   }
+});
+
+test("embeddings+rerank still reranks at whole-resume limits, like its base ranks", async () => {
+  // The embeddings base ranks by cosine at every limit (no whole-resume path).
+  const base = await get("embeddings").retrieve({ chunks, query, limit: 20, embeddings });
+  assert.deepStrictEqual(ids(base), ["s", "b1", "b5", "b4", "sk", "b2"]);
+  const favourB2: PairScorer = async (_q, p) => p.map((t) => (t === rerankPassage(chunks.find((c) => c.id === "b2")!) ? 10 : 0));
+  const s = build("embeddings", 20, favourB2);
+  await s.prepare!();
+  const out = await s.retrieve({ chunks, query, limit: 20, embeddings });
+  assert.deepStrictEqual(ids(out), ["s", "b2", "b1", "b5", "b4", "sk"]);
 });
 
 test("favoured chunk is promoted inside topN and not pulled in outside it", async () => {
@@ -158,11 +171,12 @@ test("rerank retrieve without embeddings rejects", async () => {
   await assert.rejects(async () => s.retrieve({ chunks, query, limit: 8 }), /needs embeddings/);
 });
 
-test("whole-resume limit bypasses the scorer", async () => {
+test("whole-resume limit bypasses the scorer for hybrid", async () => {
   const s = build("hybrid", 5, async () => {
     throw new Error("must not be called");
   });
   await s.prepare!();
   const out = await s.retrieve({ chunks, query, limit: 20, embeddings });
   assert.deepStrictEqual(out, retrieveVault(chunks, query, 20));
+  assert.deepStrictEqual(out, await get("hybrid").retrieve({ chunks, query, limit: 20, embeddings }));
 });

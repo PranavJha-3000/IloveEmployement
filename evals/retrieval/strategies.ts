@@ -140,8 +140,14 @@ export function createRerankStrategy(opts: {
       const { queryVector, chunkVectors } = requireEmbeddings(opts.id, input);
       if (!loading) throw new Error(`Strategy "${opts.id}" must be prepared (call prepare()) before retrieve()`);
       const scorer = await loading;
-      if (input.limit > WHOLE_RESUME_LIMIT) return retrieveVault(input.chunks, input.query, input.limit);
       const semantic = semanticRanking(queryVector, chunkVectors);
+      // Whole-resume limits follow the base strategy. Hybrid (retrieveVault) returns
+      // the resume in document order there, so there is no ranking to rerank. The
+      // embeddings strategy has no whole-resume path and ranks at every limit, so
+      // its rerank variant reranks at every limit too.
+      if (opts.base === "hybrid" && input.limit > WHOLE_RESUME_LIMIT) {
+        return retrieveVault(input.chunks, input.query, input.limit, semantic);
+      }
       const { summary, ranked } =
         opts.base === "hybrid" ? rankVault(input.chunks, input.query, semantic) : rankBySemantic(input.chunks, semantic);
       const reranked = await rerankCandidates(input.query, ranked, scorer, opts.topN);

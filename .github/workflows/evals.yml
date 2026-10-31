@@ -1,0 +1,35 @@
+name: Evals
+
+# Runs the golden cases against a real model. Manual, because it costs tokens.
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Provider id (google, openai, openrouter, groq, …)
+        default: google
+      model:
+        description: Model name (blank = provider default)
+        default: ""
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run eval
+        env:
+          EVAL_PROVIDER: ${{ inputs.provider }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_API_KEY: ${{ secrets.EVAL_API_KEY }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: |
+            evals/REPORT.md
+            evals/results/

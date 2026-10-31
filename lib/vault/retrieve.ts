@@ -5,6 +5,7 @@
 // of this function is sent with a run.
 
 import { Bm25Index } from "../retrieval/bm25";
+import { reciprocalRankFusion } from "../retrieval/fusion";
 import type { VaultChunk, VaultContextChunk } from "../engine/types";
 
 /** Kinds that hold specific, citable evidence get a small boost over containers. */
@@ -19,7 +20,12 @@ const KIND_WEIGHT: Partial<Record<VaultChunk["kind"], number>> = {
 /** Above this, a tool wants the whole resume rather than the most relevant slice. */
 const WHOLE_RESUME_LIMIT = 12;
 
-export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8): VaultContextChunk[] {
+/**
+ * @param semanticOrder chunk ids ranked by embedding similarity to the query.
+ *   When given, it's fused with the BM25 ranking (hybrid retrieval); when not,
+ *   retrieval is keyword-only.
+ */
+export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8, semanticOrder?: string[]): VaultContextChunk[] {
   if (!chunks.length) return [];
   const toContext = (c: VaultChunk): VaultContextChunk => ({ id: c.id, kind: c.kind, title: c.title, text: c.text });
 
@@ -49,6 +55,12 @@ export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8): V
       .map((h) => ({ chunk: byId.get(h.id)!, score: h.score * (KIND_WEIGHT[byId.get(h.id)!.kind] ?? 1) }))
       .sort((a, b) => b.score - a.score)
       .map((h) => h.chunk);
+    if (semanticOrder?.length) {
+      // Hybrid: semantic recall catches paraphrases BM25 misses ("shipped faster" vs
+      // "reduced lead time"); BM25 keeps exact terms like tool names on top.
+      const semantic = semanticOrder.filter((id) => byId.has(id));
+      ranked = reciprocalRankFusion([ranked.map((c) => c.id), semantic]).map((id) => byId.get(id)!);
+    }
   } else {
     // No query: most recent evidence first.
     ranked = [...pool].filter((c) => c.kind !== "experience").sort((a, b) => b.createdAt - a.createdAt);

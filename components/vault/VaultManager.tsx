@@ -14,6 +14,7 @@ import {
   saveProfile,
 } from "@/lib/vault/store";
 import { useVault } from "@/lib/vault/useVault";
+import { SemanticIndex } from "./SemanticIndex";
 
 const KIND_LABEL: Record<VaultChunkKind, string> = {
   summary: "Summary",
@@ -247,6 +248,8 @@ export function VaultManager() {
           </div>
         )}
       </section>
+
+      <SemanticIndex chunks={chunks} />
 
       {/* Manual entries */}
       <section className="rounded-xl border border-zinc-200 p-5">

@@ -1,282 +1,72 @@
-﻿# IloveEmployement - Platform Documentation
+﻿# IloveEmployement — Platform Architecture
 
-> "Ilovepdf but for getting a job"
+> "iLovePDF, but for your career." Many single-purpose tools on the surface; a handful of grounded AI engines and one Career Vault underneath.
 
-## Product Purpose
+## Product principles
 
-IloveEmployement is an absurdly high-quality, humorous **employment tool suite**. It provides **28 purpose-built tools** across five categories covering the full job-search lifecycle: resume analysis, application optimization, job investigation, interview preparation, and chaotic self-assessment.
+- **Utility over gimmick.** Even the Fun tools must land on something real and come with a real fix.
+- **Never invent the user.** Employers, titles, dates, numbers, skills and offers come only from the user's material. Unknowns become visible `[placeholders]`.
+- **Compute what can be computed.** The model classifies, extracts and writes; code scores, totals and decides verdicts.
+- **Local-first.** The Career Vault lives in the browser. A run sends only the chunks it needs.
+- **Show the work.** Every result has a "How this was generated" panel: model, tokens, context blocks, playbooks, retrieval mode, reviewer findings and grounding warnings.
+- **Small surface.** No accounts, billing or dashboards. A stateless server; the only server state is an optional rate-limit counter.
 
-Users bring their own AI API key and pick their provider. Each tool takes what it needs (resume text, job description, LinkedIn/GitHub URLs, desperation level) and returns structured, evidence-based AI output with witty, contextual commentary. The suite shares one design system, but every tool feels purpose-built - from the 30-second recruiter scan simulation to the interview boss fight.
+## Request lifecycle
 
-The tool marketplace displays 28 cards, one per unique tool route. The registry in `lib/tools.ts` contains exactly 28 entries, and a dev-mode guard throws on duplicate tool IDs.
+Every tool calls `POST /api/run/<preset-id>` (`app/api/run/[preset]/route.ts`), which delegates to `runPreset` in `lib/engine/run.ts`:
 
-### Tool Categories
+| Step | Module | Notes |
+|---|---|---|
+| 1. Access | `lib/engine/access.ts` | BYOK if the request carries a key; otherwise the free-tier server key with a per-IP daily limit (Upstash REST, or in-memory) |
+| 2. Validate inputs | `run.ts#cleanInputs` | Against the preset's field spec: required, max length, allowed chip values |
+| 3. Profile check | `run.ts` | `requiresProfile` tools refuse to run without vault/resume context |
+| 4. Injection gate | `lib/engine/injection.ts` | On every `untrusted` field: strips zero-width and bidi characters, flags instruction-shaped lines |
+| 5. External evidence | `lib/sources/github.ts` | Public repos via the GitHub REST API (Proof Check) |
+| 6. Knowledge retrieval | `lib/kb/*` | Tag pool + BM25 rank; "all"-tagged honesty and email rules always included |
+| 7. Context assembly | `lib/engine/context.ts` | Priority blocks (task 100 → inputs 95 → profile 85 → playbooks 80 → pasted 75 → external 65 → vault 60; whole-resume vault 97), per-block caps, global budget 7k tokens (14k for whole-resume tools); untrusted blocks fenced |
+| 8. Generation | `run.ts#generateStructured` | `generateObject` with the preset's zod schema; falls back to text + JSON extraction + local validation when a provider lacks structured output |
+| 9. Review (optional) | `lib/engine/review.ts` | Adversarial reviewer lists issues; any high/medium issue triggers one revision |
+| 10. Finalize | `lib/engine/reports.ts#FINALIZERS` | Deterministic: scores, verdicts, offer totals, quote verification, citation scrubbing |
+| 11. Grounding | `lib/engine/grounding.ts` | Drops citations to chunks that weren't sent; flags figures absent from the user's material |
 
-| Category | Purpose | Tools |
-|----------|---------|-------|
-| Analyze | Diagnose fit, detect delusion, decode jargon | Resume Analyzer, Job Fit Checker, Resume Roast, Delulu Detector, ATS Checker, JD Translator |
-| Optimize | Rewrite, fix, and polish application materials | Resume Rewriter, Resume Fixer, Bullet Point Fixer, LinkedIn Optimizer, Cover Letter Generator, Recruiter Message |
-| Investigate | Research the job, the requirements, and the evidence | JD Red Flag Scanner, Skill Gap Analyzer, GitHub Resume Checker, Resume Truth Detector, Recruiter Simulator |
-| Prepare | Get interview-ready with structured answers | Interview Prep, Interview Boss Fight, STAR Answer Builder, Tell Me About Yourself, Weakness Detector |
-| Chaos | Measure employment vibes with unhinged self-awareness | Employment Aura, Rizz Score, Cooked Meter, Resume Court, ATS Boss Fight, Skill Issue |
+Errors are classified (auth, rate limit, timeout, model, JSON) with API-key-like strings redacted (`lib/pipeline.ts`).
 
-## Core Philosophy
+## Engines and presets
 
-- **Utility over Gimmick:** The humor must never compromise the quality of the analysis. It's "actually useful resume analysis + occasionally unhinged commentary" - not "AI-generated cringe."
-- **Tone & Voice:** Gen-Z slang (rizz, cooked, aura, skill issue, it's giving) is used sparingly and contextually. It is never forced into every sentence.
-- **Aesthetics:** Clean, modern, professional UI. Personality comes from the copy, not a "meme-style" visual design.
-- **Purpose-Built Tools:** Every tool shares the same design system, but each has its own result metaphors, copy voice, and interaction model. No SaaS-dashboard sameness.
-- **Anti-Overengineering:** This is NOT a SaaS startup. No auth, billing, databases, dashboards, admin panels, subscriptions, or complex backend architecture.
+A **preset** (`lib/presets/*.ts`) is configuration: fields, knowledge tags, a vault query, a vault limit, the task instruction and, for reports, an output kind. Hidden presets (the mock-interview grader) have no page.
 
-## Architecture & Tech Stack
+| Engine | Output | Presets |
+|---|---|---|
+| Message | subject, body, variants, placeholders, notes, citations | 31: outreach, offer emails, transitions, at-work, growth, Cover Letter, Tell Me About Yourself, Debrief |
+| Match | `fit`, `jd`, `gap`, `ats`, `proof` | Job Fit Check, JD Decoder, Skill Gap Plan, ATS Check, Proof Check |
+| Tailor | `resume`, `bullets`, `linkedin` | Tailor My Resume (reviewed), Bullet Fixer, LinkedIn Optimizer |
+| Interview | `prep`, `mockPlan`, `answerEval`, `star` | Interview Prep Pack, Mock Interview (+ hidden grader), STAR Story Builder |
+| Offer | `offers` | Offer Comparator |
+| Fun | `roast`, `court`, `aura`, `bingo` | Resume Roast (4 modes), Resume Court, Employment Aura, Corporate Bingo |
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15.5+ (App Router, React 19) |
-| Language | TypeScript 5.7+ |
-| Styling | Tailwind CSS v4.1+ |
-| AI Integration | Vercel AI SDK (`ai` ^4.3) with multi-provider support |
-| Document Processing | `pdf-parse` (PDF), `mammoth` (DOCX), native `file.text()` (TXT) — all server-side |
-| Deployment | Vercel (`iloveemployement.vercel.app`) |
+The marketplace (`lib/tools.ts`), header menus and `/tools/[slug]` pages (statically generated) are all derived from the preset registry.
 
-### Routing Model
+## Deterministic logic (`lib/engine/scoring.ts`)
 
-Every tool lives at its own standalone route (`app/<tool>/page.tsx` rendering a dedicated page component). The landing page is a tool marketplace: category tabs filter the grid, and every card deep-links to its tool's route via `router.push(tool.target)`. The registry in `lib/tools.ts` types `target` as a route path (`` `/${string}` ``), so a card cannot point anywhere but a real route. The one special case is the **JD Translator**, which the home page opens as a full-viewport overlay from the navbar/footer; `/jd-translator` also exists as a direct-link fallback.
+- **Fit score:** must-haves weigh 2, nice-to-haves 1; STRONG = 1, PARTIAL = ½, UNVERIFIED = ¼, MISSING = 0. Verdict: APPLY ≥ 70 with no missing must-have; STRETCH ≥ 50 with at most one; LONG_SHOT ≥ 30; otherwise SKIP.
+- **ATS:** keyword coverage (term or synonym, punctuation-tolerant whole-term match, weighted) × 0.7 + parsing checks (email, phone, headings, bullets, length, columns/tables, icon glyphs, date consistency) × 0.3. Parsing checks run only on raw resume text.
+- **Offers:** year-one cash, recurring annual pay, four-year total. RSUs are spread over vesting; options are reported as paper and excluded from cash. A figure without a verbatim quote from the offer text counts as unstated.
+- **Interview answers:** overall = mean of five 1–5 dimensions × 20; signals for length/speaking time, "I" vs "we", numbers and filler.
+- **Fun:** roast score = mean dimension × 10; court verdict from evidence (acquitted, probation, hung jury, guilty); aura total = sum of ledger points, with tiers.
 
-### Multi-Provider AI Support
+## Career Vault (`lib/vault/*`)
 
-Users bring their **own API key** and choose their provider. Supported (from `lib/providers.ts`):
+- **Storage:** IndexedDB `iloveemployement` v2: `chunks`, `meta` (profile), `vectors` (semantic index). Export/import as JSON.
+- **Chunking:** sections by heading → role blocks → one chunk per bullet, titled with its role header; summary, skills, education, wins, projects. Manual stories, wins and notes; STAR Builder and the wins log write back.
+- **Retrieval:** BM25 with kind weights (stories, wins and bullets above containers), max 3 chunks per role, the summary always anchored. Whole-resume tools (limit > 12) keep document order and drop containers duplicated by their bullets.
+- **Hybrid:** once the user builds the semantic index, query and chunks are embedded on-device (Transformers.js, `Xenova/all-MiniLM-L6-v2` q8) and the cosine ranking is fused with BM25 by Reciprocal Rank Fusion (k = 60). A partial index falls back to keyword-only.
 
-| Provider | Example Models | SDK Package |
-|----------|---------------|-------------|
-| OpenAI | `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini` | `@ai-sdk/openai` |
-| Google Gemini | `gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-pro` | `@ai-sdk/google` |
-| OpenRouter | `anthropic/claude-3.5-sonnet`, `openai/gpt-4o`, `meta-llama/llama-3.1-70b-instruct` | `@ai-sdk/openai-compatible` |
-| Groq | `llama-3.1-70b-versatile`, `mixtral-8x7b-32768` | `@ai-sdk/openai-compatible` |
-| DeepSeek | `deepseek-chat`, `deepseek-reasoner` | `@ai-sdk/openai-compatible` |
-| Mistral | `mistral-large-latest`, `mistral-small-latest` | `@ai-sdk/openai-compatible` |
-| Together AI | `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `Qwen/Qwen2.5-72B-Instruct-Turbo` | `@ai-sdk/openai-compatible` |
-| xAI (Grok) | `grok-2-latest`, `grok-2-mini` | `@ai-sdk/openai-compatible` |
-| Custom / Other | Any OpenAI-compatible endpoint | `@ai-sdk/openai-compatible` |
+## Testing and evals
 
-The client sends `{ provider, apiKey, model, baseUrl? }` with each request. The server builds the right AI SDK provider instance via `lib/ai.ts`, calls the model, and **never stores the key**.
+- `npm test`: deterministic unit tests (scoring, finalizers, grounding, injection gate, context, chunker, retrieval, fusion) plus full-pipeline tests through `runPreset` with a scripted `MockLanguageModelV1` (fenced injection, dropped fake citations, review loop, free-tier limits, error redaction, both structured-output paths).
+- `npm run eval`: golden cases against a real model with behavioural expectations and guardrail metrics; writes `evals/REPORT.md`.
+- CI: typecheck, tests and build on push and PR.
 
-### Shared Pipeline
+## Out of scope (deliberately)
 
-Every tool route follows the same execution pipeline, so parsing, validation, and error handling are centralized:
-
-```
-INPUT (resume + JD + optional LinkedIn/GitHub)
-  ↓
-Document extraction        lib/documents.ts (PDF via `pdf-parse`, DOCX via `mammoth`, TXT native, or pasted text)
-  ↓
-Prompt construction        lib/prompts.ts (per-tool `build*Prompt` functions with strict JSON schemas and truth-filter rules)
-  ↓
-Unified AI call            lib/ai.ts → `createModel()` over 9 providers
-  ↓
-JSON extraction + repair   lib/utils.ts (strips markdown fences, trailing prose)
-  ↓
-Runtime validation         lib/utils.ts validators (malformed output degrades gracefully)
-  ↓
-Standardized error handling lib/pipeline.ts (`standardAIHandler` generic; auth / rate-limit / timeout / model / JSON errors)
-  ↓
-Evidence engine (when applicable)  lib/evidence.ts (STRONG / PARTIAL / MISSING / UNVERIFIED tiers with weighted scoring)
-  ↓
-Tool-specific presentation components/shared/*
-```
-
-Most of the 31 API routes are thin wrappers over `standardAIHandler` in `lib/pipeline.ts`. That generic centralizes config validation, input limits (20K char text, 10K char JD), JSON extraction, output validation via `lib/utils.ts`, and error classification. A `redactSecrets` helper strips API-key-like strings from provider error messages before they reach the client.
-
-The evidence engine (`lib/evidence.ts`) is shared across the Resume Analyzer, Job Fit Checker, Skill Gap Analyzer, Resume Truth Detector, GitHub Resume Checker and Delulu Detector. It classifies claims against resume, LinkedIn, GitHub and JD sources with explicit rules that keyword presence is not evidence and absence from one source does not mean the skill is absent.
-
-### Document Split for Bundle Safety
-
-`lib/documents.ts` imports server-only packages (`pdf-parse`, `mammoth`) and lives exclusively on the server. `lib/document-types.ts` exports client-safe helpers (`getFileType`, `isSupportedFile`, `MAX_FILE_SIZE`, `MAX_TEXT_LENGTH`) that `ResumeCard.tsx` imports. This prevents heavy server packages from leaking into the client bundle.
-
-## Main User Flow
-
-```
-Landing Page (Tool Marketplace)
-   |
-   v
-Tool Card Selected
-   |
-   +-- Most tools -> router.push to the tool's standalone route
-   +-- JD Translator -> opens as an in-page overlay (navbar/footer entry)
-   |
-   v
-Tool Page (purpose-built component per tool)
-   |  - Resume (paste text or upload PDF/DOCX/TXT)   [where applicable]
-   |  - Job Description (paste)             [where applicable]
-   |  - LinkedIn URL (optional)             [where applicable]
-   |  - GitHub URL (optional)               [where applicable]
-   |  - Desperation Level (0-5)             [where applicable]
-   |  - Provider + API Key + Model          [always]
-   |
-   v
-Tool Action ("Analyze" / "Generate" / "Fight" / "Scan" / ...)
-   |
-   v
-API Route: POST /api/<endpoint>
-    |  - Validates AI config; classifies provider errors (auth, rate-limit, timeout, malformed output); timeout guards
-    |  - Parses PDF/DOCX/TXT if uploaded
-   |  - Fetches LinkedIn/GitHub public data (when provided)
-   |  - Builds structured prompt (lib/prompts.ts)
-   |  - Calls the user's AI provider
-   |  - Validates + normalizes the JSON response (lib/utils.ts)
-   |
-   v
-Results Panel (tool-specific sections)
-   +-- Tool-specific result metaphors (boss HP, court verdicts, aura readings, ...)
-   +-- Evidence-based, actionable output
-   +-- Witty, contextual commentary
-```
-
-The flagship resume-analyzer flow remains the deepest: Selection Probability, Fit Analysis, Rewritten Resume, Profile Synthesis (LinkedIn/GitHub evidence), and Application Strategy.
-## The 28 Tools
-
-| Tool | Route | What it does |
-|------|-------|--------------|
-| Resume Analyzer | `/resume-analyzer` | Full report: selection probability, fit analysis, rewrite, strategy |
-| Resume Roast | `/resume-roast` | Brutally honest diagnosis of what a recruiter is really thinking |
-| Job Fit Checker | `/job-fit-checker` | Should you apply, or are you absolutely cooked? |
-| Delulu Detector | `/delulu-detector` | Career-reality check: qualified, or delulu? |
-| ATS Checker | `/ats-checker` | Whether the resume robots can actually parse you |
-| JD Translator | `/jd-translator` | Decode corporate yapping into human language (overlay on home) |
-| Resume Rewriter | `/resume-rewriter` | Reposition real experience for the target job (truth filter on) |
-| Resume Fixer | `/resume-fixer` | Fix weak sections only - no full rewrite |
-| Bullet Point Fixer | `/bullet-point-fixer` | Turn weak bullets into impact statements |
-| LinkedIn Optimizer | `/linkedin-optimizer` | Make your LinkedIn less NPC |
-| Cover Letter Generator | `/cover-letter-generator` | Job-specific cover letter without sounding like ChatGPT |
-| Recruiter Message | `/recruiter-message` | Cold message that does not immediately scream desperation |
-| JD Red Flag Scanner | `/jd-red-flag-scanner` | Find the suspicious parts of the job description |
-| Skill Gap Analyzer | `/skill-gap-analyzer` | See exactly what you are missing for the role |
-| GitHub Resume Checker | `/github-resume-checker` | Does your GitHub actually back up your resume? |
-| Resume Truth Detector | `/resume-truth-detector` | Separate actual evidence from trust-me-bro claims |
-| Recruiter Simulator | `/recruiter-simulator` | What a recruiter notices in a 30-second scan |
-| Interview Prep | `/interview-prep` | Questions generated from your resume and the actual JD |
-| Interview Boss Fight | `/interview-boss-fight` | Get interrogated before the interviewer gets the chance |
-| STAR Answer Builder | `/star-answer-builder` | Turn messy experience into interview-ready STAR answers |
-| Tell Me About Yourself | `/tell-me-about-yourself` | Build the answer everyone asks and nobody prepares |
-| Weakness Detector | `/weakness-detector` | Find the questions most likely to expose your gaps |
-| Employment Aura | `/employment-aura` | Measure your current employment aura |
-| Rizz Score | `/rizz-score` | How convincing is this application, really? |
-| Cooked Meter | `/cooked-meter` | How cooked you are for this particular job |
-| Resume Court | `/resume-court` | Put your resume claims on trial |
-| ATS Boss Fight | `/ats-boss-fight` | Fight the robots. Again. |
-| Skill Issue | `/skill-issue` | Find out exactly why you are getting rejected |
-
-## API Routes (31)
-
-| Group | Endpoints (all POST unless noted) |
-|-------|-----------------------------------|
-| Core analyzer | `/api/analyze`, `/api/parse-pdf` (legacy), `/api/parse-document` |
-| Resume optimization | `/api/optimize-resume`, `/api/rewrite-resume`, `/api/fix-resume`, `/api/fix-bullet` |
-| Analysis tools | `/api/check-ats`, `/api/roast-resume`, `/api/check-delulu`, `/api/translate-jd` |
-| Job research | `/api/analyze-skill-gap`, `/api/scan-jd-red-flags` |
-| Investigation | `/api/check-github-resume`, `/api/check-resume-truth`, `/api/simulate-recruiter` |
-| Content generation | `/api/generate-cover-letter`, `/api/generate-recruiter-message`, `/api/optimize-linkedin` |
-| Interview prep | `/api/prepare-interview`, `/api/start-boss-fight`, `/api/evaluate-boss-answer`, `/api/build-star-answer`, `/api/build-introduction`, `/api/detect-weaknesses` |
-| Chaos tools | `/api/employment-aura`, `/api/rizz-score`, `/api/cooked-meter`, `/api/resume-court`, `/api/ats-boss-fight`, `/api/skill-issue` |
-
-All AI endpoints follow the same contract: accept the tool inputs plus `config: { provider, apiKey, model, baseUrl? }`, build the prompt via a tool-specific builder in `lib/prompts.ts`, call the model, validate the JSON response via `lib/utils.ts` validators, and return structured data or a typed error (400 bad config, 429 rate limit, 504 timeout, 502 malformed model output, 500 unexpected). Most routes are thin wrappers over `standardAIHandler` in `lib/pipeline.ts`, which centralizes config validation, input limits (20K char text, 10K char JD), JSON extraction, output validation and error classification. A `redactSecrets` helper strips provider key strings from error messages before they reach the client.
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `app/page.tsx` | Home page - tool marketplace grid + embedded resume-analyzer flow |
-| `app/<tool>/page.tsx` | 28 standalone tool routes (server components with per-route metadata) |
-| `app/api/<endpoint>/route.ts` | 31 API routes (thin `standardAIHandler` wrappers except `/analyze` and `/parse-pdf`) |
-| `lib/tools.ts` | Tool registry: 28 entries with name, category, icon, accent, and route `target` |
-| `lib/prompts.ts` | 28 `build*Prompt` functions + system prompts with strict JSON schemas and truth-filter rules |
-| `lib/pipeline.ts` | Shared `standardAIHandler` generic; config validation, timeout guards, JSON extraction, `redactSecrets`, `classifyAIError` |
-| `lib/ai.ts` | `createModel()` — unified factory over 9 AI providers via Vercel AI SDK |
-| `lib/providers.ts` | Provider registry (models, base URLs, docs links) |
-| `lib/evidence.ts` | 4-tier evidence engine (STRONG / PARTIAL / MISSING / UNVERIFIED) with weighted strength scoring |
-| `lib/documents.ts` | Server-side document extraction (PDF via `pdf-parse`, DOCX via `mammoth`, TXT native) |
-| `lib/document-types.ts` | Client-safe file-type detection and size limits (kept separate from server-only `documents.ts`) |
-| `lib/types.ts` | Shared TypeScript interfaces (incl. `AiRequestConfig`, result types) |
-| `lib/utils.ts` | ~30 runtime validators, HTML extraction, JSON parsing, URL validation, `fetchProfileText` |
-| `components/layout/Header.tsx` | Sticky navbar with 2 hero links + 3 category menus (derived from `lib/tools.ts`) |
-| `components/layout/NavDropdown.tsx` | Category dropdown menus in the navbar |
-| `components/layout/Footer.tsx` | Footer links (real `<Link>` navigation) |
-| `components/LandingHero.tsx` | Hero section on the home page |
-| `components/shared/ToolShell.tsx` | Render-prop tool-page shell — implemented but not yet adopted by tool pages |
-| `components/shared/ToolHeader.tsx` | Per-tool header with title, description, and provider config |
-| `components/shared/ResultSection.tsx` | Wrapper for tool-specific result blocks |
-| `components/shared/ScoreCard.tsx` | Reusable score/rating display |
-| `components/shared/EvidenceTable.tsx` | Evidence tier table (green/yellow/red) |
-| `components/shared/ErrorState.tsx` | Standardized error display |
-| `components/shared/CopyButton.tsx` | Copy-to-clipboard action |
-| `components/shared/AnalyzeButton.tsx` | Primary action button with loading state |
-| `components/shared/JobDescriptionInput.tsx` | JD paste/upload field |
-| `components/shared/VerdictCard.tsx` | Verdict badge (APPLY / BORDERLINE / LONG SHOT / ABSOLUTELY COOKED, etc.) |
-| `components/tools/ToolGrid.tsx` | Category-tabbed tool grid |
-| `components/tools/ToolCard.tsx` | Marketplace card (icon tile, accent, description) |
-| `components/tools/CategoryTabs.tsx` | Category filter tabs with counts |
-| `components/InputSection.tsx` | Card-based analyzer input form |
-| `components/ResumeCard.tsx` | Resume paste/upload with parsed-state display |
-| `components/DesperationSelector.tsx` | 0-5 desperation selector |
-| `components/ProviderConfig.tsx` | Provider/API key/model selection UI |
-| `components/ApiKeyInput.tsx` | Password-style API key input |
-| `components/LoadingState.tsx` | Rotating status messages + shimmer (per-tool copy) |
-| `components/ResultsPanel.tsx` | Tabbed results container (analyzer) |
-| `components/ResumeRewriteModal.tsx` | Optimizer modal: ORIGINAL / OPTIMIZED / WHAT CHANGED tabs + export |
-| `components/JDTranslatorOverlay.tsx` | Full-viewport JD Translator overlay |
-| `components/CorporateYappingTranslator.tsx` | JD jargon translator card (JD Translator, tab 1) |
-| `components/ContactForm.tsx` | Suggestions form on the home page (mailto draft, no backend) |
-| `components/<Tool>Page.tsx` | One purpose-built page component per tool (28 total) |
-| `components/sections/*` | ~40 result-section components — shared (ReportHeader, ScoreBreakdown, ...) and tool-specific (RoastLevel, DeluluScore, FitVerdict, AtsScore, ResumeCapDetector, ...) |
-| `scripts/gen-routes.mjs` | One-shot code generator for API routes from a declarative spec |
-
-## Data & Privacy Approach
-
-- **API Keys:** User provides their own key. It is sent per-request to the API route, used server-side to call the AI provider, then **immediately discarded**. Nothing is written to disk, database, or logs.
-- **No Persistence:** No database. No session storage. No cookies. Everything is ephemeral - refresh the page and it's gone.
-- **No Tracking:** No analytics, no telemetry, no fingerprinting.
-- **Resume/Job Data:** Processed in-memory per request. Never logged, never stored.
-- **LinkedIn/GitHub:** Only public profile data is fetched via the provided URL. No OAuth, no scraping behind auth walls. Provider error messages are scanned and API-key-like strings are redacted before anything reaches the client.
-
-## Shipped (Current MVP)
-
-- [x] Multi-provider AI integration (OpenAI, Gemini, OpenRouter, Groq, DeepSeek, Mistral, Together, xAI, custom)
-- [x] 28 standalone tool routes + tool marketplace with category filtering
-- [x] Flagship resume analyzer (selection probability, fit analysis, rewrite, strategy)
-- [x] Resume input (paste text or upload PDF, DOCX, or TXT)
-- [x] Job description input (paste)
-- [x] LinkedIn URL synthesis (optional)
-- [x] GitHub URL synthesis (optional)
-- [x] Desperation Level selector (0-5)
-- [x] Selection chance estimate + verdict labels (APPLY / BORDERLINE / LONG SHOT / ABSOLUTELY COOKED)
-- [x] Evidence-based fit analysis (4-tier: STRONG / PARTIAL / MISSING / UNVERIFIED; keyword presence is never treated as proof)
-- [x] Resume problems + concrete change list (strict no-fabrication rules)
-- [x] One-click resume optimizer (Truth Filter: structure/wording/keywords only, never fabrication)
-- [x] JD Translator (corporate yapping decoder - overlay + standalone route)
-- [x] 30-Second Recruiter Test (time-stamped scan simulation + tab-closing risk)
-- [x] Resume Cap Detector (claim evidence tiers: green/yellow/red)
-- [x] Interview Boss Fight (5 high-probability questions with truthful answer strategies)
-- [x] Application strategy + interview risk flags
-- [x] Cover Letter Generator (job-specific letters)
-- [x] Chaos suite (Employment Aura, Rizz Score, Cooked Meter, Resume Court, ATS Boss Fight, Skill Issue)
-- [x] Single troll comment; all other analysis strictly professional
-- [x] Clean, modern, professional UI
-- [x] Copy-to-clipboard + .txt download for rewritten resume
-- [x] Secret redaction (API-key-like strings stripped from provider error messages before reaching client)
-- [x] Document split for bundle safety (`lib/documents.ts` server-only, `lib/document-types.ts` client-safe)
-- [ ] Reusable tool shell (`ToolShell`) — `components/shared/ToolShell.tsx` exists but is not yet adopted by the 28 tool pages (adoption deferred to a later refactor)
-
-## Out of Scope (Explicitly NOT Building)
-
-- [ ] Authentication / user accounts
-- [ ] Database / data persistence
-- [ ] Billing / subscriptions / payments
-- [ ] Admin dashboards / analytics panels
-- [ ] Email notifications
-- [ ] Third-party OAuth (LinkedIn/GitHub data is fetched via public URLs only)
-- [ ] Rate limiting / API key management / key storage
-- [ ] Analytics / tracking pixels
-- [ ] Multi-user / team features
-- [ ] Resume versioning / history
-- [ ] Job application auto-submission
-- [ ] Mobile app
-- [ ] Localization / i18n
+Accounts and server-side profile storage, auto-applying to jobs, scraping behind logins, recruiter-side screening tools, and analytics/tracking.

@@ -90,13 +90,13 @@ Career Vault (IndexedDB)                      POST /api/run/[preset]
 
 ## Phases
 
-Status: phases 1–4 are done; 5 remains. Every tool now runs on the engine: 46 presets, no legacy pages. `npm test` runs the deterministic engine tests (no model calls).
+Status: all five phases are done. 46 tools on six engines, no legacy pages; see README.md and platform.md for the current architecture. `npm test` runs the deterministic engine tests (no model calls).
 
 1. **Foundation** ✅ — engine core (access, injection gate, context assembler, structured run, grounding check), knowledge base, Career Vault (IndexedDB + chunker + BM25), Message engine with ~25 presets, one SEO route per preset (`/tools/[slug]`), new catalog home, vault page.
 2. **Match + Tailor** ✅ — Job Fit Check, JD Decoder, Skill Gap Plan, ATS Check, Proof Check (live GitHub API), Tailor My Resume, Bullet Fixer, Cover Letter, LinkedIn Optimizer. Scores and verdicts are computed in code (`lib/engine/scoring.ts`); finalizers scrub fabricated citations, verify red-flag quotes against the posting, strip skills absent from the source; Tailor and Cover Letter run a drafter → reviewer → revise loop. 14 legacy tools, their routes, ~45 orphaned components and ~2,700 lines of legacy prompts/validators deleted; old URLs 301 to their replacements.
 3. **Interview + Offer** ✅ — Interview Prep Pack (absorbs Weakness Detector and Recruiter Simulator), Mock Interview (planned questions → per-answer grading → follow-ups → session summary computed in code), STAR Story Builder (saves stories back into the Career Vault, where every other tool retrieves them), Tell Me About Yourself, Interview Debrief, Offer Comparator (model extracts each figure with a verbatim quote; unquoted figures are dropped; all compensation math in `offerTotals`). Six legacy interview tools deleted and redirected.
 4. **Fun + growth** ✅ — Resume Roast (modes: classic, Rizz Score, Skill Issue, ATS Boss Fight), Resume Court (verdicts follow the evidence classification), Employment Aura (total summed in code), Corporate Bingo (playable; squares verified against pasted text). Burns and charges that don't quote the resume verbatim are dropped. Shareable 1200×630 result images drawn in the browser. Quick wins log on the vault page feeds Self-Review and Promotion Case. All remaining legacy pages, routes, prompts, validators and types deleted; `lib/` legacy shrank from ~6,400 lines to ~100.
-5. **Quality** — in-browser embeddings (transformers.js) for hybrid retrieval, eval suite + CI, Upstash rate limiting in production, analytics-free usage counters.
+5. **Quality** ✅ — Hybrid retrieval with on-device embeddings (Transformers.js, all-MiniLM-L6-v2) fused with BM25 via RRF; full-pipeline tests against a scripted model (found and fixed a real bug: providers without a default object-generation mode returned a 500); 10-case eval harness with guardrail metrics; CI for typecheck, tests and build; README and platform docs rewritten. Upstash rate limiting was already in place from phase 1.
 
 ## Free tier configuration
 

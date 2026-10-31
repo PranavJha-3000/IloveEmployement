@@ -86,7 +86,13 @@ export function RunDetails({ meta, sentChunks }: { meta: RunMeta; sentChunks: Va
 
         <p>
           {sentChunks.length
-            ? `${sentChunks.length} profile chunk${sentChunks.length === 1 ? "" : "s"} sent; the rest of your vault stayed in this browser.`
+            ? `${sentChunks.length} profile chunk${sentChunks.length === 1 ? "" : "s"} sent${
+                meta.retrieval === "hybrid"
+                  ? ", picked by hybrid search (keyword + on-device semantic, fused with RRF)"
+                  : meta.retrieval === "whole"
+                    ? " (whole resume, in document order)"
+                    : ", picked by keyword search (BM25)"
+              }; the rest of your vault stayed in this browser.`
             : "No profile data was sent."}
         </p>
       </div>

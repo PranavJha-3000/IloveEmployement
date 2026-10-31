@@ -9,6 +9,7 @@ import { DEFAULT_VAULT_LIMIT, type ReportKind } from "@/lib/presets/types";
 import { chunkResume, manualChunk } from "@/lib/vault/chunker";
 import { retrieveVault } from "@/lib/vault/retrieve";
 import { announceVaultChange, deleteChunksFromSource, saveChunks } from "@/lib/vault/store";
+import { useSemanticOrder } from "@/lib/vault/useSemantic";
 import { useVault } from "@/lib/vault/useVault";
 import { AccessPanel, useAccess } from "./AccessPanel";
 import { MessageResultView } from "./MessageResultView";
@@ -186,10 +187,16 @@ export function PresetRunner({ presetId }: { presetId: string }) {
   const sourceChunks = pastedChunks ?? chunks;
 
   const vaultEnabled = preset.usesVault && (useVaultContext || Boolean(pastedChunks)) && sourceChunks.length > 0;
+  const vaultLimit = preset.vaultLimit ?? DEFAULT_VAULT_LIMIT;
+  const wholeResume = vaultLimit > 12;
+  const vaultQuery = preset.vaultQuery(inputs);
+  // Hybrid search needs saved vectors, so it applies to the saved vault, not a pasted resume.
+  const semanticOrder = useSemanticOrder(chunks, vaultQuery, vaultEnabled && !pastedChunks && !wholeResume);
   const retrieved = useMemo(
-    () => (vaultEnabled ? retrieveVault(sourceChunks, preset.vaultQuery(inputs), preset.vaultLimit ?? DEFAULT_VAULT_LIMIT) : []),
-    [vaultEnabled, sourceChunks, preset, inputs],
+    () => (vaultEnabled ? retrieveVault(sourceChunks, vaultQuery, vaultLimit, semanticOrder ?? undefined) : []),
+    [vaultEnabled, sourceChunks, vaultQuery, vaultLimit, semanticOrder],
   );
+  const retrievalMode = wholeResume ? "whole" : semanticOrder ? "hybrid" : "keyword";
 
   const missing = preset.fields.filter((f) => f.required && !inputs[f.key]?.trim());
   const missingProfile = Boolean(preset.requiresProfile) && retrieved.length === 0;
@@ -205,7 +212,7 @@ export function PresetRunner({ presetId }: { presetId: string }) {
       const res = await fetch(`/api/run/${preset.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inputs, vault: retrieved, profile: profileForRun, config: access.requestConfig }),
+        body: JSON.stringify({ inputs, vault: retrieved, profile: profileForRun, config: access.requestConfig, retrieval: retrievalMode }),
       });
       const json = (await res.json()) as RunSuccess<unknown> | { error: string };
       if (!res.ok || "error" in json) throw new Error("error" in json ? json.error : "Something went wrong.");
@@ -271,6 +278,7 @@ export function PresetRunner({ presetId }: { presetId: string }) {
                   <details className="mt-1 text-[12px] text-zinc-500">
                     <summary className="cursor-pointer">
                       {retrieved.length} of {chunks.length} vault chunks will be sent for this task
+                      {retrievalMode === "hybrid" ? " · hybrid search" : ""}
                     </summary>
                     <ul className="mt-2 space-y-1">
                       {retrieved.map((c) => (

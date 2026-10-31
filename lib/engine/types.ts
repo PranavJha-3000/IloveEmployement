@@ -88,6 +88,8 @@ export interface RunRequestBody {
   profile?: Partial<VaultProfile>;
   /** Omit (or leave apiKey empty) to use the free tier. */
   config?: AiRequestConfig;
+  /** How the browser picked the vault chunks; echoed back for transparency. */
+  retrieval?: "hybrid" | "keyword" | "whole";
 }
 
 export interface Citation {
@@ -115,6 +117,8 @@ export interface RunMeta {
   injection: { field: string; findings: string[] }[];
   /** Grounding problems: dropped citations, unsupported figures. */
   grounding: string[];
+  /** How the vault chunks for this run were selected. */
+  retrieval?: "hybrid" | "keyword" | "whole";
   /** Present when the preset runs a reviewer pass over its draft. */
   review?: { issues: ReviewIssue[]; revised: boolean };
   /** Outside evidence fetched for this run (e.g. GitHub repos). */

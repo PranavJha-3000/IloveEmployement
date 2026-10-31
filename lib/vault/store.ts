@@ -7,9 +7,10 @@
 import type { VaultChunk, VaultProfile } from "../engine/types";
 
 const DB_NAME = "iloveemployement";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const CHUNKS = "chunks";
 const META = "meta";
+const VECTORS = "vectors";
 const EXPORT_FORMAT = "iloveemployement-vault@1";
 
 export const EMPTY_PROFILE: VaultProfile = { name: "", headline: "", location: "", targetRole: "", links: "" };
@@ -22,6 +23,8 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(CHUNKS)) db.createObjectStore(CHUNKS, { keyPath: "id" });
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
+      // v2: semantic index, one embedding per chunk (keyed by chunk id, with a content hash).
+      if (!db.objectStoreNames.contains(VECTORS)) db.createObjectStore(VECTORS, { keyPath: "id" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -55,12 +58,17 @@ export async function saveChunks(chunks: VaultChunk[]): Promise<void> {
 
 export async function deleteChunk(id: string): Promise<void> {
   await tx(CHUNKS, "readwrite", (s) => s.delete(id));
+  await tx(VECTORS, "readwrite", (s) => s.delete(id));
 }
 
 export async function deleteChunksFromSource(source: VaultChunk["source"]): Promise<void> {
   const all = await loadChunks();
+  const doomed = all.filter((c) => c.source === source).map((c) => c.id);
   await tx(CHUNKS, "readwrite", (s) => {
-    for (const c of all) if (c.source === source) s.delete(c.id);
+    for (const id of doomed) s.delete(id);
+  });
+  await tx(VECTORS, "readwrite", (s) => {
+    for (const id of doomed) s.delete(id);
   });
 }
 
@@ -80,6 +88,30 @@ export async function saveProfile(profile: VaultProfile): Promise<void> {
 export async function clearVault(): Promise<void> {
   await tx(CHUNKS, "readwrite", (s) => s.clear());
   await tx(META, "readwrite", (s) => s.clear());
+  await tx(VECTORS, "readwrite", (s) => s.clear());
+}
+
+// ─── Semantic index ──────────────────────────────────────────────────────────
+
+export interface StoredVector {
+  id: string;
+  /** Hash of the text that was embedded; a mismatch means the chunk changed. */
+  hash: string;
+  vector: number[];
+}
+
+export async function loadVectors(): Promise<StoredVector[]> {
+  try {
+    return (await tx<StoredVector[]>(VECTORS, "readonly", (s) => s.getAll())) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveVectors(vectors: StoredVector[]): Promise<void> {
+  await tx(VECTORS, "readwrite", (s) => {
+    for (const v of vectors) s.put(v);
+  });
 }
 
 // ─── Export / import ─────────────────────────────────────────────────────────

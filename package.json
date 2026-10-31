@@ -7,12 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
+    "typecheck": "tsc --noEmit -p .",
+    "eval": "tsc -p tsconfig.eval.json && node .eval-build/evals/run.js"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.0",
     "@ai-sdk/openai": "^1.3.0",
     "@ai-sdk/openai-compatible": "^0.2.0",
+    "@huggingface/transformers": "3.8.1",
     "ai": "^4.3.0",
     "mammoth": "^1.12.2",
     "next": "^15.3.0",

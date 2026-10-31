@@ -8,6 +8,7 @@ import { checkGrounding } from "../lib/engine/grounding";
 import { screenUntrusted } from "../lib/engine/injection";
 import { FINALIZERS, REPORT_SCHEMAS, type FinalizeContext } from "../lib/engine/reports";
 import { answerSignals, formatChecks, keywordCoverage, offerTotals, scoreRequirements, type Evidence, type Importance } from "../lib/engine/scoring";
+import { contentHash, cosine, reciprocalRankFusion, semanticRanking } from "../lib/retrieval/fusion";
 import { chunkResume } from "../lib/vault/chunker";
 import { retrieveVault } from "../lib/vault/retrieve";
 
@@ -320,4 +321,40 @@ test("bingo: squares verified against pasted text, capped at 24", () => {
   const out = FINALIZERS.bingo({ squares, commentary: "" }, ctx({ inputs: { text: "OK team, let's circle back on this after the sync." } }));
   assert.strictEqual(out.squares.length, 24);
   assert.deepStrictEqual(out.squares.slice(0, 2).map((s) => s.verified), [true, false]);
+});
+
+// ── hybrid retrieval
+
+test("RRF rewards agreement and still surfaces semantic-only hits", () => {
+  const fused = reciprocalRankFusion([
+    ["a", "b", "c"],
+    ["d", "a", "b"],
+  ]);
+  assert.strictEqual(fused[0], "a");
+  assert.ok(fused.includes("d"), "a chunk only the semantic ranker found must still be retrievable");
+});
+test("cosine and semantic ranking order by similarity and drop unrelated vectors", () => {
+  assert.ok(Math.abs(cosine([1, 0], [1, 0]) - 1) < 1e-9);
+  const order = semanticRanking([1, 0, 0], [
+    { id: "far", vector: [0, 1, 0] },
+    { id: "near", vector: [0.9, 0.1, 0] },
+    { id: "mid", vector: [0.6, 0.6, 0] },
+  ]);
+  assert.deepStrictEqual(order, ["near", "mid"]);
+});
+test("hybrid retrieval surfaces a paraphrased chunk that BM25 alone misses", () => {
+  const vault = chunkResume(`EXPERIENCE
+Engineer, Foo | 2022 – Present
+• Reduced deployment lead time from two weeks to one day with a CI pipeline
+• Organised the team offsite`);
+  const query = "ship software faster";
+  const lexical = retrieveVault(vault, query, 2);
+  assert.ok(!lexical.some((c) => c.text.includes("lead time")), "BM25 has no term overlap here");
+  const leadTime = vault.find((c) => c.text.includes("lead time"))!;
+  const hybrid = retrieveVault(vault, query, 2, [leadTime.id]);
+  assert.ok(hybrid.some((c) => c.id === leadTime.id));
+});
+test("content hash changes with text", () => {
+  assert.notStrictEqual(contentHash("a"), contentHash("b"));
+  assert.strictEqual(contentHash("same"), contentHash("same"));
 });

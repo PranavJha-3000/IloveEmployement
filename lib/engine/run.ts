@@ -4,7 +4,7 @@
 // (reviewer pass → revision) → deterministic finalize → grounding check.
 // Server-only: it reads free-tier secrets and calls the provider.
 
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, type LanguageModelV1 } from "ai";
 import type { z } from "zod";
 import { createModel } from "../ai";
 import { retrieveKnowledge } from "../kb";
@@ -161,6 +161,13 @@ function buildBlocks(
 
 // ─── Generation ──────────────────────────────────────────────────────────────
 
+let modelFactory: (config: AiRequestConfig) => LanguageModelV1 = createModel;
+
+/** Test/eval seam: route generation through a different model (e.g. a scripted mock). Pass null to reset. */
+export function setModelFactory(factory: ((config: AiRequestConfig) => LanguageModelV1) | null) {
+  modelFactory = factory ?? createModel;
+}
+
 function addUsage(a: Usage | null, b: Usage | null | undefined): Usage | null {
   if (!b) return a;
   return { promptTokens: (a?.promptTokens ?? 0) + b.promptTokens, completionTokens: (a?.completionTokens ?? 0) + b.completionTokens };
@@ -173,7 +180,7 @@ async function generateStructured<T extends z.ZodTypeAny>(
   prompt: string,
   temperature = 0.5,
 ): Promise<{ object: z.infer<T>; usage: Usage | null }> {
-  const model = createModel(config);
+  const model = modelFactory(config);
   try {
     const result = await generateObject({ model, schema, system, prompt, temperature, abortSignal: AbortSignal.timeout(DEFAULT_TIMEOUT) });
     return { object: result.object, usage: result.usage };
@@ -183,7 +190,10 @@ async function generateStructured<T extends z.ZodTypeAny>(
     const name = (err as Error)?.name ?? "";
     const message = (err as Error)?.message ?? "";
     const badOutput = /NoObjectGenerated|TypeValidation|JSONParse/i.test(name);
-    const unsupportedMode = /APICall/i.test(name) && /response_format|json_schema|json mode|structured|tool/i.test(message);
+    const unsupportedMode =
+      /UnsupportedFunctionality/i.test(name) ||
+      /object generation mode/i.test(message) ||
+      (/APICall/i.test(name) && /response_format|json_schema|json mode|structured|tool/i.test(message));
     if (!badOutput && !unsupportedMode) throw err;
     const fallback = await generateText({
       model,
@@ -276,6 +286,7 @@ export async function runPreset(preset: Preset, body: RunRequestBody, ip: string
       grounding: [],
       review,
       sources: sources.length ? sources : undefined,
+      retrieval: vault.length ? (wholeResume ? "whole" : body?.retrieval === "hybrid" ? "hybrid" : "keyword") : undefined,
     };
 
     if (isMessage) {

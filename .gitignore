@@ -14,3 +14,5 @@ next-env.d.ts
 server.log
 graphify-out/
 .test-build/
+.eval-build/
+evals/results/

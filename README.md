@@ -1,68 +1,84 @@
 # iloveemployment
 
-iLovePDF, but for getting a job — 28 brutally honest, AI-powered employment tools (resume analysis, job-fit scoring, interview prep, LinkedIn/GitHub auditing, cover letters and more) that run on your own API key, with real document parsing, evidence-based analysis and validated structured outputs. No account, no database, no stored data.
+**iLovePDF, but for your career.** 46 focused tools for every step of a job, from reading a posting to negotiating the offer to writing the resignation letter, built on one rule: **nothing about you gets invented.**
 
-**Live:** [iloveemployement.vercel.app](https://iloveemployement.vercel.app)
+**Live:** [iloveemployement.vercel.app](https://iloveemployement.vercel.app) · free daily runs, no sign-up · or bring your own key from 9 providers
 
-## Features
+---
 
-- **28 employment tools** — resume analyzer, job fit checker, skill gap analyzer, resume truth detector, delulu detector, ATS checker, interview prep, boss fight (mock interview), cover letter generator, resume rewriter, LinkedIn optimizer, GitHub resume checker, JD red flag scanner, and more
-- **Real document processing** — upload PDF, DOCX or TXT resumes (or paste text); extraction runs server-side and normalizes the text for analysis, with graceful fallback to pasted text
-- **Evidence-based analysis** — LinkedIn/GitHub sources are compared against resume claims and classified as STRONG / PARTIAL / MISSING / UNVERIFIED. Keyword presence alone is never treated as proof, and absence from GitHub is never treated as "doesn't know it"
-- **Truth-filtered rewriting** — the resume rewriter only repositions experience that exists; it never invents jobs, metrics, certifications or technologies. Desperation level controls tone, never facts
-- **Multi-provider BYOK** — bring your own key from 9 providers; the key lives in memory for the duration of one request
-- **Professional outputs, Gen-Z seasoning** — the actual resumes, cover letters and interview answers stay professional; the surrounding copy carries the humor
+## Why it exists
 
-## Architecture
+Job seekers don't lack AI generators. They lack time and trust. Tailoring one application takes hours, and generic AI text is easy for recruiters to spot, and it often invents experience. iloveemployment fixes both:
 
-Every AI tool runs through the same pipeline, so no tool duplicates parsing, validation or error handling:
+- **Add your resume once.** It becomes a **Career Vault** in your browser, and every tool writes from it.
+- **Every claim about you is traced.** Generated lines cite the exact part of your resume they came from. Lines that can't be traced are flagged, and invented skills and figures are removed or called out before you see them.
+- **Scores are computed, not vibes.** The model classifies evidence; code turns that into scores and verdicts with the formula shown.
 
+## The tools
+
+| Stage | Tools |
+|---|---|
+| **Target** | Job Fit Check · JD Decoder · Skill Gap Plan |
+| **Resume & Profile** | Tailor My Resume · ATS Check · Proof Check (live GitHub) · Bullet Point Fixer · Cover Letter · LinkedIn Optimizer |
+| **Outreach** | Cold Recruiter Message · Referral Request · Follow-up Email · Interview Thank-You Note · Rejection Reply |
+| **Interview** | Interview Prep Pack · Mock Interview · STAR Story Builder · Tell Me About Yourself · Salary Expectations Answer · Interview Debrief |
+| **Offer** | Offer Comparator · Salary Negotiation · Accept an Offer · Decline an Offer |
+| **Join & Leave** | Resignation Letter (with rage filter) · Notice Period & Joining Date · Reference Request · Internship Conversion Ask · Gap & Layoff Explainer |
+| **At Work** | Email Tone Fixer · Leave Application · Corporate Speak Translator · HR Concern Write-up · New Job Intro · 1:1 Agenda · 30-60-90 Day Plan · Status Update |
+| **Growth** | Self-Review Writer · Promotion Case · Ask for a Raise · Peer Feedback · Career Switch Pitch |
+| **Fun** | Resume Roast (Rizz Score, Skill Issue, ATS Boss Fight modes) · Resume Court · Employment Aura · Corporate Bingo |
+
+Each tool has its own page at `/tools/<slug>`, but they're all **configurations of six engines** (Message, Match, Tailor, Interview, Offer, Fun). Adding a tool is a ~30-line preset, not a new page and API route.
+
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph Browser["Browser (local-first)"]
+    V[(Career Vault<br/>IndexedDB)] --> R[Hybrid retrieval<br/>BM25 + on-device embeddings, RRF]
+    R -->|top-k chunks only| REQ
+    F[Tool form] --> REQ[POST /api/run/:preset]
+  end
+  subgraph Server["Server (stateless)"]
+    REQ --> A[Access<br/>free tier or BYOK, rate limit]
+    A --> G[Injection gate<br/>pasted JDs and emails]
+    G --> K[Knowledge retrieval<br/>curated playbooks, BM25]
+    K --> C[Context assembler<br/>token budgets, fenced untrusted data]
+    C --> M[Structured generation<br/>zod schema per tool]
+    M --> RV{Reviewer pass?}
+    RV -->|issues| REV[Revise once]
+    RV -->|clean| FIN
+    REV --> FIN[Finalize in code<br/>scores, verdicts, offer math,<br/>quote and citation checks]
+    FIN --> GR[Grounding check<br/>fake citations, invented figures]
+  end
+  GR --> UI[Result + citations +<br/>'How this was generated']
 ```
-INPUT (resume + JD + optional LinkedIn/GitHub)
-  ↓
-Document extraction        lib/documents.ts (PDF / DOCX / TXT / pasted)
-  ↓
-Prompt construction        lib/prompts.ts (per-tool, structured-output schemas)
-  ↓
-Unified AI call            lib/ai.ts → provider abstraction (9 providers)
-  ↓
-JSON extraction + repair   lib/utils.ts (handles markdown fences, trailing prose)
-  ↓
-Runtime validation         lib/utils.ts validators (malformed output never crashes the UI)
-  ↓
-Standardized error handling lib/pipeline.ts (auth / rate-limit / timeout / model / JSON)
-  ↓
-Tool-specific presentation components/shared/*
-```
 
-API routes are thin wrappers over `standardAIHandler` in `lib/pipeline.ts`, which centralizes config validation, input limits, JSON extraction, output validation and error classification. The evidence engine (`lib/evidence.ts`) is shared across the Resume Analyzer, Job Fit Checker, Skill Gap Analyzer, Resume Truth Detector, GitHub Resume Checker and Delulu Detector.
+### AI engineering highlights
 
-## AI Providers
-
-The app uses a BYOK (bring-your-own-key) architecture. You pick a provider, a model and paste your key in the UI — the key is held in browser memory and sent per-request to the tool's API route, which calls the provider through one unified interface (`lib/providers.ts`). Keys are never persisted, never logged, never placed in URLs, and never written to localStorage.
-
-| Provider | Get a key |
-|----------|-----------|
-| OpenAI | [platform.openai.com](https://platform.openai.com/api-keys) |
-| Google Gemini | [aistudio.google.com](https://aistudio.google.com/apikey) |
-| OpenRouter | [openrouter.ai](https://openrouter.ai/keys) |
-| Groq | [console.groq.com](https://console.groq.com/keys) |
-| DeepSeek | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
-| Mistral | [console.mistral.ai](https://console.mistral.ai/api-keys) |
-| Together AI | [api.together.xyz](https://api.together.xyz/settings/api-keys) |
-| xAI (Grok) | [console.x.ai](https://console.x.ai) |
-| Custom | Any OpenAI-compatible endpoint |
+| Technique | Where | What it does |
+|---|---|---|
+| **RAG over personal data** | `lib/vault/*` | Structure-aware chunking (role → bullet), retrieval in the browser; only the top-k chunks for the task are sent. Whole-resume tools keep document order. |
+| **Hybrid retrieval** | `lib/retrieval/*`, `lib/vault/embeddings.ts` | BM25 fused with all-MiniLM-L6-v2 embeddings (Transformers.js, runs on-device) via Reciprocal Rank Fusion. Finds "reduced lead time" for "ship faster". |
+| **Knowledge-base RAG** | `lib/kb/*` | 37 curated playbooks (negotiation, ATS, India notice periods and CTC, STAR, equity, HR write-ups…) retrieved per tool by tag + BM25. |
+| **Context engineering** | `lib/engine/context.ts` | Priority-ordered blocks with per-block token caps and a global budget; the manifest is shown to the user. |
+| **Structured outputs** | `lib/engine/reports.ts` | A zod schema per report kind via `generateObject`, with a fallback for providers without structured output. |
+| **Deterministic scoring** | `lib/engine/scoring.ts` | Fit scores, verdicts, ATS keyword coverage and parsing checks, interview answer signals and all offer math are code. |
+| **Grounding verification** | `lib/engine/grounding.ts`, finalizers | Citations must resolve to supplied chunks; figures must appear in the user's material; roast/court/red-flag quotes must be verbatim; GitHub repos must have been fetched. |
+| **Prompt-injection defence** | `lib/engine/injection.ts` | Strips invisible/bidi characters, flags instruction-shaped lines, fences pasted text as untrusted data. |
+| **Drafter → reviewer** | `lib/engine/review.ts` | An adversarial second pass on resumes and cover letters; one revision if it finds anything serious. |
+| **Write-back memory** | STAR Builder, wins log | Stories and wins saved to the vault are retrieved by every other tool. |
+| **Evals** | `evals/*` | 10 golden cases (fit/mismatch, injection resistance, no fabrication, format limits, offer extraction) against a real model, with guardrail metrics. |
+| **Tests** | `tests/*` | 43 tests: deterministic engine units plus full-pipeline runs against a scripted model. No key needed. |
 
 ## Privacy
 
-Your documents are processed for your request. We don't need an account and we don't store your API key.
+- **Your vault lives in your browser** (IndexedDB). Export, import or delete it any time. Each run sends only the chunks it needs.
+- **Embeddings are computed on your device.** Your text is never sent anywhere to be embedded.
+- **Bring-your-own-key** requests use your key for that call only; it's never stored server-side (it lives in `sessionStorage`, cleared when the tab closes).
+- No accounts, no analytics, no tracking.
 
-- Resume/JD text and profile URLs are processed in-memory per request; they are not written to disk or a database (there is no database)
-- Your API key is forwarded to your chosen provider for that single request, then discarded — it is not persisted server-side or in browser storage
-- Provider error messages are scanned and API-key-like strings are redacted before anything is returned to the client
-- No analytics, no tracking, no auth
-
-## Local Development
+## Run it locally
 
 ```bash
 git clone https://github.com/PranavJha-3000/IloveEmployement.git
@@ -71,35 +87,50 @@ npm install
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). No environment variables are required — the app is fully BYOK and stateless.
+Open [localhost:3000](http://localhost:3000). With no environment variables, every tool works with your own API key. To offer the free tier, copy `.env.example` to `.env.local`:
+
+| Variable | Purpose |
+|---|---|
+| `FREE_TIER_PROVIDER`, `FREE_TIER_API_KEY`, `FREE_TIER_MODEL` | Server key for keyless visitors (e.g. `google` / `gemini-2.0-flash`) |
+| `FREE_TIER_DAILY_LIMIT` | Runs per IP per day (default 15) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Shared rate limiting across serverless instances (in-memory otherwise) |
+| `GITHUB_TOKEN` | Optional: raises the GitHub API limit for Proof Check |
+
+## Quality
 
 ```bash
-npm run build   # production build
-npm run start   # serve the production build
+npm run typecheck
+npm test                      # 43 tests, no network
+npm run eval -- --dry         # list the golden cases
+EVAL_PROVIDER=google EVAL_API_KEY=... npm run eval   # run them, writes evals/REPORT.md
 ```
 
-## Deployment
+CI (`.github/workflows/ci.yml`) runs typecheck, tests and build on every push and PR. Evals run on demand (`evals.yml`) with an `EVAL_API_KEY` secret.
 
-Deploy to Vercel with zero configuration:
+## Add a tool
 
-1. Push the repo to GitHub
-2. Import it at [vercel.com/new](https://vercel.com/new)
-3. Deploy — no environment variables, no database, no setup
+Most tools are a preset in `lib/presets/*.ts`: fields, knowledge tags, what to retrieve from the vault, and the instruction. For example:
 
-Or via CLI:
-
-```bash
-npm i -g vercel
-vercel
+```ts
+{
+  id: "thank-you-note",
+  slug: "interview-thank-you-note",
+  engine: "message",
+  category: "outreach",
+  name: "Interview Thank-You Note",
+  fields: [company(), role(), area("discussed", "What did you talk about?", { required: true })],
+  kbTags: ["thank-you", "interview"],
+  usesVault: true,
+  vaultQuery: (i) => i.discussed,
+  format: "email",
+  task: () => "Write a thank-you under ~150 words that references one specific thing from the conversation…",
+}
 ```
 
-## Technical Highlights
+That's all it takes: the card, the nav entry, the SEO page, validation, retrieval, the injection gate, grounding and rendering come from the engine. Structured reports add a zod schema and a finalizer in `lib/engine/reports.ts`.
 
-- **Document parsing** — unified server-side extraction for PDF (`pdf-parse`), DOCX (`mammoth`) and TXT with size limits and paste fallback
-- **Structured LLM outputs** — every tool validates model responses against its result type at runtime; malformed JSON, truncated output or hallucinated shapes degrade to a clean error instead of crashing
-- **Evidence matching** — multi-source classification (resume / LinkedIn / GitHub / JD) that distinguishes "not found in source" from "doesn't exist"
-- **Multi-provider architecture** — one `createModel` abstraction over the Vercel AI SDK; adding a provider is a config entry, not new logic
-- **Reusable input components** — shared upload (`ResumeCard`), provider config, input, loading, error, score and evidence components that each tool page composes (a unified `ToolShell` exists in `components/shared/ToolShell.tsx` but is not yet adopted by the tool pages)
-- **Validation & error handling** — centralized classification of auth failures, rate limits, timeouts, invalid models and malformed JSON, with actionable messages and secret redaction
+## Stack
 
+Next.js 15 (App Router) · React 19 · TypeScript · Tailwind v4 · Vercel AI SDK (9 providers) · zod · Transformers.js · IndexedDB · Node test runner · GitHub Actions
 
+Architecture notes: [`platform.md`](platform.md) · Restructure history: [`docs/RESTRUCTURE_PLAN.md`](docs/RESTRUCTURE_PLAN.md)

@@ -193,6 +193,20 @@ test("decide throws when a required strategy is missing", () => {
   }
 });
 
+test("decide fails closed on a non-finite overall metric", () => {
+  for (const id of ["keyword", "embeddings", "hybrid", "hybrid+rerank", "embeddings+rerank"]) {
+    for (const bad of [NaN, Infinity, -Infinity, undefined]) {
+      const runs = run().map((s) => (s.id === id ? { ...s, overall: { ...s.overall, [DECISION_METRIC]: bad as number } } : s));
+      assert.throws(() => decide(runs), new RegExp(`decide: ${id.replace("+", "\\+")} ${DECISION_METRIC} is not finite`), `${id} ${String(bad)}`);
+    }
+  }
+  // All three existing strategies NaN previously let every candidate "beat best".
+  const allNaN = run().map((s) =>
+    ["keyword", "embeddings", "hybrid"].includes(s.id) ? { ...s, overall: { ...s.overall, [DECISION_METRIC]: NaN } } : s,
+  );
+  assert.throws(() => decide(allNaN), /not finite/);
+});
+
 test("constants match DECISION.md", () => {
   const md = readFileSync(path.resolve(__dirname, "../../evals/retrieval/DECISION.md"), "utf8");
   assert.ok(md.includes(String(BOOTSTRAP_SEED)));

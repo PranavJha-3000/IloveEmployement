@@ -128,9 +128,13 @@ export function decide(strategies: StrategyRun[]): Decision {
     if (!s) throw new Error(`decide: missing required strategy "${id}"`);
     return s;
   };
-  for (const id of DECISION_STRATEGY_IDS) need(id);
-
   const metric = DECISION_METRIC;
+  // Fail closed: a NaN compares false with everything, so a non-finite overall
+  // metric would silently drop out of "best existing" and let candidates pass R1 (a).
+  for (const id of DECISION_STRATEGY_IDS) {
+    const v = need(id).overall?.[metric];
+    if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`decide: ${id} ${metric} is not finite (${String(v)})`);
+  }
   const reasons: string[] = [];
 
   let bestExisting = { id: "", value: -Infinity };

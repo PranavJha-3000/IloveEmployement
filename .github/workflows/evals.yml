@@ -1,15 +1,26 @@
 name: Evals
 
-# Runs the golden cases against a real model. Manual, because it costs tokens.
+# Runs the LLM eval harness against real models. Manual, because it costs tokens.
+# Keys come only from repository secrets. Missing secrets are empty strings and
+# those provider columns are skipped by the harness.
 on:
   workflow_dispatch:
     inputs:
-      provider:
-        description: Provider id (google, openai, openrouter, groq, …)
-        default: google
-      model:
-        description: Model name (blank = provider default)
+      models:
+        description: "Comma list provider:model (check ids with --list-models)"
+        required: true
+      judge:
+        description: "Judge model as provider:model (blank = no judge)"
         default: ""
+      cases:
+        description: "Comma list of case ids (blank = all)"
+        default: ""
+      rpm:
+        description: Requests per minute throttle
+        default: "5"
+
+permissions:
+  contents: read
 
 jobs:
   evals:
@@ -21,15 +32,33 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run eval
+      - name: Run LLM eval
         env:
-          EVAL_PROVIDER: ${{ inputs.provider }}
-          EVAL_MODEL: ${{ inputs.model }}
+          INPUT_MODELS: ${{ inputs.models }}
+          INPUT_JUDGE: ${{ inputs.judge }}
+          INPUT_CASES: ${{ inputs.cases }}
+          INPUT_RPM: ${{ inputs.rpm }}
+          EVAL_GOOGLE_API_KEY: ${{ secrets.EVAL_GOOGLE_API_KEY }}
           EVAL_API_KEY: ${{ secrets.EVAL_API_KEY }}
+          EVAL_OPENAI_API_KEY: ${{ secrets.EVAL_OPENAI_API_KEY }}
+          EVAL_GROQ_API_KEY: ${{ secrets.EVAL_GROQ_API_KEY }}
+          EVAL_OPENROUTER_API_KEY: ${{ secrets.EVAL_OPENROUTER_API_KEY }}
+        run: |
+          args=(--models "$INPUT_MODELS" --rpm "$INPUT_RPM")
+          if [ -n "$INPUT_JUDGE" ]; then
+            args+=(--judge "$INPUT_JUDGE")
+          else
+            args+=(--no-judge)
+          fi
+          if [ -n "$INPUT_CASES" ]; then
+            args+=(--cases "$INPUT_CASES")
+          fi
+          npm run eval -- "${args[@]}"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eval-report
+          name: llm-eval
           path: |
-            evals/REPORT.md
-            evals/results/
+            evals/LLM.md
+            evals/results/LLM.preview.md
+            evals/results/llm-*.json

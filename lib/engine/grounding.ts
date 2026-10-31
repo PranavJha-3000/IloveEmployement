@@ -13,6 +13,10 @@ function normalizeFigure(f: string): string {
   return f.replace(/[\s,]/g, "").toLowerCase();
 }
 
+function toValue(f: string): number {
+  return Number(f.replace(/[^\d.]/g, "").replace(/\.$/, ""));
+}
+
 /** Figures that are structural, not claims: years, small ordinals, list numbers. */
 function isNoise(fig: string): boolean {
   const n = Number(fig.replace(/[^\d.]/g, ""));
@@ -34,13 +38,14 @@ export function checkGrounding(
   const invalid = citations.length - valid.length;
   if (invalid) problems.push(`Dropped ${invalid} citation${invalid === 1 ? "" : "s"} pointing at material that wasn't supplied.`);
 
-  const haystack = normalizeFigure(`${sourceText}\n${vault.map((c) => c.text).join("\n")}`);
+  // Compare whole numeric values, not substrings: "2" must not be "found" inside "280ms".
+  const source = `${sourceText}\n${vault.map((c) => c.text).join("\n")}`;
+  const knownValues = new Set((source.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map(toValue));
   const unsupported = new Set<string>();
   for (const match of outputText.match(FIGURE) ?? []) {
     const fig = normalizeFigure(match);
     if (!fig || isNoise(fig)) continue;
-    const digits = fig.replace(/[^\d.]/g, "");
-    if (!haystack.includes(fig) && !haystack.includes(digits)) unsupported.add(match.trim());
+    if (!knownValues.has(toValue(fig))) unsupported.add(match.trim());
   }
   if (unsupported.size) {
     problems.push(

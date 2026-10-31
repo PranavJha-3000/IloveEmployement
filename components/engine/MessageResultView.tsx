@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { MessageResult } from "@/lib/engine/schemas";
 import type { RunMeta, VaultContextChunk } from "@/lib/engine/types";
 import { CopyButton } from "@/components/shared/CopyButton";
+import { RunDetails, RunWarnings } from "./RunDetails";
 
 interface Props {
   result: MessageResult;
@@ -35,20 +36,10 @@ export function MessageResultView({ result, meta, sentChunks }: Props) {
   const body = versions[active]?.body ?? result.body;
   const fullText = result.subject && active === 0 ? `Subject: ${result.subject}\n\n${body}` : body;
   const chunkTitle = new Map(sentChunks.map((c) => [c.id, `${c.title}`]));
-  const warnings = [...meta.injection.flatMap((i) => i.findings.map((f) => `${i.field}: ${f}`)), ...meta.grounding];
 
   return (
     <div className="space-y-4">
-      {warnings.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800">Check before sending</p>
-          <ul className="mt-2 space-y-1 text-[13px] text-amber-900">
-            {warnings.map((w) => (
-              <li key={w}>• {w}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <RunWarnings meta={meta} />
 
       <div className="rounded-xl border border-zinc-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3">
@@ -109,37 +100,7 @@ export function MessageResultView({ result, meta, sentChunks }: Props) {
         </div>
       )}
 
-      <details className="rounded-xl border border-zinc-200 bg-white p-4 text-[12.5px] text-zinc-600">
-        <summary className="cursor-pointer font-semibold text-zinc-700">How this was generated</summary>
-        <div className="mt-3 space-y-3">
-          <p>
-            {meta.tier === "free" ? "Free tier" : "Your key"} · {meta.model}
-            {meta.usage && ` · ${meta.usage.promptTokens.toLocaleString()} in / ${meta.usage.completionTokens.toLocaleString()} out tokens`}
-          </p>
-          <div>
-            <p className="font-semibold text-zinc-700">Context assembled</p>
-            <ul className="mt-1 space-y-0.5">
-              {meta.context.map((c) => (
-                <li key={c.id} className={c.dropped ? "text-zinc-400 line-through" : ""}>
-                  {c.title} — ~{c.tokens.toLocaleString()} tokens{c.truncated ? " (truncated)" : ""}
-                  {c.dropped ? " (dropped: over budget)" : ""}
-                </li>
-              ))}
-            </ul>
-          </div>
-          {meta.knowledge.length > 0 && (
-            <div>
-              <p className="font-semibold text-zinc-700">Playbooks retrieved</p>
-              <p className="mt-1">{meta.knowledge.map((k) => k.title).join(" · ")}</p>
-            </div>
-          )}
-          <p>
-            {sentChunks.length
-              ? `${sentChunks.length} vault chunk${sentChunks.length === 1 ? "" : "s"} sent; the rest of your vault stayed in this browser.`
-              : "No vault data was sent."}
-          </p>
-        </div>
-      </details>
+      <RunDetails meta={meta} sentChunks={sentChunks} />
     </div>
   );
 }

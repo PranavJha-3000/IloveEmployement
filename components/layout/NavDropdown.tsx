@@ -23,8 +23,6 @@ interface NavDropdownProps {
   /** Controlled expanded state. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** When provided, tools flagged `overlay` open that panel instead of navigating. */
-  onOpenTranslator?: () => void;
   /** Anchor the panel to the trigger's right edge. */
   alignRight?: boolean;
   /** Force a column count; otherwise it is derived from the tool count. */
@@ -63,7 +61,6 @@ export function NavDropdown({
   tools,
   open,
   onOpenChange,
-  onOpenTranslator,
   alignRight = false,
   columns,
 }: NavDropdownProps) {
@@ -172,28 +169,7 @@ export function NavDropdown({
                   : "grid-cols-3"
             }`}
           >
-            {tools.map((tool) =>
-              tool.overlay && onOpenTranslator ? (
-                <button
-                  key={tool.id}
-                  type="button"
-                  onClick={() => {
-                    onOpenChange(false);
-                    onOpenTranslator();
-                  }}
-                  className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-zinc-50"
-                >
-                  <ToolIcon tool={tool} />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-medium text-zinc-900">
-                      {tool.name}
-                    </span>
-                    <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">
-                      {tool.description}
-                    </span>
-                  </span>
-                </button>
-              ) : (
+            {tools.map((tool) => (
                 <Link
                   key={tool.id}
                   href={tool.target}
@@ -210,8 +186,7 @@ export function NavDropdown({
                     </span>
                   </span>
                 </Link>
-              ),
-            )}
+            ))}
           </div>
         </div>
       )}

@@ -13,3 +13,4 @@ yarn-error.log*
 next-env.d.ts
 server.log
 graphify-out/
+.test-build/

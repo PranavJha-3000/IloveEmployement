@@ -16,9 +16,26 @@ const KIND_WEIGHT: Partial<Record<VaultChunk["kind"], number>> = {
   experience: 0.8,
 };
 
+/** Above this, a tool wants the whole resume rather than the most relevant slice. */
+const WHOLE_RESUME_LIMIT = 12;
+
 export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8): VaultContextChunk[] {
   if (!chunks.length) return [];
   const toContext = (c: VaultChunk): VaultContextChunk => ({ id: c.id, kind: c.kind, title: c.title, text: c.text });
+
+  if (limit > WHOLE_RESUME_LIMIT) {
+    // Whole-resume tools (tailoring, ATS, fit) need structure, not ranking: keep
+    // document order, and drop role/project containers whose bullets are present
+    // (each bullet's title already carries the role heading).
+    const titlesWithBullets = new Set(chunks.filter((c) => c.kind === "bullet").map((c) => c.title));
+    const whole = chunks.filter((c) => !((c.kind === "experience" || c.kind === "project") && titlesWithBullets.has(c.title)));
+    if (whole.length <= limit) return whole.map(toContext);
+    // Too big: keep the most relevant, still in document order.
+    const index = new Bm25Index(whole.map((c) => ({ id: c.id, text: `${c.title} ${c.text}` })));
+    const keep = new Set(index.search(query, limit).map((h) => h.id));
+    for (const c of whole) if (keep.size < limit) keep.add(c.id);
+    return whole.filter((c) => keep.has(c.id)).map(toContext);
+  }
 
   const summary = chunks.find((c) => c.kind === "summary");
   const pool = chunks.filter((c) => c !== summary);

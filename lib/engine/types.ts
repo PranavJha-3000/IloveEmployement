@@ -25,7 +25,11 @@ export interface FieldOption {
 export interface FieldSpec {
   key: string;
   label: string;
-  kind: "text" | "textarea" | "select" | "chips";
+  /**
+   * "resume": a paste/upload box. When filled, the browser chunks it and sends
+   * the chunks as this run's vault context (it is not saved unless asked).
+   */
+  kind: "text" | "textarea" | "select" | "chips" | "resume";
   required?: boolean;
   placeholder?: string;
   help?: string;
@@ -111,6 +115,17 @@ export interface RunMeta {
   injection: { field: string; findings: string[] }[];
   /** Grounding problems: dropped citations, unsupported figures. */
   grounding: string[];
+  /** Present when the preset runs a reviewer pass over its draft. */
+  review?: { issues: ReviewIssue[]; revised: boolean };
+  /** Outside evidence fetched for this run (e.g. GitHub repos). */
+  sources?: { id: string; title: string; ok: boolean; detail: string }[];
+}
+
+export interface ReviewIssue {
+  severity: "high" | "medium" | "low";
+  where: string;
+  problem: string;
+  fix: string;
 }
 
 export interface RunSuccess<T> {

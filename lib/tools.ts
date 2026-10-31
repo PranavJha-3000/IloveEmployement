@@ -2,8 +2,7 @@
 // Maps every tool card on the landing page to its category, icon, and the
 // route it opens. Hand-built tools live at app/<tool>/; engine presets from
 // lib/presets are appended at the bottom and open /tools/<slug>.
-// app/page.tsx pushes tool.target via the router. (JD Translator additionally
-// opens as an in-page overlay on the home page via the navbar/footer.)
+// app/page.tsx pushes tool.target via the router.
 
 import type { PresetCategory } from "./engine/types";
 import { PRESETS, PRESET_CATEGORY_LABELS } from "./presets";
@@ -36,11 +35,6 @@ export interface Tool {
   tint: string;
   /** route path on the site this tool card opens */
   target: `/${string}`;
-  /**
-   * Set when the tool has an in-page panel on the home page. The header/footer
-   * then open that panel instead of navigating, and the route is the fallback.
-   */
-  overlay?: boolean;
 }
 
 // ─── Icon paths (24x24, stroke-based, lucide-style) ─────────────────────────
@@ -101,16 +95,6 @@ const I = {
 export const TOOLS: Tool[] = [
   // ANALYZE
   {
-    id: "resume-analyzer",
-    name: "Resume Analyzer",
-    description: "Find out how badly your resume matches the job.",
-    category: "materials",
-    iconPaths: [I.fileSearch],
-    accent: "#2563eb",
-    tint: "#eff6ff",
-    target: "/resume-analyzer",
-  },
-  {
     id: "resume-roast",
     name: "Resume Roast",
     description:
@@ -121,146 +105,10 @@ export const TOOLS: Tool[] = [
     tint: "#fef2f2",
     target: "/resume-roast",
   },
-  {
-    id: "resume-rewriter",
-    name: "Resume Rewriter",
-    description:
-      "Reposition your real experience for the target job. Truth filter always on.",
-    category: "materials",
-    iconPaths: [I.penLine],
-    accent: "#2563eb",
-    tint: "#eff6ff",
-    target: "/resume-rewriter",
-  },
-  {
-    id: "resume-fixer",
-    name: "Resume Fixer",
-    description:
-      "Find the weak sections and fix only what needs fixing. No full rewrite.",
-    category: "materials",
-    iconPaths: [I.wrench],
-    accent: "#059669",
-    tint: "#ecfdf5",
-    target: "/resume-fixer",
-  },
-  {
-    id: "bullet-point-fixer",
-    name: "Bullet Point Fixer",
-    description:
-      "Transform weak bullets into impact-oriented statements. Fix that bullet.",
-    category: "materials",
-    iconPaths: [I.listChecks],
-    accent: "#7c3aed",
-    tint: "#f5f3ff",
-    target: "/bullet-point-fixer",
-  },
-  {
-    id: "job-fit",
-    name: "Job Fit Checker",
-    description: "Should you apply, or are you absolutely cooked?",
-    category: "target",
-    iconPaths: [I.target],
-    accent: "#059669",
-    tint: "#ecfdf5",
-    target: "/job-fit-checker",
-  },
-  {
-    id: "delulu-detector",
-    name: "Delulu Detector",
-    description:
-      "Are you qualified, or are we being delulu? Career-reality check.",
-    category: "target",
-    iconPaths: [I.glasses],
-    accent: "#7c3aed",
-    tint: "#f5f3ff",
-    target: "/delulu-detector",
-  },
-  {
-    id: "ats-checker",
-    name: "ATS Checker",
-    description: "See whether the resume robots can actually understand you.",
-    category: "materials",
-    iconPaths: [I.robot],
-    accent: "#7c3aed",
-    tint: "#f5f3ff",
-    target: "/ats-checker",
-  },
-  {
-    id: "jd-translator",
-    name: "JD Translator",
-    description: "Decode corporate yapping into human language.",
-    category: "target",
-    iconPaths: [I.languages],
-    accent: "#d97706",
-    tint: "#fffbeb",
-    target: "/jd-translator",
-    overlay: true,
-  },
 
   // OPTIMIZE
-  {
-    id: "linkedin-optimizer",
-    name: "LinkedIn Optimizer",
-    description: "Make your LinkedIn less NPC.",
-    category: "materials",
-    iconPaths: [I.linkedin],
-    accent: "#1d4ed8",
-    tint: "#eff6ff",
-    target: "/linkedin-optimizer",
-  },
-  {
-    id: "cover-letter",
-    name: "Cover Letter Generator",
-    description:
-      "Write a job-specific cover letter without sounding like ChatGPT.",
-    category: "materials",
-    iconPaths: [I.mail],
-    accent: "#d97706",
-    tint: "#fffbeb",
-    target: "/cover-letter-generator",
-  },
 
   // INVESTIGATE
-  {
-    id: "jd-red-flags",
-    name: "JD Red Flag Scanner",
-    description: "Find the suspicious parts of the job description.",
-    category: "target",
-    iconPaths: [I.shieldAlert],
-    accent: "#dc2626",
-    tint: "#fef2f2",
-    target: "/jd-red-flag-scanner",
-  },
-  {
-    id: "skill-gap",
-    name: "Skill Gap Analyzer",
-    description: "See exactly what you're missing for the role.",
-    category: "target",
-    iconPaths: [I.gap],
-    accent: "#2563eb",
-    tint: "#eff6ff",
-    target: "/skill-gap-analyzer",
-  },
-  {
-    id: "github-check",
-    name: "GitHub Resume Checker",
-    description: "Find out whether your GitHub actually backs up your resume.",
-    category: "materials",
-    iconPaths: [I.github],
-    accent: "#0f172a",
-    tint: "#f1f5f9",
-    target: "/github-resume-checker",
-  },
-  {
-    id: "truth-detector",
-    name: "Resume Truth Detector",
-    description: "Separate actual evidence from trust-me-bro claims.",
-    category: "materials",
-    iconPaths: [I.scale],
-    accent: "#d97706",
-    tint: "#fffbeb",
-    target: "/resume-truth-detector",
-  },
   {
     id: "recruiter-simulator",
     name: "Recruiter Simulator",

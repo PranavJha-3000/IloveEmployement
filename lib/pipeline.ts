@@ -66,8 +66,6 @@ export function validateConfig(config: AiRequestConfig): string | null {
 }
 
 export const DEFAULT_TIMEOUT = 55_000;
-export const DEFAULT_MAX_TEXT = 20_000;
-export const DEFAULT_MAX_JD = 10_000;
 
 export interface PipelineOptions {
   temperature?: number;

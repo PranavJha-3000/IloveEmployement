@@ -158,6 +158,48 @@ export const KB: KbEntry[] = [
     text: `Use Situation, Behaviour, Impact: when and where, the observable behaviour (not personality), and its effect. Balance strengths and growth areas, and make the growth areas actionable. Be specific and kind. Never give feedback on protected characteristics or personal life.`,
   },
   {
+    id: "resume-bullets",
+    title: "Writing resume bullets",
+    tags: ["resume"],
+    text: `Lead with a strong, specific verb (built, cut, led, migrated, designed), not "responsible for" or "worked on". Shape: what you did, how, and the result. "Accomplished X, measured by Y, by doing Z" is a good default. Prefer the user's real numbers (latency, revenue, users, time saved, scale, team size); when there isn't one, use scope (how many services, customers, regions) instead of inventing a metric. Keep bullets to one or two lines and three to six per role, most relevant first. Cut duties anyone in the title would have. Use the job's terminology only where the user's experience genuinely matches it.`,
+  },
+  {
+    id: "tailoring",
+    title: "Tailoring a resume to one job",
+    tags: ["resume", "ats"],
+    text: `Tailoring means selection and emphasis, not invention. Put the job's top three requirements in the summary and in the first bullets of the most relevant role. Reorder bullets by relevance, rename generic section titles, and mirror the posting's terms for skills the user actually has (e.g. "CI/CD" if they built pipelines). Cut or compress unrelated content. Keep titles, employers and dates exactly as they were. One to two pages; one page for under about five years' experience.`,
+  },
+  {
+    id: "ats",
+    title: "How applicant tracking systems read resumes",
+    tags: ["ats", "resume"],
+    text: `Most ATS software parses the text layer, then recruiters search and filter on keywords, titles and sometimes years of experience. Parsing breaks on tables, multi-column layouts, text in headers or footers, icons standing in for contact details, and images. Use standard headings (Experience, Education, Skills), a single column, and plain-text contact details. Include both the full term and the abbreviation where both are common ("Amazon Web Services (AWS)"). There's no universal "ATS score". Coverage of the posting's real requirements, in honest context, is what matters. Keyword stuffing and hidden text get caught by the humans who read shortlisted resumes.`,
+  },
+  {
+    id: "jd-reading",
+    title: "Reading a job description",
+    tags: ["jd"],
+    text: `Separate the role's real core (what the first lines and repeated themes describe) from the wish list. Many postings list more requirements than any hire meets, and meeting most must-haves is usually enough to apply. Signals worth checking: a responsibilities list spanning several jobs; seniority and pay that don't match; "rockstar/ninja", "work hard play hard" or "family" culture language; "fast-paced" with no mention of team or process; unpaid trial work; a missing salary where pay transparency is expected; vague reporting lines; and unrealistic experience requests (e.g. more years in a tool than it has existed). Each signal is a question to ask, not a verdict.`,
+  },
+  {
+    id: "cover-letter",
+    title: "Cover letters that get read",
+    tags: ["cover-letter"],
+    text: `Keep it under about 350 words. Open with the role and a specific reason for this company: something true about the product, mission, team or a problem they have. Generic praise fails. The middle maps two or three of the job's top needs to concrete evidence; don't retell the resume. Close confidently with one next step. Address a person by name when you can. Avoid "I am writing to apply", "I believe I would be a great fit", and adjectives without proof.`,
+  },
+  {
+    id: "linkedin",
+    title: "LinkedIn profiles that recruiters find",
+    tags: ["linkedin"],
+    text: `Recruiters search LinkedIn on title, skills and location. The headline is the most-weighted field, so make it role plus specialty plus proof ("Backend Engineer · Payments & Ledgers · Go, Postgres") rather than only "Seeking opportunities". The first two lines of About show before "see more", so open with what you do and for whom. Experience entries should match the resume's facts. Add relevant skills, ordered by what you want to be hired for. Set Open to Work privately (recruiters only) if being visible matters.`,
+  },
+  {
+    id: "github-proof",
+    title: "Making claims provable with GitHub and portfolios",
+    tags: ["github", "resume"],
+    text: `Pin the three to six repos that support the resume's main claims. A good README covers what it does, why, the stack, how to run it, and a screenshot or demo link. Original work, tests and recent activity count for more than forks or tutorial clones. Private or employer work can't be shown, so precise wording (scale, constraints, your role), write-ups, talks or a demo with fake data can stand in. Don't claim open-source impact that isn't visible (stars, users, merged PRs).`,
+  },
+  {
     id: "honesty",
     title: "Non-negotiable honesty rules",
     tags: ["all"],

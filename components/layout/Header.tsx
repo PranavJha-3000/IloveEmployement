@@ -12,7 +12,7 @@ import { NavDropdown } from "./NavDropdown";
  */
 
 /** Promoted to always-visible links beside the logo, like iLovePDF's top picks. */
-const HERO_TOOL_IDS = ["resume-analyzer"];
+const HERO_TOOL_IDS = ["tailor-resume"];
 
 /**
  * Dropdown groups. The lifecycle categories collapse into four menus so the
@@ -31,11 +31,6 @@ const NAV_MENUS: {
   { id: "work-career", label: "Work & Career", categories: ["transition", "work", "growth"], columns: 2 },
   { id: "fun", label: "Fun", categories: ["fun"], columns: 2 },
 ];
-
-interface HeaderProps {
-  /** When provided, JD Translator opens the in-page overlay instead of navigating. */
-  onOpenTranslator?: () => void;
-}
 
 const heroTools = HERO_TOOL_IDS.map((id) => TOOLS.find((t) => t.id === id)).filter(
   (t): t is Tool => Boolean(t),
@@ -64,16 +59,10 @@ const ALL_TOOLS_ICON = (
   </svg>
 );
 
-export function Header({ onOpenTranslator }: HeaderProps) {
+export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   /** Id of the single open desktop dropdown; only one is open at a time. */
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-
-  function openTranslator() {
-    setMobileOpen(false);
-    setOpenMenu(null);
-    onOpenTranslator?.();
-  }
 
   function renderMobileTool(tool: Tool) {
     const className =
@@ -87,18 +76,6 @@ export function Header({ onOpenTranslator }: HeaderProps) {
       </>
     );
 
-    if (tool.overlay && onOpenTranslator) {
-      return (
-        <button
-          key={tool.id}
-          type="button"
-          onClick={openTranslator}
-          className={className}
-        >
-          {label}
-        </button>
-      );
-    }
     return (
       <Link
         key={tool.id}
@@ -125,17 +102,7 @@ export function Header({ onOpenTranslator }: HeaderProps) {
         </Link>
 
         <nav className="flex items-center gap-0.5" aria-label="Primary">
-          {heroTools.map((tool) =>
-            tool.overlay && onOpenTranslator ? (
-              <button
-                key={tool.id}
-                type="button"
-                onClick={openTranslator}
-                className="whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
-              >
-                {tool.name}
-              </button>
-            ) : (
+          {heroTools.map((tool) => (
               <Link
                 key={tool.id}
                 href={tool.target}
@@ -143,8 +110,7 @@ export function Header({ onOpenTranslator }: HeaderProps) {
               >
                 {tool.name}
               </Link>
-            ),
-          )}
+          ))}
 
           {menus.map((menu) => (
             <NavDropdown
@@ -154,14 +120,11 @@ export function Header({ onOpenTranslator }: HeaderProps) {
               columns={menu.columns}
               open={openMenu === menu.id}
               onOpenChange={(next) => setOpenMenu(next ? menu.id : null)}
-              onOpenTranslator={
-                menu.tools.some((t) => t.overlay) ? openTranslator : undefined
-              }
             />
           ))}
         </nav>
 
-        {/* Right: every tool, then the Dashboard placeholder */}
+        {/* Right: every tool, then the Career Vault */}
         <div className="ml-auto flex items-center gap-2">
           <NavDropdown
             icon={ALL_TOOLS_ICON}
@@ -169,9 +132,6 @@ export function Header({ onOpenTranslator }: HeaderProps) {
             tools={TOOLS}
             open={openMenu === "all"}
             onOpenChange={(next) => setOpenMenu(next ? "all" : null)}
-            onOpenTranslator={
-              TOOLS.some((t) => t.overlay) ? openTranslator : undefined
-            }
             alignRight
             columns={3}
           />

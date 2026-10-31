@@ -1,10 +1,12 @@
 import type { PresetCategory } from "../engine/types";
+import { MATCH_PRESETS } from "./match";
 import { MESSAGE_PRESETS } from "./message";
+import { TAILOR_PRESETS } from "./tailor";
 import type { Preset } from "./types";
 
-export type { Preset, MessagePreset } from "./types";
+export type { Preset, MessagePreset, ReportPreset } from "./types";
 
-export const PRESETS: Preset[] = [...MESSAGE_PRESETS];
+export const PRESETS: Preset[] = [...MATCH_PRESETS, ...TAILOR_PRESETS, ...MESSAGE_PRESETS];
 
 export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
   target: "Target",

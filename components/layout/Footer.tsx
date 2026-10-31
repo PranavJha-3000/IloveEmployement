@@ -3,13 +3,8 @@
 import Link from "next/link";
 import { TOOLS } from "@/lib/tools";
 
-interface FooterProps {
-  /** When provided, the JD Translator link opens the in-page overlay instead of navigating. */
-  onOpenTranslator?: () => void;
-}
-
-export function Footer({ onOpenTranslator }: FooterProps) {
-  const featured = ["resume-analyzer", "jd-translator"]
+export function Footer() {
+  const featured = ["tailor-resume", "job-fit-check", "cold-recruiter-message"]
     .map((id) => TOOLS.find((t) => t.id === id))
     .filter((t): t is NonNullable<typeof t> => Boolean(t));
 
@@ -40,23 +35,16 @@ export function Footer({ onOpenTranslator }: FooterProps) {
                   All Tools
                 </Link>
               </li>
+              <li>
+                <Link href="/vault" className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors">
+                  Career Vault
+                </Link>
+              </li>
               {featured.map((tool) => (
                 <li key={tool.id}>
-                  {tool.overlay && onOpenTranslator ? (
-                    <button
-                      onClick={onOpenTranslator}
-                      className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                    >
-                      {tool.name}
-                    </button>
-                  ) : (
-                    <Link
-                      href={tool.target}
-                      className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                    >
-                      {tool.name}
-                    </Link>
-                  )}
+                  <Link href={tool.target} className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors">
+                    {tool.name}
+                  </Link>
                 </li>
               ))}
             </ul>

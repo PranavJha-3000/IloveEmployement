@@ -5,55 +5,8 @@
 // The user's field values are passed to the model separately, so task() only
 // states what to write and how — it never needs to repeat the inputs.
 
-import type { FieldSpec } from "../engine/types";
+import { area, chips, company, extra, jobDescription, joinQuery, recipient, role, text, tone } from "./fields";
 import type { MessagePreset } from "./types";
-
-// ─── Shared fields ───────────────────────────────────────────────────────────
-
-const text = (key: string, label: string, opts: Partial<FieldSpec> = {}): FieldSpec => ({
-  key,
-  label,
-  kind: "text",
-  maxLength: 200,
-  ...opts,
-});
-
-const area = (key: string, label: string, opts: Partial<FieldSpec> = {}): FieldSpec => ({
-  key,
-  label,
-  kind: "textarea",
-  maxLength: 4000,
-  ...opts,
-});
-
-const chips = (key: string, label: string, options: [string, string][], defaultValue?: string, opts: Partial<FieldSpec> = {}): FieldSpec => ({
-  key,
-  label,
-  kind: "chips",
-  options: options.map(([value, label]) => ({ value, label })),
-  defaultValue: defaultValue ?? options[0][0],
-  ...opts,
-});
-
-const company = (required = true) => text("company", "Company", { required, placeholder: "e.g. Razorpay" });
-const role = (required = true, label = "Role") => text("role", label, { required, placeholder: "e.g. Backend Engineer" });
-const recipient = (label = "Recipient's name") => text("recipientName", label, { placeholder: "Leave blank if unknown" });
-const jobDescription = (required = false) =>
-  area("jobDescription", "Job description", {
-    required,
-    untrusted: true,
-    maxLength: 10000,
-    placeholder: "Paste the posting. It's screened for hidden instructions before the AI reads it.",
-  });
-const extra = area("extra", "Anything else to include?", { maxLength: 1500, placeholder: "Optional" });
-const tone = chips("tone", "Tone", [
-  ["professional", "Professional"],
-  ["warm", "Warm"],
-  ["direct", "Direct"],
-  ["formal", "Formal"],
-]);
-
-const joinQuery = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(" ");
 
 // ─── Presets ─────────────────────────────────────────────────────────────────
 

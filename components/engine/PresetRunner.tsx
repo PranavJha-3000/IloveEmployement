@@ -1,20 +1,99 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { FieldSpec, RunMeta, RunSuccess, VaultContextChunk } from "@/lib/engine/types";
+import { useMemo, useRef, useState } from "react";
+import type { FieldSpec, RunMeta, RunSuccess, VaultChunk, VaultContextChunk } from "@/lib/engine/types";
 import type { MessageResult } from "@/lib/engine/schemas";
 import { getPresetById } from "@/lib/presets";
-import { useVault } from "@/lib/vault/useVault";
+import { DEFAULT_VAULT_LIMIT, type ReportKind } from "@/lib/presets/types";
+import { chunkResume } from "@/lib/vault/chunker";
 import { retrieveVault } from "@/lib/vault/retrieve";
+import { announceVaultChange, deleteChunksFromSource, saveChunks } from "@/lib/vault/store";
+import { useVault } from "@/lib/vault/useVault";
 import { AccessPanel, useAccess } from "./AccessPanel";
 import { MessageResultView } from "./MessageResultView";
+import { ReportView } from "./ReportView";
 
 function initialInputs(fields: FieldSpec[]): Record<string, string> {
   return Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ""]));
 }
 
-function Field({ field, value, onChange, disabled }: { field: FieldSpec; value: string; onChange: (v: string) => void; disabled: boolean }) {
+interface FieldProps {
+  field: FieldSpec;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}
+
+function ResumeField({ field, value, onChange, disabled, vaultCount, pasted }: FieldProps & { vaultCount: number; pasted: VaultChunk[] | null }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState("");
+
+  async function upload(file: File) {
+    setStatus("Reading…");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/parse-document", { method: "POST", body: form });
+      const json = (await res.json()) as { text?: string; error?: string };
+      if (!res.ok || !json.text) throw new Error(json.error || "Couldn't read that file.");
+      onChange(json.text);
+      setStatus("");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Couldn't read that file.");
+    }
+  }
+
+  async function saveToVault() {
+    if (!pasted?.length) return;
+    if (vaultCount && !window.confirm("Replace the resume chunks in your Career Vault with this resume? Stories, wins and notes stay.")) return;
+    await deleteChunksFromSource("resume");
+    await saveChunks(pasted);
+    announceVaultChange();
+    setStatus(`Saved ${pasted.length} chunks to your Career Vault.`);
+  }
+
+  return (
+    <div className="sm:col-span-2">
+      <div className="flex items-center justify-between">
+        <label htmlFor="field-resume" className="field-label">
+          {field.label}
+        </label>
+        <div className="mb-1.5 flex gap-2 text-[11.5px] font-semibold">
+          <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="text-zinc-600 hover:text-red-600">
+            Upload PDF/DOCX
+          </button>
+          {pasted && (
+            <button type="button" onClick={() => void saveToVault()} className="text-zinc-600 hover:text-red-600">
+              Save to vault
+            </button>
+          )}
+        </div>
+      </div>
+      <input ref={fileRef} type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+      <textarea
+        id="field-resume"
+        rows={value ? 8 : 3}
+        value={value}
+        disabled={disabled}
+        maxLength={field.maxLength}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={vaultCount ? `Leave empty to use your Career Vault (${vaultCount} chunks), or paste a different resume` : "Paste your resume or upload a file"}
+        className="field-control"
+      />
+      <p className="field-help">
+        {status ||
+          (pasted
+            ? `Using this resume for this run (${pasted.length} chunks). It isn't saved unless you click "Save to vault".`
+            : vaultCount
+              ? "Using your Career Vault."
+              : "Tip: save it to your Career Vault once and every tool can use it.")}
+      </p>
+    </div>
+  );
+}
+
+function Field({ field, value, onChange, disabled }: FieldProps) {
   const id = `field-${field.key}`;
   const label = (
     <label htmlFor={id} className="field-label">
@@ -85,6 +164,8 @@ function Field({ field, value, onChange, disabled }: { field: FieldSpec; value: 
   );
 }
 
+type RunResult = { kind: "message" | ReportKind; data: unknown; meta: RunMeta; sent: VaultContextChunk[] };
+
 export function PresetRunner({ presetId }: { presetId: string }) {
   const preset = getPresetById(presetId)!;
   const access = useAccess();
@@ -94,17 +175,24 @@ export function PresetRunner({ presetId }: { presetId: string }) {
   const [useVaultContext, setUseVaultContext] = useState(true);
   const [phase, setPhase] = useState<"idle" | "loading" | "done">("idle");
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ data: MessageResult; meta: RunMeta; sent: VaultContextChunk[] } | null>(null);
+  const [result, setResult] = useState<RunResult | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
 
-  const vaultEnabled = preset.usesVault && useVaultContext && chunks.length > 0;
+  const hasResumeField = preset.fields.some((f) => f.kind === "resume");
+  const pastedResume = inputs.resume?.trim() ?? "";
+  const pastedChunks = useMemo(() => (pastedResume ? chunkResume(pastedResume) : null), [pastedResume]);
+  const sourceChunks = pastedChunks ?? chunks;
+
+  const vaultEnabled = preset.usesVault && (useVaultContext || Boolean(pastedChunks)) && sourceChunks.length > 0;
   const retrieved = useMemo(
-    () => (vaultEnabled ? retrieveVault(chunks, preset.vaultQuery(inputs), 8) : []),
-    [vaultEnabled, chunks, preset, inputs],
+    () => (vaultEnabled ? retrieveVault(sourceChunks, preset.vaultQuery(inputs), preset.vaultLimit ?? DEFAULT_VAULT_LIMIT) : []),
+    [vaultEnabled, sourceChunks, preset, inputs],
   );
 
   const missing = preset.fields.filter((f) => f.required && !inputs[f.key]?.trim());
-  const canRun = access.ready && missing.length === 0 && phase !== "loading";
+  const missingProfile = Boolean(preset.requiresProfile) && retrieved.length === 0;
+  const canRun = access.ready && missing.length === 0 && !missingProfile && phase !== "loading";
+  const steps = preset.review ? "Drafting, then a second AI reviews it for invented claims…" : "Retrieving playbooks, assembling context, checking every fact…";
 
   async function run() {
     if (!canRun) return;
@@ -117,9 +205,9 @@ export function PresetRunner({ presetId }: { presetId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inputs, vault: retrieved, profile: profileForRun, config: access.requestConfig }),
       });
-      const json = (await res.json()) as RunSuccess<MessageResult> | { error: string };
+      const json = (await res.json()) as RunSuccess<unknown> | { error: string };
       if (!res.ok || "error" in json) throw new Error("error" in json ? json.error : "Something went wrong.");
-      setResult({ data: json.data, meta: json.meta, sent: retrieved });
+      setResult({ kind: preset.engine === "message" ? "message" : preset.output, data: json.data, meta: json.meta, sent: retrieved });
       setRemaining(json.meta.remaining);
       setPhase("done");
       requestAnimationFrame(() => document.getElementById("result")?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -129,8 +217,10 @@ export function PresetRunner({ presetId }: { presetId: string }) {
     }
   }
 
+  const setField = (key: string) => (v: string) => setInputs((prev) => ({ ...prev, [key]: v }));
+
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       <form
         className="space-y-5"
         onSubmit={(e) => {
@@ -139,22 +229,29 @@ export function PresetRunner({ presetId }: { presetId: string }) {
         }}
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          {preset.fields.map((field) => (
-            <Field
-              key={field.key}
-              field={field}
-              value={inputs[field.key] ?? ""}
-              disabled={phase === "loading"}
-              onChange={(v) => setInputs((prev) => ({ ...prev, [field.key]: v }))}
-            />
-          ))}
+          {preset.fields.map((field) =>
+            field.kind === "resume" ? (
+              <ResumeField
+                key={field.key}
+                field={field}
+                value={inputs[field.key] ?? ""}
+                disabled={phase === "loading"}
+                onChange={setField(field.key)}
+                vaultCount={chunks.length}
+                pasted={pastedChunks}
+              />
+            ) : (
+              <Field key={field.key} field={field} value={inputs[field.key] ?? ""} disabled={phase === "loading"} onChange={setField(field.key)} />
+            ),
+          )}
         </div>
 
-        {preset.usesVault && loaded && (
+        {preset.usesVault && loaded && !pastedChunks && (
           <div className="rounded-xl border border-zinc-200 p-4">
             {chunks.length === 0 ? (
               <p className="text-[12.5px] text-zinc-600">
-                <span className="font-semibold text-zinc-800">Make it about you.</span> Add your resume to your{" "}
+                <span className="font-semibold text-zinc-800">Make it about you.</span>{" "}
+                {hasResumeField ? "Paste your resume above, or add it to your " : "Add your resume to your "}
                 <Link href="/vault" className="font-semibold text-red-600 hover:underline">
                   Career Vault
                 </Link>{" "}
@@ -162,14 +259,16 @@ export function PresetRunner({ presetId }: { presetId: string }) {
               </p>
             ) : (
               <>
-                <label className="flex items-center gap-2 text-[13px] font-semibold text-zinc-800">
-                  <input type="checkbox" checked={useVaultContext} onChange={(e) => setUseVaultContext(e.target.checked)} />
-                  Use my Career Vault
-                </label>
-                {useVaultContext && (
-                  <details className="mt-2 text-[12px] text-zinc-500">
+                {!preset.requiresProfile && (
+                  <label className="flex items-center gap-2 text-[13px] font-semibold text-zinc-800">
+                    <input type="checkbox" checked={useVaultContext} onChange={(e) => setUseVaultContext(e.target.checked)} />
+                    Use my Career Vault
+                  </label>
+                )}
+                {(useVaultContext || preset.requiresProfile) && (
+                  <details className="mt-1 text-[12px] text-zinc-500">
                     <summary className="cursor-pointer">
-                      {retrieved.length} of {chunks.length} chunks will be sent for this task
+                      {retrieved.length} of {chunks.length} vault chunks will be sent for this task
                     </summary>
                     <ul className="mt-2 space-y-1">
                       {retrieved.map((c) => (
@@ -190,10 +289,12 @@ export function PresetRunner({ presetId }: { presetId: string }) {
         {error && <p className="form-error">{error}</p>}
 
         <button type="submit" disabled={!canRun} className="cta-primary w-full disabled:cursor-not-allowed disabled:opacity-50">
-          {phase === "loading" ? "Writing…" : `Write it`}
+          {phase === "loading" ? "Working…" : preset.engine === "message" ? "Write it" : preset.engine === "tailor" ? "Tailor it" : "Analyze"}
         </button>
-        {missing.length > 0 && (
-          <p className="text-center text-[11.5px] text-zinc-400">Still needed: {missing.map((f) => f.label).join(", ")}</p>
+        {(missing.length > 0 || missingProfile) && (
+          <p className="text-center text-[11.5px] text-zinc-400">
+            Still needed: {[...missing.map((f) => f.label), ...(missingProfile && !missing.some((f) => f.kind === "resume") ? ["your resume"] : [])].join(", ")}
+          </p>
         )}
       </form>
 
@@ -204,18 +305,24 @@ export function PresetRunner({ presetId }: { presetId: string }) {
             <div className="h-3 w-full animate-pulse rounded bg-zinc-100" />
             <div className="h-3 w-5/6 animate-pulse rounded bg-zinc-100" />
             <div className="h-3 w-4/6 animate-pulse rounded bg-zinc-100" />
-            <p className="pt-2 text-[12px] text-zinc-400">Retrieving playbooks, assembling context, checking every fact…</p>
+            <p className="pt-2 text-[12px] text-zinc-400">{steps}</p>
           </div>
         )}
-        {phase !== "loading" && result && <MessageResultView result={result.data} meta={result.meta} sentChunks={result.sent} />}
+        {phase !== "loading" && result?.kind === "message" && (
+          <MessageResultView result={result.data as MessageResult} meta={result.meta} sentChunks={result.sent} />
+        )}
+        {phase !== "loading" && result && result.kind !== "message" && (
+          <ReportView kind={result.kind} data={result.data} meta={result.meta} sentChunks={result.sent} profileName={profile.name} />
+        )}
         {phase === "idle" && !result && (
           <div className="rounded-xl border border-dashed border-zinc-200 p-6 text-[13px] leading-relaxed text-zinc-500">
-            <p className="font-semibold text-zinc-700">What you'll get</p>
+            <p className="font-semibold text-zinc-700">How this tool stays honest</p>
             <ul className="mt-2 space-y-1">
-              <li>• A ready-to-send draft plus alternatives</li>
-              <li>• Highlighted [placeholders] for anything we don't know, never made-up facts</li>
-              <li>• Citations to your Career Vault for every claim about you</li>
-              <li>• A warning if any figure doesn't appear in what you gave us</li>
+              <li>• It works only from what you give it and your Career Vault. Unknowns become highlighted [placeholders].</li>
+              <li>• Claims about you cite the exact part of your resume they came from.</li>
+              {preset.engine !== "message" && <li>• Scores are computed by code from the evidence, not guessed by the AI.</li>}
+              {preset.review && <li>• A second AI reviews the draft for invented or stretched claims before you see it.</li>}
+              <li>• Figures that don't appear in your material are flagged.</li>
             </ul>
           </div>
         )}

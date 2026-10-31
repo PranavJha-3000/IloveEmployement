@@ -95,15 +95,6 @@ export interface ResumeOptimizationResult {
   whatChanged: ChangeEntry[];
 }
 
-export interface ResumeOptimizationRequest {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  analysis: AnalysisResult;
-  linkedinUrl?: string;
-  githubUrl?: string;
-}
-
 // ─── Request Types ───────────────────────────────────────────────────────────
 
 export interface AnalyzeRequestBody {
@@ -136,15 +127,6 @@ export interface CorporateYappingResult {
   translations: YappingTranslation[];
   /** 0-100: low = unusually specific JD, high = lots of generic corporate language. */
   yappingScore?: number;
-}
-
-export interface CorporateYappingRequest {
-  config: AiRequestConfig;
-  jobDescription: string;
-  /** Optional context. Used only to frame the JD; never invented information. */
-  companyName?: string;
-  /** Optional context. Used only to frame the JD; never invented information. */
-  roleTitle?: string;
 }
 
 // ─── Recruiter Simulator & Cap Detector Types ──────────────────────────────
@@ -222,12 +204,6 @@ export interface AtsCheckResult {
   strongResumeNote?: string; // present when atsScore >= 80
 }
 
-export interface AtsCheckRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription?: string; // optional — enables keyword matching
-}
-
 // ─── Resume Roast Types ─────────────────────────────────────────────────────
 
 export type RoastRiskLevel = "LOW" | "MEDIUM" | "HIGH";
@@ -296,14 +272,6 @@ export interface DeluluCheckResult {
   verdict: DeluluVerdict;
   howToBecomeLessDelulu: string[]; // 3-5 concrete improvements
   finalLine: string; // one funny closing line
-}
-
-export interface DeluluCheckRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  linkedinUrl?: string;
-  githubUrl?: string;
 }
 
 // ─── Resume Rewriter Types ──────────────────────────────────────────────────
@@ -383,23 +351,6 @@ export interface LinkedInOptimizerResult {
   funnyCopy: string;
 }
 
-export interface LinkedInOptimizerRequestBody {
-  config: AiRequestConfig;
-  linkedinUrl?: string;
-  linkedinContent?: string;
-  jobDescription?: string;
-  resumeText?: string;
-}
-
-export interface ResumeRewriteRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  desperationLevel: number; // 0-5
-  linkedinUrl?: string;
-  githubUrl?: string;
-}
-
 // ─── Resume Fixer Types ────────────────────────────────────────────────────
 
 export type IssueSeverity = "CRITICAL" | "WARNING" | "OPTIONAL";
@@ -418,14 +369,6 @@ export interface ResumeFixResult {
   issues: ResumeIssue[];
   quickFix: string[]; // top 3 highest-impact changes
   personalityCopy: string; // e.g. "Your resume isn't doomed. It just has a few skill issues."
-}
-
-export interface ResumeFixRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription?: string;
-  linkedinUrl?: string;
-  githubUrl?: string;
 }
 
 // ─── Bullet Point Fixer Types ──────────────────────────────────────────────
@@ -448,15 +391,6 @@ export interface BulletFixResult {
   roast: string; // small roast line
 }
 
-export interface BulletFixRequestBody {
-  config: AiRequestConfig;
-  bullet: string;
-  jobDescription?: string;
-  roleContext?: string;
-  technology?: string;
-  desperationLevel?: number; // 0-5
-}
-
 // ─── Cover Letter Generator Types ─────────────────────────────────────────
 
 export type CoverLetterTone =
@@ -477,17 +411,6 @@ export interface CoverLetterResult {
   };
   tone: CoverLetterTone; // tone actually used
   disclaimer?: string; // explicit note if resume lacks relevant evidence
-}
-
-export interface CoverLetterRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  companyName: string;
-  jobTitle: string;
-  hiringManagerName?: string;
-  additionalContext?: string;
-  tone?: CoverLetterTone;
 }
 
 // ─── Recruiter Message Types ──────────────────────────────────────────────
@@ -514,17 +437,6 @@ export interface RecruiterMessageResult {
   disclaimer?: string; // explicit note if resume lacks relevant evidence
 }
 
-export interface RecruiterMessageRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  companyName: string;
-  jobTitle: string;
-  recruiterName?: string;
-  context?: RecruiterMessageContext;
-  additionalContext?: string;
-}
-
 // ─── JD Red Flag Scanner Types ────────────────────────────────────────────
 
 export type RedFlagLevel = "LOW" | "MEDIUM" | "HIGH";
@@ -549,14 +461,6 @@ export interface JdRedFlagResult {
   corporateYappingScore: number; // 0-100
   shouldProceed: ProceedRecommendation;
   summary: string; // short, fair, no accusations
-}
-
-export interface JdRedFlagRequestBody {
-  config: AiRequestConfig;
-  jobDescription: string;
-  companyName?: string;
-  role?: string;
-  salary?: string;
 }
 
 // ─── Skill Gap Analyzer Types ─────────────────────────────────────────────
@@ -611,14 +515,6 @@ export interface SkillGapResult {
   summary: string;
 }
 
-export interface SkillGapRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  linkedin?: string;
-  github?: string;
-}
-
 // ─── GitHub Resume Checker Types ──────────────────────────────────────────
 
 export type EvidenceStrength = "strong" | "weak" | "none";
@@ -653,13 +549,6 @@ export interface GitHubResumeResult {
   };
   githubRoast: string[]; // 3 short observations, funny not cruel
   disclaimer?: string; // stated limitation when GitHub wasn't fully accessible
-}
-
-export interface GitHubResumeRequestBody {
-  config: AiRequestConfig;
-  githubInput: string; // GitHub URL or pasted repo/profile content
-  resumeText?: string;
-  jobDescription?: string;
 }
 
 // ─── Resume Truth Detector Types ──────────────────────────────────────────
@@ -700,15 +589,6 @@ export interface ResumeTruthResult {
   };
   funnyLine: string; // "The evidence department has concerns."
   summary: string;
-}
-
-export interface ResumeTruthRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  linkedin?: string;
-  github?: string;
-  portfolio?: string;
-  jobDescription?: string;
 }
 
 // ─── Recruiter Simulator Types ────────────────────────────────────────────

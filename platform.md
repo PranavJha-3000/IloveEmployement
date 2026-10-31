@@ -70,8 +70,6 @@ INPUT (resume + JD + optional LinkedIn/GitHub)
   ↓
 Document extraction        lib/documents.ts (PDF via `pdf-parse`, DOCX via `mammoth`, TXT native, or pasted text)
   ↓
-Structured normalization   lib/resume-parser.ts (contact, summary, experience, education, skills)
-  ↓
 Prompt construction        lib/prompts.ts (per-tool `build*Prompt` functions with strict JSON schemas and truth-filter rules)
   ↓
 Unified AI call            lib/ai.ts → `createModel()` over 9 providers
@@ -195,7 +193,6 @@ All AI endpoints follow the same contract: accept the tool inputs plus `config: 
 | `lib/ai.ts` | `createModel()` — unified factory over 9 AI providers via Vercel AI SDK |
 | `lib/providers.ts` | Provider registry (models, base URLs, docs links) |
 | `lib/evidence.ts` | 4-tier evidence engine (STRONG / PARTIAL / MISSING / UNVERIFIED) with weighted strength scoring |
-| `lib/resume-parser.ts` | Heuristic section normalization (contact, summary, experience, education, skills) |
 | `lib/documents.ts` | Server-side document extraction (PDF via `pdf-parse`, DOCX via `mammoth`, TXT native) |
 | `lib/document-types.ts` | Client-safe file-type detection and size limits (kept separate from server-only `documents.ts`) |
 | `lib/types.ts` | Shared TypeScript interfaces (incl. `AiRequestConfig`, result types) |
@@ -204,7 +201,7 @@ All AI endpoints follow the same contract: accept the tool inputs plus `config: 
 | `components/layout/NavDropdown.tsx` | Category dropdown menus in the navbar |
 | `components/layout/Footer.tsx` | Footer links (real `<Link>` navigation) |
 | `components/LandingHero.tsx` | Hero section on the home page |
-| `components/shared/ToolShell.tsx` | Reusable render-prop shell for tool page layout |
+| `components/shared/ToolShell.tsx` | Render-prop tool-page shell — implemented but not yet adopted by tool pages |
 | `components/shared/ToolHeader.tsx` | Per-tool header with title, description, and provider config |
 | `components/shared/ResultSection.tsx` | Wrapper for tool-specific result blocks |
 | `components/shared/ScoreCard.tsx` | Reusable score/rating display |
@@ -266,7 +263,7 @@ All AI endpoints follow the same contract: accept the tool inputs plus `config: 
 - [x] Copy-to-clipboard + .txt download for rewritten resume
 - [x] Secret redaction (API-key-like strings stripped from provider error messages before reaching client)
 - [x] Document split for bundle safety (`lib/documents.ts` server-only, `lib/document-types.ts` client-safe)
-- [x] Reusable tool shell (`ToolShell`) for consistent page layout across all 28 tools
+- [ ] Reusable tool shell (`ToolShell`) — `components/shared/ToolShell.tsx` exists but is not yet adopted by the 28 tool pages (adoption deferred to a later refactor)
 
 ## Out of Scope (Explicitly NOT Building)
 

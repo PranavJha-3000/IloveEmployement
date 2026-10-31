@@ -1,4 +1,5 @@
 "use client";
+import { getDefaultConfig } from "@/lib/providers";
 import { useState } from "react";
 import Link from "next/link";
 import type {
@@ -80,11 +81,7 @@ export function JdRedFlagScannerPage() {
   const [error, setError] = useState("");
   const [validationError, setValidationError] = useState("");
 
-  const [config, setConfig] = useState<AiRequestConfig>({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-4o-mini",
-  });
+  const [config, setConfig] = useState<AiRequestConfig>(getDefaultConfig());
   const [jobDescription, setJobDescription] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [role, setRole] = useState("");

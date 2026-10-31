@@ -1,4 +1,5 @@
 ﻿"use client";
+import { getDefaultConfig } from "@/lib/providers";
 import { useState } from "react";
 import Link from "next/link";
 import type {
@@ -45,11 +46,7 @@ export function CorporateYappingTranslator({ embedded = false }: Props) {
   const [jd, setJd] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
-  const [config, setConfig] = useState<AiRequestConfig>({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-4o-mini",
-  });
+  const [config, setConfig] = useState<AiRequestConfig>(getDefaultConfig());
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<CorporateYappingResult | null>(null);
   const [err, setErr] = useState("");

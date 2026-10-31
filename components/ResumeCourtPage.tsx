@@ -1,4 +1,5 @@
 "use client";
+import { getDefaultConfig } from "@/lib/providers";
 import { useState } from "react";
 import Link from "next/link";
 import type { AiRequestConfig, ResumeCourtResult, CourtVerdict } from "@/lib/types";
@@ -23,11 +24,7 @@ export function ResumeCourtPage() {
   const [error, setError] = useState("");
   const [validationError, setValidationError] = useState("");
 
-  const [config, setConfig] = useState<AiRequestConfig>({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-4o-mini",
-  });
+  const [config, setConfig] = useState<AiRequestConfig>(getDefaultConfig());
   const [resumeText, setResumeText] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [githubUrl, setGithubUrl] = useState("");

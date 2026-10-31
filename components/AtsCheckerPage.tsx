@@ -1,4 +1,5 @@
 "use client";
+import { getDefaultConfig } from "@/lib/providers";
 import { useState } from "react";
 import Link from "next/link";
 import type {
@@ -33,11 +34,7 @@ export function AtsCheckerPage() {
   const [validationError, setValidationError] = useState("");
   const [hadJobDescription, setHadJobDescription] = useState(false);
 
-  const [config, setConfig] = useState<AiRequestConfig>({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-4o-mini",
-  });
+  const [config, setConfig] = useState<AiRequestConfig>(getDefaultConfig());
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
 

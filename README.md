@@ -22,8 +22,6 @@ INPUT (resume + JD + optional LinkedIn/GitHub)
   ↓
 Document extraction        lib/documents.ts (PDF / DOCX / TXT / pasted)
   ↓
-Structured normalization   lib/resume-parser.ts (contact, experience, skills, …)
-  ↓
 Prompt construction        lib/prompts.ts (per-tool, structured-output schemas)
   ↓
 Unified AI call            lib/ai.ts → provider abstraction (9 providers)
@@ -101,7 +99,7 @@ vercel
 - **Structured LLM outputs** — every tool validates model responses against its result type at runtime; malformed JSON, truncated output or hallucinated shapes degrade to a clean error instead of crashing
 - **Evidence matching** — multi-source classification (resume / LinkedIn / GitHub / JD) that distinguishes "not found in source" from "doesn't exist"
 - **Multi-provider architecture** — one `createModel` abstraction over the Vercel AI SDK; adding a provider is a config entry, not new logic
-- **Reusable tool architecture** — shared `ToolShell`, upload, input, loading, error, score and evidence components; each route is ~50 lines of tool-specific config
+- **Reusable input components** — shared upload (`ResumeCard`), provider config, input, loading, error, score and evidence components that each tool page composes (a unified `ToolShell` exists in `components/shared/ToolShell.tsx` but is not yet adopted by the tool pages)
 - **Validation & error handling** — centralized classification of auth failures, rate limits, timeouts, invalid models and malformed JSON, with actionable messages and secret redaction
 
 

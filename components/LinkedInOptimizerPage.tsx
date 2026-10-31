@@ -1,4 +1,5 @@
 "use client";
+import { getDefaultConfig } from "@/lib/providers";
 import { useState } from "react";
 import Link from "next/link";
 import type {
@@ -123,11 +124,7 @@ export function LinkedInOptimizerPage() {
   const [error, setError] = useState("");
   const [validationError, setValidationError] = useState("");
 
-  const [config, setConfig] = useState<AiRequestConfig>({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-4o-mini",
-  });
+  const [config, setConfig] = useState<AiRequestConfig>(getDefaultConfig());
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [linkedinContent, setLinkedinContent] = useState("");
   const [jobDescription, setJobDescription] = useState("");

@@ -1,4 +1,4 @@
-import type { ProviderConfig, ProviderId } from "./types";
+import type { AiRequestConfig, ProviderConfig, ProviderId } from "./types";
 
 export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
   openai: {
@@ -92,3 +92,12 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
 };
 
 export const PROVIDER_LIST: ProviderConfig[] = Object.values(PROVIDERS);
+
+/** Default AI request config used to initialize provider state in tool pages. Returns a new object each call. */
+export function getDefaultConfig(): AiRequestConfig {
+  return {
+    provider: PROVIDERS.openai.id,
+    apiKey: "",
+    model: PROVIDERS.openai.defaultModel,
+  };
+}

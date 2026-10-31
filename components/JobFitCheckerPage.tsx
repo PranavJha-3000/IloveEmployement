@@ -1,4 +1,5 @@
 "use client";
+import { getDefaultConfig } from "@/lib/providers";
 import { useState } from "react";
 import Link from "next/link";
 import type { AnalysisResult, AnalyzeRequestBody, AiRequestConfig } from "@/lib/types";
@@ -28,11 +29,7 @@ export function JobFitCheckerPage() {
   const [error, setError] = useState("");
   const [validationError, setValidationError] = useState("");
 
-  const [config, setConfig] = useState<AiRequestConfig>({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-4o-mini",
-  });
+  const [config, setConfig] = useState<AiRequestConfig>(getDefaultConfig());
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");

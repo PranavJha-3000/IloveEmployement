@@ -21,12 +21,12 @@ Nothing about the user gets invented: every generated claim traces to the user's
 - ✓ Drafter → reviewer → revise loop on resume and cover letter
 - ✓ Free tier with per-IP limit or bring-your-own-key across 9 providers
 - ✓ 43 tests (unit + pipeline with a scripted model), 10-case behavioural eval harness, CI
+- ✓ Retrieval evaluation: 85 graded queries over 3 synthetic resumes, recall@k / MRR / nDCG per strategy in `evals/RETRIEVAL.md`, keyword baseline gated in CI — Validated in Phase 1: Retrieval Evaluation
 
 ### Active
 
 <!-- Milestone: AI engineering depth. Each item must end in a measured, publishable result. -->
 
-- [ ] Retrieval evaluation with a labelled dataset and published comparison of retrieval strategies
 - [ ] On-device cross-encoder reranking, adopted only if the evals show it helps
 - [ ] Real-model eval runs with model comparison, cost, citation precision and a calibrated LLM judge
 - [ ] Bounded tool-calling "Apply to this job" agent workflow with human approval checkpoints
@@ -64,7 +64,8 @@ Nothing about the user gets invented: every generated claim traces to the user's
 | Engines + presets instead of per-tool pages | One pipeline gets every guardrail; adding a tool is config | ✓ Good |
 | Local-first vault, BYOK + free tier | Privacy and zero-account onboarding | ✓ Good |
 | Scores computed in code, model only classifies | Explainable, testable, no vibe scores | ✓ Good |
-| Measure retrieval before adding a reranker | Avoid features that can't show a win | — Pending |
+| Measure retrieval before adding a reranker | Avoid features that can't show a win | ✓ Good — Phase 1: embeddings-only nDCG@8 0.593 beats shipped hybrid RRF 0.580 overall (hybrid wins lexical 0.664 vs 0.641, loses paraphrase 0.485 vs 0.538); Phase 2 must beat 0.593 |
+| Paraphrase queries share no keywords with targets | Isolates semantic recall | ⚠️ Revisit — makes BM25 paraphrase score 0 by construction (review WR-04); report as an upper bound, not a finding |
 | Agent workflow composes existing engines as tools | Reuses guardrails; bounded steps keep it testable | — Pending |
 
 ## Evolution
@@ -85,4 +86,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-31 after initialization*
+*Last updated: 2026-10-31 after Phase 1 (Retrieval Evaluation)*

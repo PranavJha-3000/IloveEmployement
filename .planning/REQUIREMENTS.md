@@ -8,9 +8,9 @@
 ### Retrieval Evaluation
 
 - [x] **REVAL-01**: A labelled retrieval dataset exists in the repo: at least 3 synthetic resumes (different seniorities/domains) and at least 60 queries, each with graded relevant chunk ids, including paraphrase queries that share no keywords with their targets
-- [ ] **REVAL-02**: A script computes recall@k (k = 3, 5, 8), MRR and nDCG@k for keyword (BM25), embeddings-only, hybrid (RRF) and any later strategy, using the same retrieval code the app uses
-- [ ] **REVAL-03**: The script writes a published results table (`evals/RETRIEVAL.md`) with per-strategy metrics, per-query-type breakdown (lexical vs paraphrase) and latency
-- [ ] **REVAL-04**: Keyword-only retrieval metrics run in CI without network or API key; a regression below a recorded baseline fails the build
+- [x] **REVAL-02**: A script computes recall@k (k = 3, 5, 8), MRR and nDCG@k for keyword (BM25), embeddings-only, hybrid (RRF) and any later strategy, using the same retrieval code the app uses
+- [x] **REVAL-03**: The script writes a published results table (`evals/RETRIEVAL.md`) with per-strategy metrics, per-query-type breakdown (lexical vs paraphrase) and latency
+- [x] **REVAL-04**: Keyword-only retrieval metrics run in CI without network or API key; a regression below a recorded baseline fails the build
 
 ### Reranking
 
@@ -71,9 +71,9 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | REVAL-01 | Phase 1 | Complete |
-| REVAL-02 | Phase 1 | Pending |
-| REVAL-03 | Phase 1 | Pending |
-| REVAL-04 | Phase 1 | Pending |
+| REVAL-02 | Phase 1 | Complete |
+| REVAL-03 | Phase 1 | Complete |
+| REVAL-04 | Phase 1 | Complete |
 | RERANK-01 | Phase 2 | Pending |
 | RERANK-02 | Phase 2 | Pending |
 | RERANK-03 | Phase 2 | Pending |

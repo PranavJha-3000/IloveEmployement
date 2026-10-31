@@ -45,14 +45,22 @@ export function renderReport(result: RetrievalRunResult): string {
     "- Limit 8 = DEFAULT_VAULT_LIMIT.",
     "- The app always anchors the summary at rank 1 and keeps at most 3 chunks per role; the metrics include that behaviour.",
     `- Relevance grades 1-3; recall and MRR count grade >= ${result.relevanceThreshold}; nDCG gain is 2^g - 1. MRR is effectively MRR@8.`,
-    `- Latency is the median of ${result.repeat} timed calls per query, including the query embedding for embedding strategies; chunk vectors are precomputed as in the app's index.`,
+    `- Latency is the median of ${result.repeat} timed retrieve() calls per query. For embedding strategies one query-embedding timing per query is added to that median, and the same query-embedding timing sample is shared by every embedding strategy for that query; chunk vectors are precomputed as in the app's index.`,
+    "- The summary chunk is always placed at rank 1, so unless a query labels the summary at a grade >= the relevance threshold, MRR is at most 0.5; IDCG ignores the summary anchor and the 3-per-role cap, so nDCG@k cannot reach 1. Compare strategies with each other, not against 1.0.",
     `- Primary metric is ${result.primaryMetric}: it is graded, covers the full 8-chunk context and is order-sensitive.`,
     "",
   );
 
   out.push("## Overall", "", ...metricTable(result, (s) => s.overall), "");
   out.push("## Lexical queries", "", ...metricTable(result, (s) => s.byType.lexical), "");
-  out.push("## Paraphrase queries", "", ...metricTable(result, (s) => s.byType.paraphrase), "");
+  out.push(
+    "## Paraphrase queries",
+    "",
+    `Paraphrase queries share no BM25 tokens with any chunk labelled for them; the dataset validator enforces this by construction. Keyword retrieval therefore scores ~0 on them as a property of the dataset, not as a finding. The Overall table depends on the lexical/paraphrase query mix (${d.lexical} lexical, ${d.paraphrase} paraphrase), so read the per-type tables first.`,
+    "",
+    ...metricTable(result, (s) => s.byType.paraphrase),
+    "",
+  );
 
   out.push("## By resume", "", `Primary metric (${result.primaryMetric}).`, "");
   const resumeIds = d.resumes.map((r) => r.id);

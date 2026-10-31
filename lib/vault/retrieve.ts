@@ -18,7 +18,7 @@ const KIND_WEIGHT: Partial<Record<VaultChunk["kind"], number>> = {
 };
 
 /** Above this, a tool wants the whole resume rather than the most relevant slice. */
-const WHOLE_RESUME_LIMIT = 12;
+export const WHOLE_RESUME_LIMIT = 12;
 
 /**
  * @param semanticOrder chunk ids ranked by embedding similarity to the query.
@@ -43,6 +43,15 @@ export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8, se
     return whole.filter((c) => keep.has(c.id)).map(toContext);
   }
 
+  const { summary, ranked } = rankVault(chunks, query, semanticOrder);
+  return selectWithAnchor(summary, ranked, limit);
+}
+
+/**
+ * The pre-selection ranking behind retrieveVault: summary anchor plus the pool
+ * ranked by BM25 (optionally RRF-fused with semanticOrder), or recency with no query.
+ */
+export function rankVault(chunks: VaultChunk[], query: string, semanticOrder?: string[]): { summary: VaultChunk | undefined; ranked: VaultChunk[] } {
   const summary = chunks.find((c) => c.kind === "summary");
   const pool = chunks.filter((c) => c !== summary);
   const byId = new Map(pool.map((c) => [c.id, c]));
@@ -66,12 +75,25 @@ export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8, se
     ranked = [...pool].filter((c) => c.kind !== "experience").sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  return selectWithAnchor(summary, ranked, limit);
+  return { summary, ranked };
+}
+
+/**
+ * Embeddings-only ranking, measured in the eval and available to the app if the
+ * Phase 2 decision switches modes.
+ */
+export function rankBySemantic(chunks: VaultChunk[], semanticOrder: string[]): { summary: VaultChunk | undefined; ranked: VaultChunk[] } {
+  const summary = chunks.find((c) => c.kind === "summary");
+  const pool = chunks.filter((c) => c !== summary);
+  const byId = new Map(pool.map((c) => [c.id, c]));
+  const ranked = semanticOrder.filter((id) => byId.has(id)).map((id) => byId.get(id)!);
+  return { summary, ranked };
 }
 
 /**
  * Diversity (at most 3 chunks per title) plus summary anchoring. Exported for
- * the retrieval eval harness so embeddings-only is measured on equal terms.
+ * the retrieval eval harness so embeddings-only and the rerank strategies are
+ * measured on equal terms.
  */
 export function selectWithAnchor(summary: VaultChunk | undefined, ranked: VaultChunk[], limit: number): VaultContextChunk[] {
   const toContext = (c: VaultChunk): VaultContextChunk => ({ id: c.id, kind: c.kind, title: c.title, text: c.text });

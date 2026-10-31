@@ -46,7 +46,7 @@ Nothing about the user gets invented: every generated claim traces to the user's
 
 - Stack: Next.js 15 App Router, React 19, TypeScript, Tailwind v4, Vercel AI SDK 4.3, zod, Transformers.js (`Xenova/all-MiniLM-L6-v2`), IndexedDB, node test runner, GitHub Actions.
 - Architecture reference: `platform.md`; history: `docs/RESTRUCTURE_PLAN.md`; graph: `graphify-out/`.
-- Key seams: `setModelFactory` (lib/engine/run.ts) for scripted models; `retrieveVault(chunks, query, limit, semanticOrder?)` (lib/vault/retrieve.ts); `reciprocalRankFusion` (lib/retrieval/fusion.ts); eval harness `evals/run.ts` + `evals/cases.ts`.
+- Key seams: `setModelFactory` (lib/engine/run.ts) for scripted models; `retrieveVault(chunks, query, limit, semanticOrder?)` (lib/vault/retrieve.ts); `reciprocalRankFusion` (lib/retrieval/fusion.ts); LLM eval harness `evals/llm/run.ts` + `evals/cases.ts`; retrieval eval `evals/retrieval/run.ts`.
 - Known gap: no live model output has ever been verified. The app has no logging.
 - PR #1 (feat/engine-restructure → main) is open; there are uncommitted UI changes in the working tree that are not part of this milestone.
 

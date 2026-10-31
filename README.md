@@ -102,7 +102,7 @@ Open [localhost:3000](http://localhost:3000). With no environment variables, eve
 npm run typecheck
 npm test                      # 43 tests, no network
 npm run eval -- --dry         # list the golden cases
-EVAL_PROVIDER=google EVAL_API_KEY=... npm run eval   # run them, writes evals/REPORT.md
+npm run eval -- --models google:<model> --judge google:<model>   # key from .env (EVAL_* or FREE_TIER_*), writes evals/LLM.md
 ```
 
 CI (`.github/workflows/ci.yml`) runs typecheck, tests and build on every push and PR. Evals run on demand (`evals.yml`) with an `EVAL_API_KEY` secret.

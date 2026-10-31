@@ -1,12 +1,13 @@
 // ─── Retrieval strategy registry ─────────────────────────────────────────────
-// Each strategy calls the same code the app does. Phase 2 registers
-// "hybrid+rerank" by appending one object to STRATEGIES (use `prepare` to load
-// a reranker model once, outside timed calls). This file must not import the
-// embedder or the transformers package.
+// Each strategy calls the same code the app does. Phase 2 registers the rerank
+// strategies in plan 02-05 via createRerankStrategy with a Node scorer loaded in
+// prepare() (outside timed calls). This file must not statically import the
+// embedder, a reranker loader or transformers.
 
 import type { VaultChunk, VaultContextChunk } from "../../lib/engine/types";
 import { semanticRanking } from "../../lib/retrieval/fusion";
-import { retrieveVault, selectWithAnchor } from "../../lib/vault/retrieve";
+import { rerankCandidates, type PairScorer } from "../../lib/retrieval/rerank";
+import { WHOLE_RESUME_LIMIT, rankBySemantic, rankVault, retrieveVault, selectWithAnchor } from "../../lib/vault/retrieve";
 
 export interface EmbeddingInput {
   queryVector: number[];
@@ -46,13 +47,8 @@ export const STRATEGIES: RetrievalStrategy[] = [
     needsEmbeddings: true,
     retrieve: (input) => {
       const { queryVector, chunkVectors } = requireEmbeddings("embeddings", input);
-      const summary = input.chunks.find((c) => c.kind === "summary");
-      const pool = input.chunks.filter((c) => c !== summary);
-      const byId = new Map(pool.map((c) => [c.id, c]));
-      const ordered = semanticRanking(queryVector, chunkVectors)
-        .filter((id) => byId.has(id))
-        .map((id) => byId.get(id)!);
-      return selectWithAnchor(summary, ordered, input.limit);
+      const { summary, ranked } = rankBySemantic(input.chunks, semanticRanking(queryVector, chunkVectors));
+      return selectWithAnchor(summary, ranked, input.limit);
     },
   },
   {
@@ -65,3 +61,33 @@ export const STRATEGIES: RetrievalStrategy[] = [
     },
   },
 ];
+
+export function createRerankStrategy(opts: {
+  id: string;
+  label: string;
+  base: "hybrid" | "embeddings";
+  topN: number;
+  loadScorer: () => Promise<PairScorer>;
+}): RetrievalStrategy {
+  let loading: Promise<PairScorer> | undefined;
+  const load = () => (loading ??= opts.loadScorer());
+  return {
+    id: opts.id,
+    label: opts.label,
+    needsEmbeddings: true,
+    prepare: async () => {
+      await load();
+    },
+    retrieve: async (input) => {
+      const { queryVector, chunkVectors } = requireEmbeddings(opts.id, input);
+      if (!loading) throw new Error(`Strategy "${opts.id}" must be prepared (call prepare()) before retrieve()`);
+      const scorer = await loading;
+      if (input.limit > WHOLE_RESUME_LIMIT) return retrieveVault(input.chunks, input.query, input.limit);
+      const semantic = semanticRanking(queryVector, chunkVectors);
+      const { summary, ranked } =
+        opts.base === "hybrid" ? rankVault(input.chunks, input.query, semantic) : rankBySemantic(input.chunks, semantic);
+      const reranked = await rerankCandidates(input.query, ranked, scorer, opts.topN);
+      return selectWithAnchor(summary, reranked, input.limit);
+    },
+  };
+}

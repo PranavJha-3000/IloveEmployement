@@ -86,3 +86,83 @@ test("rankBySemantic excludes the summary and keeps semantic order", () => {
   const out = selectWithAnchor(summary, ranked, 8);
   assert.strictEqual(out[0].id, "s");
 });
+
+// ─── createRerankStrategy ────────────────────────────────────────────────────
+import { STRATEGIES, createRerankStrategy } from "../evals/retrieval/strategies";
+
+const get = (id: string) => STRATEGIES.find((s) => s.id === id)!;
+const embeddings = { queryVector, chunkVectors };
+const orderPreserving: PairScorer = async (_q, p) => p.map((_, i) => -i);
+const build = (base: "hybrid" | "embeddings", topN: number, scorer: PairScorer) =>
+  createRerankStrategy({ id: `r-${base}`, label: "r", base, topN, loadScorer: async () => scorer });
+
+test("order-preserving scorer reproduces the base strategy", async () => {
+  for (const base of ["hybrid", "embeddings"] as const) {
+    const s = build(base, 20, orderPreserving);
+    await s.prepare!();
+    const out = await s.retrieve({ chunks, query, limit: 8, embeddings });
+    const expected = await get(base).retrieve({ chunks, query, limit: 8, embeddings });
+    assert.deepStrictEqual(ids(out), ids(expected));
+  }
+});
+
+test("favoured chunk is promoted inside topN and not pulled in outside it", async () => {
+  const base = await get("hybrid").retrieve({ chunks, query, limit: 8, embeddings });
+  const baseIds = ids(base).slice(1);
+  assert.ok(baseIds.length >= 3);
+  const favour = (target: string): PairScorer => async (_q, p) =>
+    p.map((t) => (t === rerankPassage(chunks.find((c) => c.id === target)!) ? 10 : 0));
+
+  const inside = baseIds[1];
+  const s1 = build("hybrid", 2, favour(inside));
+  await s1.prepare!();
+  const out1 = await s1.retrieve({ chunks, query, limit: 8, embeddings });
+  assert.strictEqual(out1[0].id, "s");
+  assert.strictEqual(out1[1].id, inside);
+
+  const outside = baseIds[2];
+  const s2 = build("hybrid", 2, favour(outside));
+  await s2.prepare!();
+  const out2 = await s2.retrieve({ chunks, query, limit: 8, embeddings });
+  assert.deepStrictEqual(ids(out2), ids(base));
+});
+
+test("selection rules still apply after rerank", async () => {
+  const loves: PairScorer = async (_q, p) => p.map((t) => (t.startsWith("Eng @ Zeta") ? 10 : 0));
+  const s = build("hybrid", 20, loves);
+  await s.prepare!();
+  const out = await s.retrieve({ chunks, query, limit: 5, embeddings });
+  assert.strictEqual(out[0].id, "s");
+  assert.ok(out.length <= 5);
+  assert.ok(out.filter((c) => c.title === "Eng @ Zeta").length <= 3);
+});
+
+test("retrieve before prepare rejects; prepare is memoised", async () => {
+  let loads = 0;
+  const s = createRerankStrategy({
+    id: "r", label: "r", base: "hybrid", topN: 5,
+    loadScorer: async () => {
+      loads++;
+      return orderPreserving;
+    },
+  });
+  await assert.rejects(async () => s.retrieve({ chunks, query, limit: 8, embeddings }), /prepare/);
+  await s.prepare!();
+  await s.prepare!();
+  assert.strictEqual(loads, 1);
+});
+
+test("rerank retrieve without embeddings rejects", async () => {
+  const s = build("hybrid", 5, orderPreserving);
+  await s.prepare!();
+  await assert.rejects(async () => s.retrieve({ chunks, query, limit: 8 }), /needs embeddings/);
+});
+
+test("whole-resume limit bypasses the scorer", async () => {
+  const s = build("hybrid", 5, async () => {
+    throw new Error("must not be called");
+  });
+  await s.prepare!();
+  const out = await s.retrieve({ chunks, query, limit: 20, embeddings });
+  assert.deepStrictEqual(out, retrieveVault(chunks, query, 20));
+});

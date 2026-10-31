@@ -2,7 +2,9 @@
 import assert from "node:assert";
 import { test } from "node:test";
 import { DatasetError, MIN_CHUNKS_PER_RESUME, resolveDataset } from "../evals/retrieval/dataset/load";
+import { RESUMES } from "../evals/retrieval/dataset/resumes";
 import type { RetrievalQuery, SyntheticResume } from "../evals/retrieval/dataset/types";
+import { chunkResume } from "../lib/vault/chunker";
 
 const FIXTURE: SyntheticResume = {
   id: "fx",
@@ -115,4 +117,16 @@ test("minimums enforced", () => {
   assert.ok(p.some((m) => m.includes("at least 3 resumes")));
   assert.ok(p.some((m) => m.includes("at least 60 queries")));
   assert.ok(p.some((m) => m.includes(`at least ${MIN_CHUNKS_PER_RESUME}`)));
+});
+
+test("RESUMES: unique ids, >= min chunks, core kinds present", () => {
+  assert.strictEqual(new Set(RESUMES.map((r) => r.id)).size, RESUMES.length);
+  assert.ok(RESUMES.length >= 3);
+  for (const r of RESUMES) {
+    const chunks = chunkResume(r.text);
+    assert.ok(chunks.length >= MIN_CHUNKS_PER_RESUME, `${r.id} has ${chunks.length} chunks`);
+    for (const kind of ["summary", "bullet", "experience", "skill", "education"]) {
+      assert.ok(chunks.some((c) => c.kind === kind), `${r.id} missing ${kind}`);
+    }
+  }
 });

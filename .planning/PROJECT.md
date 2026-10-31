@@ -22,12 +22,12 @@ Nothing about the user gets invented: every generated claim traces to the user's
 - ✓ Free tier with per-IP limit or bring-your-own-key across 9 providers
 - ✓ 43 tests (unit + pipeline with a scripted model), 10-case behavioural eval harness, CI
 - ✓ Retrieval evaluation: 85 graded queries over 3 synthetic resumes, recall@k / MRR / nDCG per strategy in `evals/RETRIEVAL.md`, keyword baseline gated in CI — Validated in Phase 1: Retrieval Evaluation
+- ✓ Reranker evaluated against a pre-registered rule (paired bootstrap CI, latency budget) and rejected with recorded numbers; app stays on hybrid — Validated in Phase 2: Reranking
 
 ### Active
 
 <!-- Milestone: AI engineering depth. Each item must end in a measured, publishable result. -->
 
-- [ ] On-device cross-encoder reranking, adopted only if the evals show it helps
 - [ ] Real-model eval runs with model comparison, cost, citation precision and a calibrated LLM judge
 - [ ] Bounded tool-calling "Apply to this job" agent workflow with human approval checkpoints
 - [ ] Structured profile extraction with skill normalization and resume versions
@@ -88,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-31 after Phase 2 measurement (reranker decision recorded)*
+*Last updated: 2026-11-01 after Phase 2 (Reranking)*

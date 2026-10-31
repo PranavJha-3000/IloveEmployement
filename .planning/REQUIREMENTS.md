@@ -14,9 +14,9 @@
 
 ### Reranking
 
-- [ ] **RERANK-01**: An on-device cross-encoder reranker (Transformers.js) can rerank the hybrid top-N candidates, lazy-loaded only on opt-in
-- [ ] **RERANK-02**: Reranking is evaluated through the REVAL harness against hybrid alone, including added latency
-- [ ] **RERANK-03**: Reranking is enabled in the app only if it improves the primary metric; the decision and numbers are recorded either way
+- [x] **RERANK-01**: An on-device cross-encoder reranker (Transformers.js) can rerank the hybrid top-N candidates, lazy-loaded only on opt-in
+- [x] **RERANK-02**: Reranking is evaluated through the REVAL harness against hybrid alone, including added latency
+- [x] **RERANK-03**: Reranking is enabled in the app only if it improves the primary metric; the decision and numbers are recorded either way
 
 ### LLM Evaluation
 
@@ -74,9 +74,9 @@
 | REVAL-02 | Phase 1 | Complete |
 | REVAL-03 | Phase 1 | Complete |
 | REVAL-04 | Phase 1 | Complete |
-| RERANK-01 | Phase 2 | Pending |
-| RERANK-02 | Phase 2 | Pending |
-| RERANK-03 | Phase 2 | Pending |
+| RERANK-01 | Phase 2 | Complete |
+| RERANK-02 | Phase 2 | Complete |
+| RERANK-03 | Phase 2 | Complete |
 | LEVAL-01 | Phase 3 | Pending |
 | LEVAL-02 | Phase 3 | Pending |
 | LEVAL-03 | Phase 3 | Pending |

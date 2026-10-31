@@ -84,3 +84,8 @@ None yet.
 Last session: 2026-10-31T18:46:19.887Z
 Stopped at: Roadmap and state initialized; ready for /gsd:plan-phase 1
 Resume file: None
+
+
+## Paused: Phase 3 plan 03-08 (2026-11-01)
+
+First real-model run stopped on the free Gemini daily quota after 13/28 cases on gemini-3.8-flash (0 on gemini-3.5-flash-lite). Eval call timeout raised to 180 s (d7a3dc2). A daily scheduled task `resume-llm-eval` (14:00 IST) resumes from the disk cache until the run completes, then publishes evals/LLM.md and the blind labelling sheet. Plan 03-09 (human labelling) follows.

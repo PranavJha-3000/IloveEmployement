@@ -40,6 +40,14 @@ export interface RecordingContext {
   retry: RetryOptions;
   transcript: CallRecord[];
   onEvent?: (e: ThrottleEvent) => void;
+  /** Per-attempt timeout; defaults to evalCallTimeoutMs(). */
+  timeoutMs?: number;
+}
+
+/** Eval per-call timeout: EVAL_TIMEOUT_MS if set to a positive number, else 180 s (never below the app's 55 s). */
+export function evalCallTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  const n = Number(env.EVAL_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? Math.max(n, DEFAULT_TIMEOUT) : 180_000;
 }
 
 /** Classify a call from its prompt (array of messages, or already-serialised JSON). */
@@ -103,8 +111,9 @@ export function recordingModel(inner: LanguageModelV1, ctx: RecordingContext): L
             await ctx.throttle.acquire(ctx.modelKey);
             const started = Date.now();
             // Fresh per-attempt signal: throttle waits must never eat the caller's 55 s budget,
-            // and an outer abort must not poison a cached, retried call.
-            const out = await inner.doGenerate({ ...options, abortSignal: AbortSignal.timeout(DEFAULT_TIMEOUT) });
+            // and an outer abort must not poison a cached, retried call. Thinking models can
+            // exceed the app's 55 s limit, so evals use their own (longer) per-call timeout.
+            const out = await inner.doGenerate({ ...options, abortSignal: AbortSignal.timeout(ctx.timeoutMs ?? evalCallTimeoutMs()) });
             latencyMs = Date.now() - started;
             return out;
           },

@@ -8,7 +8,7 @@ import { CASES } from "../evals/cases";
 import { createDiskCache } from "../evals/llm/cache";
 import { parseModelSpec } from "../evals/llm/env";
 import { estimateRequests, formatEstimate } from "../evals/llm/estimate";
-import { classifyCallRole, recordingModel, type CallPurpose, type CallRecord } from "../evals/llm/recordingModel";
+import { classifyCallRole, evalCallTimeoutMs, recordingModel, type CallPurpose, type CallRecord } from "../evals/llm/recordingModel";
 import { createThrottle } from "../evals/llm/throttle";
 import { runPreset, setModelFactory } from "../lib/engine/run";
 import type { RunMeta, VaultContextChunk } from "../lib/engine/types";
@@ -156,4 +156,11 @@ test("estimateRequests subtracts cases already complete in the cache", () => {
   const after = estimateRequests({ cases: CASES, models, judge: null, cache });
   assert.strictEqual(after.perModel[0].cachedCases, 1);
   assert.ok(after.lower < full.lower);
+});
+
+test("eval call timeout defaults to 180 s and never drops below the app's 55 s", () => {
+  assert.strictEqual(evalCallTimeoutMs({}), 180_000);
+  assert.strictEqual(evalCallTimeoutMs({ EVAL_TIMEOUT_MS: "300000" }), 300_000);
+  assert.strictEqual(evalCallTimeoutMs({ EVAL_TIMEOUT_MS: "1000" }), 55_000);
+  assert.strictEqual(evalCallTimeoutMs({ EVAL_TIMEOUT_MS: "nope" }), 180_000);
 });

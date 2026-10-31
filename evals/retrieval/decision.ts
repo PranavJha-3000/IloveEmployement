@@ -1,5 +1,8 @@
-// Stub (RED phase). Implemented in the GREEN commit.
-import { PRIMARY_METRIC, type MetricKey, type MetricSet } from "./metrics";
+// The Phase 2 decision rule (evals/retrieval/DECISION.md) as a pure function.
+// Imports metrics and stats only; never run.ts. No clock, no files, no randomness
+// beyond the seeded bootstrap, so the same results JSON always gives the same decision.
+import { PRIMARY_METRIC, percentile, type MetricKey, type MetricSet } from "./metrics";
+import { pairedBootstrapCI } from "./stats";
 
 export const DECISION_RULE_VERSION = 1;
 export const DECISION_METRIC: MetricKey = PRIMARY_METRIC;
@@ -7,6 +10,7 @@ export const BOOTSTRAP_ITERATIONS = 10000;
 export const BOOTSTRAP_SEED = 20261031;
 export const BOOTSTRAP_CONFIDENCE = 0.95;
 export const ADDED_LATENCY_BUDGET_MS = 150;
+export const RERANK_TOP_N = 20;
 export const SHIPPED_STRATEGY = "hybrid";
 export const EXISTING_STRATEGIES = ["keyword", "embeddings", "hybrid"] as const;
 export const RERANK_CANDIDATES = [
@@ -67,18 +71,125 @@ export interface Decision {
 }
 
 export function pairedComparison(
-  _a: StrategyRun,
-  _b: StrategyRun,
-  _scope: Scope = "overall",
-  _metric: MetricKey = DECISION_METRIC,
+  a: StrategyRun,
+  b: StrategyRun,
+  scope: Scope = "overall",
+  metric: MetricKey = DECISION_METRIC,
 ): PairedComparison {
-  throw new Error("not implemented");
+  if (a.perQuery.length !== b.perQuery.length || a.perQuery.some((q, i) => q.id !== b.perQuery[i].id)) {
+    throw new Error(`pairedComparison: ${a.id} and ${b.id} have different query order or length`);
+  }
+  const deltas: number[] = [];
+  for (let i = 0; i < a.perQuery.length; i++) {
+    if (scope !== "overall" && a.perQuery[i].type !== scope) continue;
+    deltas.push(a.perQuery[i].metrics[metric] - b.perQuery[i].metrics[metric]);
+  }
+  const { mean, lo, hi } = pairedBootstrapCI(deltas, {
+    iterations: BOOTSTRAP_ITERATIONS,
+    seed: BOOTSTRAP_SEED,
+    confidence: BOOTSTRAP_CONFIDENCE,
+  });
+  let wins = 0;
+  let ties = 0;
+  let losses = 0;
+  for (const d of deltas) {
+    if (Math.abs(d) <= TIE_EPSILON) ties++;
+    else if (d > 0) wins++;
+    else losses++;
+  }
+  return { a: a.id, b: b.id, scope, metric, n: deltas.length, meanDelta: mean, lo, hi, wins, ties, losses };
 }
 
-export function addedLatency(_s: StrategyRun, _base: StrategyRun): AddedLatency {
-  throw new Error("not implemented");
+export function addedLatency(s: StrategyRun, base: StrategyRun): AddedLatency {
+  if (s.perQuery.length !== base.perQuery.length) {
+    throw new Error(`addedLatency: ${s.id} and ${base.id} have different query counts`);
+  }
+  const diffs = s.perQuery.map((q, i) => q.totalMs - base.perQuery[i].totalMs);
+  return { id: s.id, baseId: base.id, p50: percentile(diffs, 50), p95: percentile(diffs, 95) };
 }
 
-export function decide(_strategies: StrategyRun[]): Decision {
-  throw new Error("not implemented");
+const f4 = (x: number) => x.toFixed(4);
+const f2 = (x: number) => x.toFixed(2);
+
+export function decide(strategies: StrategyRun[]): Decision {
+  const byId = new Map(strategies.map((s) => [s.id, s]));
+  const need = (id: string): StrategyRun => {
+    const s = byId.get(id);
+    if (!s) throw new Error(`decide: missing required strategy "${id}"`);
+    return s;
+  };
+  for (const id of [...EXISTING_STRATEGIES, ...RERANK_CANDIDATES.map((c) => c.id)]) need(id);
+
+  const metric = DECISION_METRIC;
+  const reasons: string[] = [];
+
+  let bestExisting = { id: "", value: -Infinity };
+  for (const id of EXISTING_STRATEGIES) {
+    const v = need(id).overall[metric];
+    if (v > bestExisting.value) bestExisting = { id, value: v };
+  }
+  reasons.push(`Best existing strategy on ${metric}: ${bestExisting.id} = ${f4(bestExisting.value)}.`);
+
+  const shipped = need(SHIPPED_STRATEGY);
+  const candidates: CandidateCheck[] = [];
+  for (const c of RERANK_CANDIDATES) {
+    const s = need(c.id);
+    const value = s.overall[metric];
+    const beatsBest = value > bestExisting.value;
+    const delta = pairedComparison(s, shipped);
+    const ciExcludesZero = delta.lo > 0;
+    const lat = addedLatency(s, need(c.base));
+    const latencyOk = lat.p50 <= ADDED_LATENCY_BUDGET_MS;
+    const eligible = beatsBest && ciExcludesZero && latencyOk;
+    candidates.push({
+      id: c.id,
+      base: c.base,
+      value,
+      beatsBest,
+      deltaVsShipped: delta,
+      ciExcludesZero,
+      addedLatencyP50: lat.p50,
+      latencyOk,
+      eligible,
+    });
+    reasons.push(
+      `${c.id} (top ${RERANK_TOP_N}): ${metric} ${f4(value)} ${beatsBest ? ">" : "<="} best existing ${f4(bestExisting.value)}; ` +
+        `delta vs ${SHIPPED_STRATEGY} ${f4(delta.meanDelta)} 95% CI [${f4(delta.lo)}, ${f4(delta.hi)}] ` +
+        `${ciExcludesZero ? "excludes" : "includes"} 0; ` +
+        `added p50 latency ${f2(lat.p50)} ms ${latencyOk ? "within" : "exceeds"} the ${ADDED_LATENCY_BUDGET_MS} ms latency budget; ` +
+        `${eligible ? "eligible" : "not eligible"}.`,
+    );
+  }
+
+  const eligible = candidates.filter((c) => c.eligible);
+  let rerankAdopted: Decision["rerankAdopted"] = null;
+  if (eligible.length > 0) {
+    // Strict > keeps the earlier (hybrid+rerank) candidate on an exact tie.
+    let best = eligible[0];
+    for (const c of eligible.slice(1)) if (c.value > best.value) best = c;
+    rerankAdopted = best.id as "hybrid+rerank" | "embeddings+rerank";
+    reasons.push(`R1: adopt ${rerankAdopted} (${metric} ${f4(best.value)}).`);
+  } else {
+    reasons.push("R1: no candidate is eligible; no reranker ships.");
+  }
+
+  const emb = need("embeddings");
+  const switchDelta = pairedComparison(emb, shipped);
+  const switchToEmbeddings = emb.overall[metric] > shipped.overall[metric] && switchDelta.lo > 0;
+  const baseMode: Decision["baseMode"] = switchToEmbeddings ? "embeddings" : "hybrid";
+  reasons.push(
+    `R2: embeddings minus hybrid ${f4(switchDelta.meanDelta)} 95% CI [${f4(switchDelta.lo)}, ${f4(switchDelta.hi)}]; ` +
+      `base mode ${baseMode}.`,
+  );
+
+  return {
+    ruleVersion: DECISION_RULE_VERSION,
+    metric,
+    bestExisting,
+    candidates,
+    rerankAdopted,
+    switchCheck: { delta: switchDelta, switchToEmbeddings },
+    baseMode,
+    reasons,
+  };
 }

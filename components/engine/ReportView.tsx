@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { ReportResult } from "@/lib/engine/reports";
 import type { Evidence, FitScore } from "@/lib/engine/scoring";
 import type { RunMeta, VaultContextChunk } from "@/lib/engine/types";
@@ -556,6 +556,265 @@ function ProofView({ r, chunks }: { r: ReportResult<"proof"> } & Ctx) {
   );
 }
 
+// ─── Interview ───────────────────────────────────────────────────────────────
+
+const RISK_STYLE = { high: "text-red-600", medium: "text-amber-700", low: "text-emerald-700" } as const;
+
+function PrepView({ r, chunks }: { r: ReportResult<"prep"> } & Ctx) {
+  const high = r.questions.filter((q) => q.risk === "high").length;
+  return (
+    <>
+      <Card title="30-second recruiter scan">
+        <p className="text-[13.5px] text-zinc-700">{r.recruiterScan.firstImpression}</p>
+        <p className="mt-2 text-[12.5px] font-semibold text-zinc-800">They'll look for</p>
+        <Bullets items={r.recruiterScan.theyWillLookFor} />
+        <p className="mt-2 text-[13px] text-zinc-700">
+          <span className="font-semibold">Make or break:</span> {r.recruiterScan.makeOrBreak}
+        </p>
+      </Card>
+      <Card title={`Likely questions · ${high} high-risk`}>
+        <ol className="space-y-4">
+          {r.questions.map((q, i) => (
+            <li key={i}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[13.5px] font-semibold text-zinc-900">
+                  {i + 1}. {q.question}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11.5px] text-zinc-400">
+                {q.category} · <span className={`font-semibold ${RISK_STYLE[q.risk]}`}>{q.risk} risk</span> · probing: {q.why}
+              </p>
+              <p className="mt-1.5 text-[13px] text-zinc-700">{q.answerPlan}</p>
+              {q.storyHint && <p className="mt-1 text-[12.5px] text-zinc-500">Use: {q.storyHint}</p>}
+              <Cites ids={q.chunkIds} chunks={chunks} />
+            </li>
+          ))}
+        </ol>
+      </Card>
+      {r.weakSpots.length > 0 && (
+        <Card title="Where you're exposed">
+          <ul className="space-y-3 text-[13.5px]">
+            {r.weakSpots.map((w, i) => (
+              <li key={i}>
+                <span className="font-semibold text-zinc-900">{w.topic}</span>
+                <span className="text-zinc-600"> — {w.whyExposed}</span>
+                <p className="mt-1 text-[13px] text-zinc-700">Bridge: {w.honestBridge}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      <Card title="Ask them">
+        <Bullets items={r.questionsToAsk} />
+      </Card>
+    </>
+  );
+}
+
+function SignalNotes({ signals }: { signals: { words: number; seconds: number; notes: string[] } }) {
+  return (
+    <div className="text-[12.5px] text-zinc-600">
+      <p>
+        {signals.words} words · ~{signals.seconds}s spoken
+      </p>
+      {signals.notes.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {signals.notes.map((n) => (
+            <li key={n}>• {n}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function StarView({ r, chunks, onSave }: { r: ReportResult<"star">; onSave?: (title: string, text: string) => Promise<void> } & Ctx) {
+  const [saved, setSaved] = useState(false);
+  const storyText = `Q: ${r.question}\nSituation: ${r.situation}\nTask: ${r.task}\nAction: ${r.action}\nResult: ${r.result}`;
+  return (
+    <>
+      <Card
+        title={r.title}
+        right={
+          onSave && (
+            <button
+              type="button"
+              disabled={saved}
+              onClick={async () => {
+                await onSave(r.title, storyText);
+                setSaved(true);
+              }}
+              className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 disabled:opacity-60"
+            >
+              {saved ? "Saved to vault ✓" : "Save to Career Vault"}
+            </button>
+          )
+        }
+      >
+        <p className="text-[12.5px] text-zinc-500">Best for: {r.question}</p>
+        <dl className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed">
+          {(
+            [
+              ["Situation", r.situation],
+              ["Task", r.task],
+              ["Action", r.action],
+              ["Result", r.result],
+            ] as const
+          ).map(([k, v]) => (
+            <div key={k}>
+              <dt className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{k}</dt>
+              <dd className="text-zinc-800">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <Cites ids={r.chunkIds} chunks={chunks} />
+      </Card>
+      <Card title="Say it like this" right={<CopyButton text={r.spoken} label="Copy" />}>
+        <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-zinc-800">{r.spoken}</p>
+        <div className="mt-3">
+          <SignalNotes signals={r.signals} />
+        </div>
+      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card title="Make it stronger">
+          <Bullets items={r.missing} />
+        </Card>
+        <Card title="Also answers">
+          <Bullets items={r.alsoAnswers} />
+        </Card>
+      </div>
+    </>
+  );
+}
+
+const DIMENSIONS = ["structure", "specificity", "relevance", "ownership", "credibility"] as const;
+
+export function AnswerEvalView({ r, chunks }: { r: ReportResult<"answerEval"> } & Ctx) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-zinc-200 bg-white p-4">
+        <span className={`text-[34px] font-bold leading-none ${r.overall >= 70 ? "text-emerald-600" : r.overall >= 50 ? "text-amber-600" : "text-red-600"}`}>{r.overall}</span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-zinc-600">
+          {DIMENSIONS.map((d) => (
+            <span key={d}>
+              {d} <span className="font-bold text-zinc-900">{r.scores[d]}/5</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <SignalNotes signals={r.signals} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card title="What worked">
+          <Bullets items={r.whatWorked} />
+        </Card>
+        <Card title="Fix">
+          <Bullets items={r.fix} />
+        </Card>
+      </div>
+      <Card title="A stronger answer" right={<CopyButton text={r.strongerAnswer} label="Copy" />}>
+        <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-zinc-800">{r.strongerAnswer}</p>
+        <Cites ids={r.chunkIds} chunks={chunks} />
+      </Card>
+    </div>
+  );
+}
+
+// ─── Offers ──────────────────────────────────────────────────────────────────
+
+function money(n: number, currency: string): string {
+  if (!n) return "—";
+  const code = /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  try {
+    return new Intl.NumberFormat(code === "INR" ? "en-IN" : "en-US", { style: "currency", currency: code, maximumFractionDigits: 0 }).format(n);
+  } catch {
+    return n.toLocaleString();
+  }
+}
+
+function OffersView({ r }: { r: ReportResult<"offers"> }) {
+  const best = r.rankedByFourYear[0];
+  const rows: [string, (o: (typeof r.offers)[number]) => string][] = [
+    ["Base / fixed", (o) => money(o.base, r.currency)],
+    ["Variable (target)", (o) => (o.variablePct ? `${o.variablePct}% · ${money(o.totals.variable, r.currency)}` : "—")],
+    ["Joining + other one-time", (o) => money(o.joiningBonus + o.otherCash, r.currency)],
+    ["Equity per year", (o) => (o.equityKind === "none" ? "—" : `${money(o.totals.equityPerYear, r.currency)}${o.totals.equityIsPaper ? " (options: paper)" : ""}`)],
+    ["Year-one cash", (o) => money(o.totals.year1Cash, r.currency)],
+    ["Recurring per year", (o) => money(o.totals.annualRecurring, r.currency)],
+    ["4-year total", (o) => money(o.totals.fourYearTotal, r.currency)],
+  ];
+  return (
+    <>
+      <Card title="Side by side">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-left text-[13px]">
+            <thead>
+              <tr className="border-b border-zinc-200 text-[12px] text-zinc-500">
+                <th className="py-2 pr-3 font-medium" />
+                {r.offers.map((o) => (
+                  <th key={o.name} className="py-2 pr-3 font-semibold text-zinc-900">
+                    {o.name}
+                    {o.name === best && r.offers.length > 1 && <span className="ml-1 text-[10.5px] font-bold text-emerald-600">highest 4-yr</span>}
+                    <span className="block text-[11px] font-normal text-zinc-400">{o.title}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, cell]) => (
+                <tr key={label} className={`border-b border-zinc-100 ${/total|Year-one/.test(label) ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
+                  <td className="py-2 pr-3 text-zinc-500">{label}</td>
+                  {r.offers.map((o) => (
+                    <td key={o.name} className="py-2 pr-3">
+                      {cell(o)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-[11.5px] text-zinc-500">
+          Computed in code from the figures quoted from your offers. Variable at 100% of target; RSUs valued at the stated grant value, spread over vesting; stock options excluded from cash totals.
+          {r.current.total > 0 && ` Current compensation: ${money(r.current.total, r.currency)}.`}
+        </p>
+      </Card>
+      <Card title="Where each number came from">
+        <ul className="space-y-2 text-[12.5px] text-zinc-600">
+          {r.offers.map((o) => (
+            <li key={o.name}>
+              <span className="font-semibold text-zinc-800">{o.name}:</span>{" "}
+              {[o.baseQuote, o.variableQuote, o.joiningQuote, o.otherCashQuote, o.equityQuote].filter(Boolean).map((q) => `“${q}”`).join(" · ") || "no figures quoted"}
+            </li>
+          ))}
+        </ul>
+      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {r.offers.map((o) => (
+          <Card key={o.name} title={o.name}>
+            <p className="text-[12px] font-semibold text-zinc-500">Beyond the money</p>
+            <Bullets items={o.nonCash} />
+            {o.risks.length > 0 && (
+              <>
+                <p className="mt-2 text-[12px] font-semibold text-red-600">Watch out</p>
+                <Bullets items={o.risks} />
+              </>
+            )}
+          </Card>
+        ))}
+      </div>
+      <Card title="Trade-offs">
+        <Bullets items={r.tradeoffs} />
+      </Card>
+      <Card title="Equity, in plain English">
+        <p className="text-[13.5px] leading-relaxed text-zinc-700">{r.equityExplainer}</p>
+      </Card>
+      <Card title="Ask before you sign">
+        <Bullets items={r.questionsToClarify} />
+      </Card>
+    </>
+  );
+}
+
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
 export function ReportView({
@@ -564,12 +823,15 @@ export function ReportView({
   meta,
   sentChunks,
   profileName,
+  onSaveStory,
 }: {
   kind: ReportKind;
   data: unknown;
   meta: RunMeta;
   sentChunks: VaultContextChunk[];
   profileName: string;
+  /** Writes a STAR story back into the Career Vault. */
+  onSaveStory?: (title: string, text: string) => Promise<void>;
 }) {
   const chunks = new Map(sentChunks.map((c) => [c.id, c]));
   const body = (() => {
@@ -590,6 +852,17 @@ export function ReportView({
         return <LinkedInView r={data as ReportResult<"linkedin">} chunks={chunks} />;
       case "proof":
         return <ProofView r={data as ReportResult<"proof">} chunks={chunks} />;
+      case "prep":
+        return <PrepView r={data as ReportResult<"prep">} chunks={chunks} />;
+      case "star":
+        return <StarView r={data as ReportResult<"star">} chunks={chunks} onSave={onSaveStory} />;
+      case "answerEval":
+        return <AnswerEvalView r={data as ReportResult<"answerEval">} chunks={chunks} />;
+      case "offers":
+        return <OffersView r={data as ReportResult<"offers">} />;
+      case "mockPlan":
+        // Rendered as an interactive session by PresetRunner.
+        return null;
     }
   })();
 

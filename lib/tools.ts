@@ -5,7 +5,7 @@
 // app/page.tsx pushes tool.target via the router.
 
 import type { PresetCategory } from "./engine/types";
-import { PRESETS, PRESET_CATEGORY_LABELS } from "./presets";
+import { PRESET_CATEGORY_LABELS, PUBLIC_PRESETS } from "./presets";
 
 export type CategoryId = "all" | PresetCategory;
 
@@ -109,68 +109,8 @@ export const TOOLS: Tool[] = [
   // OPTIMIZE
 
   // INVESTIGATE
-  {
-    id: "recruiter-simulator",
-    name: "Recruiter Simulator",
-    description: "See what a recruiter is likely to notice in 30 seconds.",
-    category: "interview",
-    iconPaths: [I.eye],
-    accent: "#7c3aed",
-    tint: "#f5f3ff",
-    target: "/recruiter-simulator",
-  },
 
   // PREPARE
-  {
-    id: "interview-prep",
-    name: "Interview Prep",
-    description: "Generate questions based on your resume and the actual JD.",
-    category: "interview",
-    iconPaths: [I.clipboardList],
-    accent: "#0891b2",
-    tint: "#ecfeff",
-    target: "/interview-prep",
-  },
-  {
-    id: "boss-fight",
-    name: "Interview Boss Fight",
-    description: "Get interrogated before the interviewer gets the chance.",
-    category: "interview",
-    iconPaths: [I.swords],
-    accent: "#dc2626",
-    tint: "#fef2f2",
-    target: "/interview-boss-fight",
-  },
-  {
-    id: "star-builder",
-    name: "STAR Answer Builder",
-    description: "Turn your messy experience into interview-ready answers.",
-    category: "interview",
-    iconPaths: [I.star],
-    accent: "#d97706",
-    tint: "#fffbeb",
-    target: "/star-answer-builder",
-  },
-  {
-    id: "tell-me-about",
-    name: "Tell Me About Yourself",
-    description: "Build the answer everyone asks and nobody likes preparing.",
-    category: "interview",
-    iconPaths: [I.userCircle],
-    accent: "#059669",
-    tint: "#ecfdf5",
-    target: "/tell-me-about-yourself",
-  },
-  {
-    id: "weakness-detector",
-    name: "Weakness Detector",
-    description: "Find the questions most likely to expose your skill gaps.",
-    category: "interview",
-    iconPaths: [I.zap],
-    accent: "#7c3aed",
-    tint: "#f5f3ff",
-    target: "/weakness-detector",
-  },
 
   // CHAOS
   {
@@ -249,7 +189,7 @@ const CATEGORY_COLORS: Record<PresetCategory, { accent: string; tint: string }> 
   fun: { accent: "#db2777", tint: "#fdf2f8" },
 };
 
-for (const preset of PRESETS) {
+for (const preset of PUBLIC_PRESETS) {
   TOOLS.push({
     id: preset.id,
     name: preset.name,

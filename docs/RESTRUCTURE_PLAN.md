@@ -90,11 +90,11 @@ Career Vault (IndexedDB)                      POST /api/run/[preset]
 
 ## Phases
 
-Status: phases 1 and 2 are done; 3–5 remain. `npm test` runs the deterministic engine tests (no model calls).
+Status: phases 1–3 are done; 4–5 remain. `npm test` runs the deterministic engine tests (no model calls).
 
 1. **Foundation** ✅ — engine core (access, injection gate, context assembler, structured run, grounding check), knowledge base, Career Vault (IndexedDB + chunker + BM25), Message engine with ~25 presets, one SEO route per preset (`/tools/[slug]`), new catalog home, vault page.
 2. **Match + Tailor** ✅ — Job Fit Check, JD Decoder, Skill Gap Plan, ATS Check, Proof Check (live GitHub API), Tailor My Resume, Bullet Fixer, Cover Letter, LinkedIn Optimizer. Scores and verdicts are computed in code (`lib/engine/scoring.ts`); finalizers scrub fabricated citations, verify red-flag quotes against the posting, strip skills absent from the source; Tailor and Cover Letter run a drafter → reviewer → revise loop. 14 legacy tools, their routes, ~45 orphaned components and ~2,700 lines of legacy prompts/validators deleted; old URLs 301 to their replacements.
-3. **Interview + Offer** — STAR save-back, mock interview chat, deterministic offer math. Delete replaced prepare pages.
+3. **Interview + Offer** ✅ — Interview Prep Pack (absorbs Weakness Detector and Recruiter Simulator), Mock Interview (planned questions → per-answer grading → follow-ups → session summary computed in code), STAR Story Builder (saves stories back into the Career Vault, where every other tool retrieves them), Tell Me About Yourself, Interview Debrief, Offer Comparator (model extracts each figure with a verbatim quote; unquoted figures are dropped; all compensation math in `offerTotals`). Six legacy interview tools deleted and redirected.
 4. **Fun + growth** — share cards; wins log; consolidate chaos tools into Roast modes and delete the rest.
 5. **Quality** — in-browser embeddings (transformers.js) for hybrid retrieval, eval suite + CI, Upstash rate limiting in production, analytics-free usage counters.
 

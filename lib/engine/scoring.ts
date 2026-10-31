@@ -132,3 +132,77 @@ export function formatChecks(resumeText: string): { checks: FormatCheck[]; score
   const score = Math.round((checks.filter((c) => c.pass).length / checks.length) * 100);
   return { checks, score };
 }
+
+// ─── Offer math ──────────────────────────────────────────────────────────────
+// The model only extracts numbers (each with a verbatim quote); all money
+// arithmetic happens here so totals are reproducible and assumptions explicit.
+
+export interface OfferNumbers {
+  name: string;
+  base: number;
+  variablePct: number;
+  joiningBonus: number;
+  otherCash: number;
+  equityKind: "rsu" | "options" | "none";
+  equityGrantValue: number;
+  equityVestYears: number;
+}
+
+export interface OfferTotals {
+  name: string;
+  variable: number;
+  equityPerYear: number;
+  /** Options are illiquid paper; excluded from the cash view. */
+  equityIsPaper: boolean;
+  year1Cash: number;
+  annualRecurring: number;
+  fourYearTotal: number;
+}
+
+export function offerTotals(o: OfferNumbers): OfferTotals {
+  const variable = Math.round((o.base * o.variablePct) / 100);
+  const vest = o.equityVestYears > 0 ? o.equityVestYears : 4;
+  const equityPerYear = o.equityKind === "none" ? 0 : Math.round(o.equityGrantValue / vest);
+  const equityIsPaper = o.equityKind === "options";
+  const cashEquity = equityIsPaper ? 0 : equityPerYear;
+  return {
+    name: o.name,
+    variable,
+    equityPerYear,
+    equityIsPaper,
+    year1Cash: o.base + variable + o.joiningBonus + o.otherCash,
+    annualRecurring: o.base + variable + cashEquity,
+    fourYearTotal: 4 * (o.base + variable) + o.joiningBonus + o.otherCash + cashEquity * Math.min(4, vest),
+  };
+}
+
+// ─── Interview answer signals ────────────────────────────────────────────────
+// Cheap, explainable signals interviewers actually react to.
+
+export interface AnswerSignals {
+  words: number;
+  /** Rough speaking time at ~140 words per minute. */
+  seconds: number;
+  iCount: number;
+  weCount: number;
+  hasNumbers: boolean;
+  fillerCount: number;
+  notes: string[];
+}
+
+export function answerSignals(answer: string): AnswerSignals {
+  const words = answer.split(/\s+/).filter(Boolean).length;
+  const iCount = (answer.match(/\b(I|I'm|I've|I'd|my|me)\b/g) ?? []).length;
+  const weCount = (answer.match(/\b(we|we're|we've|our|us)\b/gi) ?? []).length;
+  const hasNumbers = /\d/.test(answer);
+  const fillerCount = (answer.match(/\b(basically|actually|literally|kind of|sort of|like,|you know|stuff like that)\b/gi) ?? []).length;
+  const seconds = Math.round((words / 140) * 60);
+
+  const notes: string[] = [];
+  if (words < 60) notes.push(`Short (${words} words): most behavioural answers need 90–150 seconds to land a result.`);
+  if (seconds > 180) notes.push(`Long (~${Math.round(seconds / 60)} min spoken): aim for under two minutes, then let them ask.`);
+  if (weCount > iCount * 2 && weCount >= 3) notes.push(`"We" ${weCount}× vs "I" ${iCount}×: say what *you* did.`);
+  if (!hasNumbers) notes.push("No concrete numbers: add scale, time or impact if you have it.");
+  if (fillerCount >= 3) notes.push(`${fillerCount} filler phrases: they read as hedging.`);
+  return { words, seconds, iCount, weCount, hasNumbers, fillerCount, notes };
+}

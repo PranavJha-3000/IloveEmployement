@@ -1,12 +1,17 @@
 import type { PresetCategory } from "../engine/types";
+import { INTERVIEW_PRESETS } from "./interview";
 import { MATCH_PRESETS } from "./match";
 import { MESSAGE_PRESETS } from "./message";
+import { OFFER_PRESETS } from "./offer";
 import { TAILOR_PRESETS } from "./tailor";
 import type { Preset } from "./types";
 
 export type { Preset, MessagePreset, ReportPreset } from "./types";
 
-export const PRESETS: Preset[] = [...MATCH_PRESETS, ...TAILOR_PRESETS, ...MESSAGE_PRESETS];
+export const PRESETS: Preset[] = [...MATCH_PRESETS, ...TAILOR_PRESETS, ...INTERVIEW_PRESETS, ...OFFER_PRESETS, ...MESSAGE_PRESETS];
+
+/** Presets with their own page and card (hidden ones are internal steps of another tool). */
+export const PUBLIC_PRESETS = PRESETS.filter((p) => !p.hidden);
 
 export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
   target: "Target",

@@ -7,7 +7,7 @@ import { assembleContext } from "../lib/engine/context";
 import { checkGrounding } from "../lib/engine/grounding";
 import { screenUntrusted } from "../lib/engine/injection";
 import { FINALIZERS, REPORT_SCHEMAS, type FinalizeContext } from "../lib/engine/reports";
-import { formatChecks, keywordCoverage, scoreRequirements, type Evidence, type Importance } from "../lib/engine/scoring";
+import { answerSignals, formatChecks, keywordCoverage, offerTotals, scoreRequirements, type Evidence, type Importance } from "../lib/engine/scoring";
 import { chunkResume } from "../lib/vault/chunker";
 import { retrieveVault } from "../lib/vault/retrieve";
 
@@ -215,4 +215,60 @@ test("targeted retrieval ranks the relevant bullet first after the summary", () 
   const top = retrieveVault(chunks, "Kubernetes migration platform", 4);
   assert.strictEqual(top[0].kind, "summary");
   assert.ok(top[1].text.includes("Kubernetes"));
+});
+
+// ── offers
+test("offer math: RSUs spread over vesting, options excluded from cash", () => {
+  const rsu = offerTotals({ name: "A", base: 3_000_000, variablePct: 10, joiningBonus: 200_000, otherCash: 0, equityKind: "rsu", equityGrantValue: 2_000_000, equityVestYears: 4 });
+  assert.strictEqual(rsu.year1Cash, 3_500_000);
+  assert.strictEqual(rsu.annualRecurring, 3_800_000);
+  assert.strictEqual(rsu.fourYearTotal, 4 * 3_300_000 + 200_000 + 2_000_000);
+  const opt = offerTotals({ name: "B", base: 3_000_000, variablePct: 0, joiningBonus: 0, otherCash: 0, equityKind: "options", equityGrantValue: 5_000_000, equityVestYears: 4 });
+  assert.strictEqual(opt.equityIsPaper, true);
+  assert.strictEqual(opt.annualRecurring, 3_000_000);
+  assert.strictEqual(opt.equityPerYear, 1_250_000);
+});
+test("offers finalizer: a figure without a verbatim quote is treated as unstated", () => {
+  const base = { title: "SDE2", variablePct: 0, variableQuote: "", joiningBonus: 0, joiningQuote: "", otherCash: 0, otherCashQuote: "", equityKind: "none" as const, equityGrantValue: 0, equityVestYears: 0, equityQuote: "", nonCash: [], risks: [] };
+  const out = FINALIZERS.offers(
+    {
+      currency: "INR",
+      offers: [
+        { ...base, name: "Zeta", base: 3_200_000, baseQuote: "Fixed: ₹32,00,000 per annum" },
+        { ...base, name: "Acme", base: 3_600_000, baseQuote: "₹36 LPA fixed", joiningBonus: 500_000, joiningQuote: "joining bonus of 5 lakh" },
+      ],
+      current: { total: 2_400_000, quote: "24 LPA" },
+      equityExplainer: "", tradeoffs: [], questionsToClarify: [],
+    },
+    ctx({ inputs: { offerA: "Fixed: ₹32,00,000 per annum. Location Bengaluru.", offerB: "CTC ₹36 LPA fixed, hybrid.", current: "24 LPA fixed" } }),
+  );
+  assert.strictEqual(out.offers[1].joiningBonus, 0, "unquoted joining bonus must be dropped");
+  assert.deepStrictEqual(out.unverified, ["Acme: joining bonus"]);
+  assert.deepStrictEqual(out.rankedByFourYear, ["Acme", "Zeta"]);
+  assert.strictEqual(out.current.total, 2_400_000);
+});
+test("offers finalizer ignores extracted offers beyond what was pasted", () => {
+  const empty = { name: "X", title: "", base: 1, baseQuote: "", variablePct: 0, variableQuote: "", joiningBonus: 0, joiningQuote: "", otherCash: 0, otherCashQuote: "", equityKind: "none" as const, equityGrantValue: 0, equityVestYears: 0, equityQuote: "", nonCash: [], risks: [] };
+  const out = FINALIZERS.offers(
+    { currency: "USD", offers: [empty, { ...empty, name: "Y" }, { ...empty, name: "Ghost" }], current: { total: 0, quote: "" }, equityExplainer: "", tradeoffs: [], questionsToClarify: [] },
+    ctx({ inputs: { offerA: "a", offerB: "b" } }),
+  );
+  assert.deepStrictEqual(out.offers.map((o) => o.name), ["X", "Y"]);
+});
+
+// ── interview
+test("answer signals catch 'we' answers with no numbers", () => {
+  const s = answerSignals("We had a problem with the service so we looked into it and we fixed it and our team shipped it and we were happy with how we handled it overall in the end.");
+  assert.ok(s.notes.some((n) => n.includes('"We"')));
+  assert.ok(s.notes.some((n) => n.includes("No concrete numbers")));
+  assert.ok(s.notes.some((n) => n.startsWith("Short")));
+});
+test("answer grading: overall computed from dimension scores", () => {
+  const out = FINALIZERS.answerEval(
+    { scores: { structure: 4, specificity: 3, relevance: 5, ownership: 2, credibility: 4 }, whatWorked: [], fix: [], strongerAnswer: "", followUp: "", chunkIds: ["c1", "ghost"] },
+    ctx({ inputs: { answer: "I cut latency by 60%." } }),
+  );
+  assert.strictEqual(out.overall, 72);
+  assert.deepStrictEqual(out.chunkIds, ["c1"]);
+  assert.strictEqual(out.signals.hasNumbers, true);
 });

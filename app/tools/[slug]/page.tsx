@@ -4,10 +4,10 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { PresetRunner } from "@/components/engine/PresetRunner";
-import { PRESETS, PRESET_CATEGORY_LABELS, getPresetBySlug } from "@/lib/presets";
+import { PRESET_CATEGORY_LABELS, PUBLIC_PRESETS, getPresetBySlug } from "@/lib/presets";
 
 export function generateStaticParams() {
-  return PRESETS.map((p) => ({ slug: p.slug }));
+  return PUBLIC_PRESETS.map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -24,9 +24,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ToolPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const preset = getPresetBySlug(slug);
-  if (!preset) notFound();
+  if (!preset || preset.hidden) notFound();
 
-  const related = PRESETS.filter((p) => p.category === preset.category && p.id !== preset.id).slice(0, 4);
+  const related = PUBLIC_PRESETS.filter((p) => p.category === preset.category && p.id !== preset.id).slice(0, 4);
 
   return (
     <>

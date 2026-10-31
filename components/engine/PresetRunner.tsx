@@ -6,12 +6,14 @@ import type { FieldSpec, RunMeta, RunSuccess, VaultChunk, VaultContextChunk } fr
 import type { MessageResult } from "@/lib/engine/schemas";
 import { getPresetById } from "@/lib/presets";
 import { DEFAULT_VAULT_LIMIT, type ReportKind } from "@/lib/presets/types";
-import { chunkResume } from "@/lib/vault/chunker";
+import { chunkResume, manualChunk } from "@/lib/vault/chunker";
 import { retrieveVault } from "@/lib/vault/retrieve";
 import { announceVaultChange, deleteChunksFromSource, saveChunks } from "@/lib/vault/store";
 import { useVault } from "@/lib/vault/useVault";
 import { AccessPanel, useAccess } from "./AccessPanel";
 import { MessageResultView } from "./MessageResultView";
+import { MockSession } from "./MockSession";
+import type { ReportResult } from "@/lib/engine/reports";
 import { ReportView } from "./ReportView";
 
 function initialInputs(fields: FieldSpec[]): Record<string, string> {
@@ -289,7 +291,19 @@ export function PresetRunner({ presetId }: { presetId: string }) {
         {error && <p className="form-error">{error}</p>}
 
         <button type="submit" disabled={!canRun} className="cta-primary w-full disabled:cursor-not-allowed disabled:opacity-50">
-          {phase === "loading" ? "Working…" : preset.engine === "message" ? "Write it" : preset.engine === "tailor" ? "Tailor it" : "Analyze"}
+          {phase === "loading"
+            ? "Working…"
+            : preset.engine === "message"
+              ? "Write it"
+              : preset.engine === "tailor"
+                ? "Tailor it"
+                : preset.id === "mock-interview"
+                  ? "Start the interview"
+                  : preset.engine === "offer"
+                    ? "Compare"
+                    : preset.engine === "interview"
+                      ? "Build it"
+                      : "Analyze"}
         </button>
         {(missing.length > 0 || missingProfile) && (
           <p className="text-center text-[11.5px] text-zinc-400">
@@ -311,8 +325,29 @@ export function PresetRunner({ presetId }: { presetId: string }) {
         {phase !== "loading" && result?.kind === "message" && (
           <MessageResultView result={result.data as MessageResult} meta={result.meta} sentChunks={result.sent} />
         )}
-        {phase !== "loading" && result && result.kind !== "message" && (
-          <ReportView kind={result.kind} data={result.data} meta={result.meta} sentChunks={result.sent} profileName={profile.name} />
+        {phase !== "loading" && result?.kind === "mockPlan" && (
+          <MockSession
+            plan={result.data as ReportResult<"mockPlan">}
+            planMeta={result.meta}
+            inputs={inputs}
+            sourceChunks={sourceChunks}
+            profile={Object.fromEntries(Object.entries(profile).filter(([, v]) => v))}
+            config={access.requestConfig}
+            onRemaining={setRemaining}
+          />
+        )}
+        {phase !== "loading" && result && result.kind !== "message" && result.kind !== "mockPlan" && (
+          <ReportView
+            kind={result.kind}
+            data={result.data}
+            meta={result.meta}
+            sentChunks={result.sent}
+            profileName={profile.name}
+            onSaveStory={async (title, text) => {
+              await saveChunks([manualChunk("story", title, text, "star")]);
+              announceVaultChange();
+            }}
+          />
         )}
         {phase === "idle" && !result && (
           <div className="rounded-xl border border-dashed border-zinc-200 p-6 text-[13px] leading-relaxed text-zinc-500">

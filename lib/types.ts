@@ -617,14 +617,6 @@ export interface RecruiterSimulationResult {
   disclaimer: string; // model-based simulation statement
 }
 
-export interface RecruiterSimulationRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  role?: string;
-  company?: string;
-}
-
 // ─── Interview Prep Types ─────────────────────────────────────────────────
 
 export type QuestionCategory =
@@ -657,14 +649,6 @@ export interface InterviewPrepResult {
   summary: string;
 }
 
-export interface InterviewPrepRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  linkedin?: string;
-  github?: string;
-}
-
 // ─── STAR Answer Builder Types ────────────────────────────────────────────
 
 export interface StarSections {
@@ -690,14 +674,6 @@ export interface StarAnswerResult {
   funnyLine: string;
 }
 
-export interface StarAnswerRequestBody {
-  config: AiRequestConfig;
-  question: string; // the interview question
-  experience: string; // the messy story
-  resumeText?: string;
-  jobDescription?: string;
-}
-
 // ─── Tell Me About Yourself Types ─────────────────────────────────────────
 
 export interface TellMeResult {
@@ -707,14 +683,6 @@ export interface TellMeResult {
   whyThisWorks: string[]; // exactly 3 short points
   avoidSaying: string[]; // exactly 3 things to avoid
   funnyLine: string;
-}
-
-export interface TellMeRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  linkedin?: string;
-  github?: string;
 }
 
 // ─── Weakness Detector Types ──────────────────────────────────────────────
@@ -744,14 +712,6 @@ export interface WeaknessResult {
   funnyLine: string;
 }
 
-export interface WeaknessRequestBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  linkedin?: string;
-  github?: string;
-}
-
 // ─── Interview Boss Fight Types ───────────────────────────────────────────
 
 export type BossVerdict = "READY" | "NEEDS WORK" | "ABSOLUTELY COOKED";
@@ -776,32 +736,6 @@ export interface BossAnswerEvaluation {
   whatWasWeak: string[];
   whatTheyMightAskNext: string;
   betterAnswerStructure: string; // guidance, not a memorizable perfect answer
-}
-
-export interface BossFightResults {
-  overallScore: number; // 0-100
-  strongestArea: string;
-  weakestArea: string;
-  mostDangerousQuestion: string;
-  interviewReadiness: number; // 0-100
-  verdict: BossVerdict;
-  funnyLine: string;
-}
-
-export interface StartBossFightBody {
-  config: AiRequestConfig;
-  resumeText: string;
-  jobDescription: string;
-  role?: string;
-  experienceLevel?: string;
-}
-
-export interface EvaluateBossAnswerBody {
-  config: AiRequestConfig;
-  question: BossFightQuestion;
-  answer: string;
-  resumeText: string;
-  jobDescription: string;
 }
 
 // ─── Employment Aura Types ────────────────────────────────────────────────

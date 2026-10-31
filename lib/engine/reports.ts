@@ -7,7 +7,7 @@
 // Isomorphic (no server imports) so result types can be shared with the UI.
 
 import { z } from "zod";
-import { containsTerm, formatChecks, keywordCoverage, scoreRequirements } from "./scoring";
+import { answerSignals, containsTerm, formatChecks, keywordCoverage, offerTotals, scoreRequirements } from "./scoring";
 import type { ReportKind } from "../presets/types";
 
 const evidence = z.enum(["STRONG", "PARTIAL", "MISSING", "UNVERIFIED"]);
@@ -142,6 +142,87 @@ export const REPORT_SCHEMAS = {
     ),
     strongestProof: z.array(z.string()),
   }),
+  prep: z.object({
+    recruiterScan: z.object({
+      firstImpression: z.string().describe("What a recruiter notices in the first few seconds of the resume, for this job"),
+      theyWillLookFor: z.array(z.string()),
+      makeOrBreak: z.string().describe("The single factor most likely to decide keep-reading vs move-on"),
+    }),
+    questions: z
+      .array(
+        z.object({
+          question: z.string(),
+          category: z.enum(["behavioral", "technical", "role", "motivation", "curveball"]),
+          why: z.string().describe("What the interviewer is really probing"),
+          risk: severity.describe("How exposed the user is, given their actual evidence"),
+          answerPlan: z.string().describe("A truthful plan for answering, rooted in the user's real experience"),
+          storyHint: z.string().describe("Which of the user's experiences to use. Empty if none fits"),
+          chunkIds,
+        }),
+      )
+      .describe("10–14 questions this interviewer is likely to ask, mixing categories"),
+    weakSpots: z.array(z.object({ topic: z.string(), whyExposed: z.string(), honestBridge: z.string().describe("How to acknowledge the gap and bridge to real adjacent strength") })),
+    questionsToAsk: z.array(z.string()).describe("Sharp questions for the user to ask them"),
+  }),
+  star: z.object({
+    title: z.string(),
+    question: z.string().describe("The interview question this story answers best"),
+    situation: z.string(),
+    task: z.string(),
+    action: z.string().describe("What the USER did, in first person singular"),
+    result: z.string().describe("The outcome; only real numbers, otherwise a [placeholder]"),
+    spoken: z.string().describe("The story as said aloud in 60–120 seconds"),
+    chunkIds,
+    missing: z.array(z.string()).describe("Questions whose answers would make the story stronger"),
+    alsoAnswers: z.array(z.string()).describe("Other common questions this story can answer"),
+  }),
+  mockPlan: z.object({
+    opener: z.string().describe("How the interviewer opens, in character"),
+    questions: z
+      .array(z.object({ question: z.string(), intent: z.string(), difficulty: z.enum(["warmup", "standard", "hard", "final"]) }))
+      .describe("5–6 questions, escalating, ending with the hardest one for this candidate"),
+  }),
+  answerEval: z.object({
+    scores: z.object({
+      structure: z.number().int().min(1).max(5),
+      specificity: z.number().int().min(1).max(5),
+      relevance: z.number().int().min(1).max(5),
+      ownership: z.number().int().min(1).max(5).describe("Is it clear what the candidate personally did?"),
+      credibility: z.number().int().min(1).max(5).describe("Consistent with the candidate's material, no overclaiming"),
+    }),
+    whatWorked: z.array(z.string()),
+    fix: z.array(z.string()).describe("The 1–3 changes that would most improve this answer"),
+    strongerAnswer: z.string().describe("A better version using only facts from the answer and the Career Vault; [placeholders] for unknowns"),
+    followUp: z.string().describe("The follow-up question a sharp interviewer would ask next"),
+    chunkIds,
+  }),
+  offers: z.object({
+    currency: z.string().describe("e.g. INR, USD. If offers use different currencies, say so in tradeoffs"),
+    offers: z.array(
+      z.object({
+        name: z.string(),
+        title: z.string(),
+        base: z.number().describe("Annual fixed/base pay as a plain number in full units (₹32 LPA → 3200000). 0 if not stated"),
+        baseQuote: z.string().describe("The exact text the base comes from, copied verbatim. Empty if not stated"),
+        variablePct: z.number().describe("Target variable/bonus as % of base. 0 if not stated"),
+        variableQuote: z.string(),
+        joiningBonus: z.number(),
+        joiningQuote: z.string(),
+        otherCash: z.number().describe("Relocation, retention or other one-time cash"),
+        otherCashQuote: z.string(),
+        equityKind: z.enum(["rsu", "options", "none"]),
+        equityGrantValue: z.number().describe("Total grant value as stated by the company, full units. 0 if only unit counts are given"),
+        equityVestYears: z.number(),
+        equityQuote: z.string(),
+        nonCash: z.array(z.string()).describe("Remote policy, leave, insurance, learning budget, etc."),
+        risks: z.array(z.string()).describe("Clawbacks, long notice, unclear variable payout, early-stage risk"),
+      }),
+    ),
+    current: z.object({ total: z.number().describe("Current annual compensation, 0 if not given"), quote: z.string() }),
+    equityExplainer: z.string().describe("Plain-English explanation of the equity in these offers: RSU vs options, vesting, cliff, liquidity"),
+    tradeoffs: z.array(z.string()),
+    questionsToClarify: z.array(z.string()).describe("What to ask each company before deciding"),
+  }),
 } satisfies Record<ReportKind, z.ZodTypeAny>;
 
 export type ReportOutput<K extends ReportKind> = z.infer<(typeof REPORT_SCHEMAS)[K]>;
@@ -237,6 +318,53 @@ export const FINALIZERS = {
       sourceRefs: c.sourceRefs.filter((r) => ctx.externalRefs.has(r.toLowerCase())),
     })),
   }),
+  prep: (o: ReportOutput<"prep">, ctx: FinalizeContext) => ({
+    ...o,
+    questions: o.questions.map((q) => ({ ...q, chunkIds: scrub(q.chunkIds, ctx) })),
+  }),
+  star: (o: ReportOutput<"star">, ctx: FinalizeContext) => ({
+    ...o,
+    chunkIds: scrub(o.chunkIds, ctx),
+    signals: answerSignals(o.spoken),
+  }),
+  mockPlan: (o: ReportOutput<"mockPlan">) => o,
+  answerEval: (o: ReportOutput<"answerEval">, ctx: FinalizeContext) => {
+    const values = Object.values(o.scores);
+    return {
+      ...o,
+      chunkIds: scrub(o.chunkIds, ctx),
+      overall: Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 20),
+      signals: answerSignals(ctx.inputs.answer ?? ""),
+    };
+  },
+  offers: (o: ReportOutput<"offers">, ctx: FinalizeContext) => {
+    const sources = [ctx.inputs.offerA, ctx.inputs.offerB, ctx.inputs.offerC].filter(Boolean);
+    const unverified: string[] = [];
+    const offers = o.offers.slice(0, sources.length).map((offer, i) => {
+      const text = sources[i] ?? "";
+      // A number the model can't quote from the offer text is treated as unstated.
+      const keep = (value: number, quote: string, label: string) => {
+        if (!value) return 0;
+        if (quoteInText(quote, text)) return value;
+        unverified.push(`${offer.name}: ${label}`);
+        return 0;
+      };
+      const numbers = {
+        name: offer.name,
+        base: keep(offer.base, offer.baseQuote, "base pay"),
+        variablePct: keep(offer.variablePct, offer.variableQuote, "variable pay"),
+        joiningBonus: keep(offer.joiningBonus, offer.joiningQuote, "joining bonus"),
+        otherCash: keep(offer.otherCash, offer.otherCashQuote, "other cash"),
+        equityKind: offer.equityKind,
+        equityGrantValue: keep(offer.equityGrantValue, offer.equityQuote, "equity value"),
+        equityVestYears: offer.equityVestYears,
+      };
+      return { ...offer, ...numbers, totals: offerTotals(numbers) };
+    });
+    const currentOk = o.current.total > 0 && quoteInText(o.current.quote, ctx.inputs.current ?? "");
+    const rankedByFourYear = [...offers].sort((a, b) => b.totals.fourYearTotal - a.totals.fourYearTotal).map((x) => x.name);
+    return { ...o, offers, current: currentOk ? o.current : { total: 0, quote: "" }, rankedByFourYear, unverified };
+  },
 } satisfies { [K in ReportKind]: (o: ReportOutput<K>, ctx: FinalizeContext) => unknown };
 
 export type ReportResult<K extends ReportKind> = ReturnType<(typeof FINALIZERS)[K]>;
@@ -254,6 +382,10 @@ export function generatedText(kind: ReportKind, o: Record<string, unknown>): str
       const l = o as ReportOutput<"linkedin">;
       return [...l.headlines.map((h) => h.text), l.about, ...l.experience.map((e) => e.text)].join("\n");
     }
+    case "star":
+      return (o as ReportOutput<"star">).spoken;
+    case "answerEval":
+      return (o as ReportOutput<"answerEval">).strongerAnswer;
     default:
       return "";
   }

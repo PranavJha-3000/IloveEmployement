@@ -200,6 +200,36 @@ export const KB: KbEntry[] = [
     text: `Pin the three to six repos that support the resume's main claims. A good README covers what it does, why, the stack, how to run it, and a screenshot or demo link. Original work, tests and recent activity count for more than forks or tutorial clones. Private or employer work can't be shown, so precise wording (scale, constraints, your role), write-ups, talks or a demo with fake data can stand in. Don't claim open-source impact that isn't visible (stars, users, merged PRs).`,
   },
   {
+    id: "interview-prep",
+    title: "Preparing for an interview round",
+    tags: ["interview"],
+    text: `Each round tests something different. Recruiter screens check motivation, logistics, compensation range and basic fit. Hiring-manager rounds probe depth of ownership, judgement and how you work with others. Technical rounds test fundamentals and how you reason out loud. Final/panel rounds test consistency and culture add. Prepare five to eight real stories that each cover several themes (impact, conflict, failure, ambiguity, leadership, learning) rather than one script per question. Expect follow-ups on any resume claim, so know the numbers and your exact part. For a gap, acknowledge it plainly, bridge to adjacent experience, and show how you'd ramp up. Never bluff. Ask questions that show you've thought about the work and that test for red flags (how success is measured, why the role is open, what the first 90 days look like).`,
+  },
+  {
+    id: "star",
+    title: "STAR stories",
+    tags: ["star", "interview"],
+    text: `Situation and Task together should take about 20% of the answer: just enough context. Action is the core (about 60%): what YOU decided and did, in first person, including the hard choice or trade-off. Result (about 20%) gives the outcome, ideally measurable, and what you learned. Spoken, aim for 90 seconds to 2 minutes. Common failures: all context and no action, "we" hiding your contribution, no result, and a result with no number when one exists. Keep a story bank and reuse each story for several question types.`,
+  },
+  {
+    id: "mock-rubric",
+    title: "How interviewers grade answers",
+    tags: ["mock", "interview"],
+    text: `Structure: is there a clear arc (context → action → result) and does it answer the question asked? Specificity: concrete details, names of systems, numbers and decisions rather than generalities. Relevance: is it the most relevant example for this role? Ownership: is it clear what the candidate personally did and decided? Credibility: is it consistent, appropriately scoped and free of overclaiming? Strong answers usually take 1.5–2 minutes, include one real number, admit a trade-off or mistake, and invite a natural follow-up.`,
+  },
+  {
+    id: "offer-evaluation",
+    title: "Comparing job offers",
+    tags: ["offer", "equity"],
+    text: `Compare like with like: fixed/base pay, target variable (and how reliably it actually pays out), one-time cash (joining, relocation, retention, and any clawback if you leave early), equity, and benefits. In India, CTC often bundles items that aren't take-home cash, such as employer PF, gratuity, insurance premiums and sometimes the variable at 100%, so compare fixed pay and in-hand pay separately. Look beyond money: scope, manager, team stability, learning, notice period, remote policy and runway for startups. Get every number in writing before resigning.`,
+  },
+  {
+    id: "equity",
+    title: "Equity basics: RSUs vs options",
+    tags: ["equity", "offer"],
+    text: `RSUs (common at public companies) are shares granted over a vesting schedule, typically four years, often with a one-year cliff. They're worth the share price when they vest, and taxed as income at vest in many countries. Stock options (common at startups) are the right to buy shares at a fixed strike price. They're only worth something if the company's value rises above the strike AND there's a way to sell (IPO, acquisition, buyback), so treat them as a lottery ticket with an expiry, not as salary. Ask for: number of units, strike price, latest valuation or 409A/FMV, total shares outstanding (to compute your percentage), vesting and cliff, exercise window after leaving, and refresh-grant policy.`,
+  },
+  {
     id: "honesty",
     title: "Non-negotiable honesty rules",
     tags: ["all"],

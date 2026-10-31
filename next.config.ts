@@ -17,6 +17,12 @@ const RETIRED_ROUTES: Record<string, string> = {
   "/cover-letter-generator": "/tools/cover-letter-generator",
   "/github-resume-checker": "/tools/resume-proof-check",
   "/resume-truth-detector": "/tools/resume-proof-check",
+  "/interview-prep": "/tools/interview-prep",
+  "/weakness-detector": "/tools/interview-prep",
+  "/recruiter-simulator": "/tools/interview-prep",
+  "/interview-boss-fight": "/tools/mock-interview",
+  "/star-answer-builder": "/tools/star-story-builder",
+  "/tell-me-about-yourself": "/tools/tell-me-about-yourself",
 };
 
 const nextConfig: NextConfig = {

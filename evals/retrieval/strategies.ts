@@ -6,7 +6,7 @@
 
 import type { VaultChunk, VaultContextChunk } from "../../lib/engine/types";
 import { semanticRanking } from "../../lib/retrieval/fusion";
-import { rerankCandidates, type PairScorer } from "../../lib/retrieval/rerank";
+import { RERANK_TOP_N, rerankCandidates, type PairScorer } from "../../lib/retrieval/rerank";
 import { WHOLE_RESUME_LIMIT, rankBySemantic, rankVault, retrieveVault, selectWithAnchor } from "../../lib/vault/retrieve";
 
 export interface EmbeddingInput {
@@ -32,6 +32,38 @@ export interface RetrievalStrategy {
 function requireEmbeddings(id: string, input: StrategyInput): EmbeddingInput {
   if (!input.embeddings) throw new Error(`Strategy "${id}" needs embeddings but none were provided`);
   return input.embeddings;
+}
+
+export interface RerankInfo {
+  model: string;
+  dtype: string;
+  transformersVersion: string;
+  loadMs: number;
+}
+
+// One shared model load for all rerank strategies. The dynamic import keeps
+// transformers out of keyword-only runs and the test suite.
+let scorerMemo: Promise<PairScorer> | null = null;
+let rerankInfo: RerankInfo | null = null;
+
+export function getRerankInfo(): RerankInfo | null {
+  return rerankInfo;
+}
+
+function loadNodeScorer(): Promise<PairScorer> {
+  if (!scorerMemo) {
+    scorerMemo = import("./reranker.js")
+      .then((m) => m.createNodeReranker({ onProgress: (msg) => console.log(msg) }))
+      .then((r) => {
+        rerankInfo = { model: r.model, dtype: r.dtype, transformersVersion: r.transformersVersion, loadMs: r.loadMs };
+        return r.score;
+      })
+      .catch((e) => {
+        scorerMemo = null;
+        throw e;
+      });
+  }
+  return scorerMemo;
 }
 
 export const STRATEGIES: RetrievalStrategy[] = [
@@ -60,6 +92,34 @@ export const STRATEGIES: RetrievalStrategy[] = [
       return retrieveVault(input.chunks, input.query, input.limit, semanticRanking(queryVector, chunkVectors));
     },
   },
+  createRerankStrategy({
+    id: "hybrid+rerank",
+    label: "Hybrid + cross-encoder rerank (top 20)",
+    base: "hybrid",
+    topN: RERANK_TOP_N,
+    loadScorer: loadNodeScorer,
+  }),
+  createRerankStrategy({
+    id: "embeddings+rerank",
+    label: "Embeddings + cross-encoder rerank (top 20)",
+    base: "embeddings",
+    topN: RERANK_TOP_N,
+    loadScorer: loadNodeScorer,
+  }),
+  createRerankStrategy({
+    id: "hybrid+rerank@30",
+    label: "Hybrid + cross-encoder rerank (top 30, sensitivity)",
+    base: "hybrid",
+    topN: 30,
+    loadScorer: loadNodeScorer,
+  }),
+  createRerankStrategy({
+    id: "embeddings+rerank@30",
+    label: "Embeddings + cross-encoder rerank (top 30, sensitivity)",
+    base: "embeddings",
+    topN: 30,
+    loadScorer: loadNodeScorer,
+  }),
 ];
 
 export function createRerankStrategy(opts: {

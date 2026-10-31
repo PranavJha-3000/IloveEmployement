@@ -32,8 +32,11 @@ const get = (id: string) => STRATEGIES.find((s) => s.id === id)!;
 const ids = (r: { id: string }[]) => r.map((c) => c.id);
 
 test("registry order and flags", () => {
-  assert.deepStrictEqual(STRATEGIES.map((s) => s.id), ["keyword", "embeddings", "hybrid"]);
-  assert.deepStrictEqual(STRATEGIES.map((s) => s.needsEmbeddings), [false, true, true]);
+  assert.deepStrictEqual(STRATEGIES.map((s) => s.id), [
+    "keyword", "embeddings", "hybrid", "hybrid+rerank", "embeddings+rerank", "hybrid+rerank@30", "embeddings+rerank@30",
+  ]);
+  assert.deepStrictEqual(STRATEGIES.map((s) => s.needsEmbeddings), [false, true, true, true, true, true, true]);
+  for (const s of STRATEGIES.filter((x) => x.id.includes("rerank"))) assert.strictEqual(typeof s.prepare, "function");
 });
 
 test("keyword equals retrieveVault", async () => {

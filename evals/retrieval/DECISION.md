@@ -43,4 +43,19 @@ Primary: Xenova/ms-marco-MiniLM-L-6-v2 (q8). Fallback: mixedbread-ai/mxbai-reran
 
 ## Outcome
 
-Not yet measured. Plan 02-07 fills this section from the generated Decision section of evals/RETRIEVAL.md.
+Measured 2026-10-31 (report date 2026-10-31T19:00:15Z), git sha e76522c, reranker Xenova/ms-marco-MiniLM-L-6-v2 (q8, transformers 3.8.1); the primary model loaded, no fallback was used. Dataset fingerprint 1jxooun, 85 queries. Values below are copied from evals/RETRIEVAL.md.
+
+- RERANK_ADOPTED: none
+- APP_BASE_MODE: hybrid
+
+Overall ndcg@8: keyword 0.349, embeddings 0.593, hybrid 0.580, hybrid+rerank (top 20) 0.561, embeddings+rerank (top 20) 0.553, hybrid+rerank (top 30) 0.561, embeddings+rerank (top 30) 0.553.
+
+R1 checks (top 20):
+
+- hybrid+rerank: (a) FAIL, 0.5607 <= best existing 0.5927. (b) FAIL, delta vs hybrid -0.019, 95% CI [-0.052, +0.014]; versus embeddings -0.032, CI [-0.067, +0.002]. (c) FAIL, added p50 169.49 ms (p95 276.89 ms) exceeds 150 ms.
+- embeddings+rerank: (a) FAIL, 0.5533 <= best existing 0.5927. (b) FAIL, delta vs hybrid -0.026, 95% CI [-0.060, +0.007]; versus embeddings -0.039, CI [-0.073, -0.007]. (c) FAIL, added p50 158.98 ms (p95 269.08 ms) exceeds 150 ms.
+- Top 30 sensitivity (not eligible by rule): hybrid+rerank@30 0.561, delta vs hybrid -0.019 CI [-0.052, +0.014], added p50 166.65 ms; embeddings+rerank@30 0.553, delta vs hybrid -0.027 CI [-0.060, +0.006], added p50 163.46 ms.
+
+R2: embeddings minus hybrid +0.013, 95% CI [-0.004, +0.031] (CI includes 0), so the app stays on hybrid.
+
+App consequence: no reranker ships in the app (not even as an opt-in) and the default retrieval stays hybrid, so the app is unchanged.

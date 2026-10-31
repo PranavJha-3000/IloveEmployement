@@ -67,6 +67,8 @@ Nothing about the user gets invented: every generated claim traces to the user's
 | Measure retrieval before adding a reranker | Avoid features that can't show a win | ✓ Good — Phase 1: embeddings-only nDCG@8 0.593 beats shipped hybrid RRF 0.580 overall (hybrid wins lexical 0.664 vs 0.641, loses paraphrase 0.485 vs 0.538); Phase 2 must beat 0.593 |
 | Paraphrase queries share no keywords with targets | Isolates semantic recall | ⚠️ Revisit — makes BM25 paraphrase score 0 by construction (review WR-04); report as an upper bound, not a finding |
 | Agent workflow composes existing engines as tools | Reuses guardrails; bounded steps keep it testable | — Pending |
+| On-device cross-encoder reranker (Phase 2) | Pre-registered rule in evals/retrieval/DECISION.md: beat best existing ndcg@8, CI of delta vs shipped hybrid excludes 0, p50 added latency <= 150 ms at top 20 | Rejected — best variant hybrid+rerank ndcg@8 0.561 vs hybrid 0.580 (delta -0.019, 95% CI [-0.052, +0.014]), added p50 169.5 ms; nothing ships |
+| App retrieval mode after Phase 2 | Phase 1 + 2 data, rule R2 (embeddings must beat hybrid with CI excluding 0) | Stay on hybrid — embeddings minus hybrid +0.013, 95% CI [-0.004, +0.031] includes 0 |
 
 ## Evolution
 
@@ -86,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-31 after Phase 1 (Retrieval Evaluation)*
+*Last updated: 2026-10-31 after Phase 2 measurement (reranker decision recorded)*

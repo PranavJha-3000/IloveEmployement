@@ -1,8 +1,7 @@
 ﻿// ─── Tool Marketplace Data ──────────────────────────────────────────────────
-// Maps every tool card on the landing page to its category, icon, and the
-// route it opens. Hand-built tools live at app/<tool>/; engine presets from
-// lib/presets are appended at the bottom and open /tools/<slug>.
-// app/page.tsx pushes tool.target via the router.
+// Every tool card, derived from the preset registry (lib/presets): adding a
+// preset is all it takes for it to get a card, a nav entry and a /tools/<slug>
+// page. This file only adds presentation: icons and category colours.
 
 import type { PresetCategory } from "./engine/types";
 import { PRESET_CATEGORY_LABELS, PUBLIC_PRESETS } from "./presets";
@@ -91,90 +90,6 @@ const I = {
     "M6 11h4 M8 9v4 M15 12h.01 M18 10h.01 M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z",
 };
 
-// ─── Tools ───────────────────────────────────────────────────────────────────
-export const TOOLS: Tool[] = [
-  // ANALYZE
-  {
-    id: "resume-roast",
-    name: "Resume Roast",
-    description:
-      "A brutally honest diagnosis of what a recruiter is really thinking.",
-    category: "fun",
-    iconPaths: [I.flame],
-    accent: "#dc2626",
-    tint: "#fef2f2",
-    target: "/resume-roast",
-  },
-
-  // OPTIMIZE
-
-  // INVESTIGATE
-
-  // PREPARE
-
-  // CHAOS
-  {
-    id: "employment-aura",
-    name: "Employment Aura",
-    description: "Measure your current employment aura.",
-    category: "fun",
-    iconPaths: [I.gauge],
-    accent: "#db2777",
-    tint: "#fdf2f8",
-    target: "/employment-aura",
-  },
-  {
-    id: "rizz-score",
-    name: "Rizz Score",
-    description: "How convincing is this application, really?",
-    category: "fun",
-    iconPaths: [I.sparkles],
-    accent: "#dc2626",
-    tint: "#fef2f2",
-    target: "/rizz-score",
-  },
-  {
-    id: "cooked-meter",
-    name: "Cooked Meter",
-    description: "See how cooked you are for this particular job.",
-    category: "fun",
-    iconPaths: [I.skull],
-    accent: "#525252",
-    tint: "#f5f5f5",
-    target: "/cooked-meter",
-  },
-  {
-    id: "resume-court",
-    name: "Resume Court",
-    description: "Put your resume claims on trial.",
-    category: "fun",
-    iconPaths: [I.gavel],
-    accent: "#b45309",
-    tint: "#fffbeb",
-    target: "/resume-court",
-  },
-  {
-    id: "ats-boss-fight",
-    name: "ATS Boss Fight",
-    description: "Fight the robots. Again.",
-    category: "fun",
-    iconPaths: [I.gamepad],
-    accent: "#4f46e5",
-    tint: "#eef2ff",
-    target: "/ats-boss-fight",
-  },
-  {
-    id: "skill-issue",
-    name: "Skill Issue",
-    description: "Find out exactly why you're getting rejected.",
-    category: "fun",
-    iconPaths: [I.bug],
-    accent: "#059669",
-    tint: "#ecfdf5",
-    target: "/skill-issue",
-  },
-];
-
 // ─── Engine presets ──────────────────────────────────────────────────────────
 // Accent/tint per category keeps preset cards visually grouped.
 const CATEGORY_COLORS: Record<PresetCategory, { accent: string; tint: string }> = {
@@ -189,32 +104,13 @@ const CATEGORY_COLORS: Record<PresetCategory, { accent: string; tint: string }> 
   fun: { accent: "#db2777", tint: "#fdf2f8" },
 };
 
-for (const preset of PUBLIC_PRESETS) {
-  TOOLS.push({
-    id: preset.id,
-    name: preset.name,
-    description: preset.tagline,
-    category: preset.category,
-    iconPaths: [I[preset.icon as keyof typeof I] ?? I.messages],
-    ...CATEGORY_COLORS[preset.category],
-    target: `/tools/${preset.slug}`,
-  });
-}
-
-TOOLS.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
-
-// Guards the marketplace against duplicate entries sneaking back in: the grid
-// keys cards by `id`, so a repeated id renders the same tool twice and React
-// logs a non-unique-key error. Static config means a duplicate is always a
-// bug, so fail loudly in development rather than rendering it silently.
-if (process.env.NODE_ENV !== "production") {
-  const seen = new Set<string>();
-  for (const tool of TOOLS) {
-    if (seen.has(tool.id)) {
-      throw new Error(
-        `lib/tools: duplicate tool id "${tool.id}" — each tool must be listed exactly once.`,
-      );
-    }
-    seen.add(tool.id);
-  }
-}
+// Ids are already checked for uniqueness in lib/presets.
+export const TOOLS: Tool[] = PUBLIC_PRESETS.map((preset) => ({
+  id: preset.id,
+  name: preset.name,
+  description: preset.tagline,
+  category: preset.category,
+  iconPaths: [I[preset.icon as keyof typeof I] ?? I.messages],
+  ...CATEGORY_COLORS[preset.category],
+  target: `/tools/${preset.slug}` as const,
+})).sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));

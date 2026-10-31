@@ -7,6 +7,7 @@ import type { RunMeta, VaultContextChunk } from "@/lib/engine/types";
 import type { ReportKind } from "@/lib/presets/types";
 import { CopyButton } from "@/components/shared/CopyButton";
 import { RunDetails, RunWarnings } from "./RunDetails";
+import { ShareCard } from "./ShareCard";
 
 // ─── Shared pieces ───────────────────────────────────────────────────────────
 
@@ -114,11 +115,12 @@ function ScoreBreakdown({ score }: { score: FitScore }) {
 
 type Ctx = { chunks: Map<string, VaultContextChunk> };
 
-function FitView({ r, chunks }: { r: ReportResult<"fit"> } & Ctx) {
+function FitView({ r, chunks, share }: { r: ReportResult<"fit">; share: Share } & Ctx) {
   const v = VERDICT_LABEL[r.score.verdict];
   return (
     <>
       <ScoreHeader score={r.score.score} label={v.label} sub={r.headline} tone={v.tone} />
+      <ShareCard tool={share.name} slug={share.slug} score={String(r.score.score)} label={v.label} headline={r.headline} accent="#059669" />
       <ScoreBreakdown score={r.score} />
       <Card title="Summary">
         <p className="text-[13.5px] leading-relaxed text-zinc-700">{r.summary}</p>
@@ -815,6 +817,181 @@ function OffersView({ r }: { r: ReportResult<"offers"> }) {
   );
 }
 
+// ─── Fun ─────────────────────────────────────────────────────────────────────
+
+type Share = { name: string; slug: string };
+
+function RoastView({ r, share }: { r: ReportResult<"roast">; share: Share }) {
+  const tone = r.score >= 70 ? "good" : r.score >= 45 ? "mid" : "bad";
+  return (
+    <>
+      <ScoreHeader score={r.score} label={r.score >= 70 ? "Surprisingly not cooked" : r.score >= 45 ? "Medium rare" : "Well done (not a compliment)"} sub={r.headline} tone={tone} />
+      <ShareCard tool={share.name} slug={share.slug} score={String(r.score)} label="Resume Roast score" headline={r.headline} accent="#dc2626" />
+      <Card title="Scorecard">
+        <ul className="space-y-2 text-[13px]">
+          {r.dimensions.map((d) => (
+            <li key={d.name}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-zinc-800">{d.name}</span>
+                <span className="font-bold text-zinc-900">{d.score}/10</span>
+              </div>
+              <div className="mt-1 h-1.5 rounded-full bg-zinc-100">
+                <div className="h-1.5 rounded-full bg-red-500" style={{ width: `${d.score * 10}%` }} />
+              </div>
+              <p className="mt-1 text-[12.5px] text-zinc-500">{d.comment}</p>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      <Card title="The roast">
+        <ul className="space-y-4">
+          {r.burns.map((b, i) => (
+            <li key={i}>
+              <blockquote className="border-l-2 border-red-200 pl-2 text-[12.5px] italic text-zinc-500">“{b.quote}”</blockquote>
+              <p className="mt-1 text-[14px] font-medium text-zinc-900">🔥 {b.burn}</p>
+              <p className="mt-1 text-[12.5px] text-emerald-700">Fix: {b.realFix}</p>
+            </li>
+          ))}
+        </ul>
+        {r.droppedBurns > 0 && <p className="mt-3 text-[11.5px] text-zinc-400">{r.droppedBurns} burn(s) removed because they didn't quote your resume accurately.</p>}
+      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card title="Buried gold">
+          <Bullets items={r.buriedGold} />
+        </Card>
+        <Card title="Fix these first">
+          <Bullets items={r.topFixes} />
+        </Card>
+      </div>
+    </>
+  );
+}
+
+const COURT_STYLE = { Acquitted: "bg-emerald-50 text-emerald-700", Probation: "bg-amber-50 text-amber-700", "Hung jury": "bg-zinc-100 text-zinc-600", Guilty: "bg-red-50 text-red-700" } as const;
+
+function CourtView({ r, chunks, share }: { r: ReportResult<"court">; share: Share } & Ctx) {
+  const n = r.charges.length;
+  return (
+    <>
+      <ScoreHeader
+        score={r.guilty}
+        label={`Guilty on ${r.guilty} of ${n} count${n === 1 ? "" : "s"}`}
+        sub={r.caseTitle}
+        tone={r.guilty === 0 ? "good" : r.guilty <= n / 3 ? "mid" : "bad"}
+      />
+      <ShareCard tool={share.name} slug={share.slug} score={`${r.guilty}/${n}`} label="counts guilty" headline={r.caseTitle} accent="#b45309" />
+      <Card title="The charges">
+        <ul className="divide-y divide-zinc-100">
+          {r.charges.map((c, i) => (
+            <li key={i} className="py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded px-2 py-0.5 text-[11px] font-bold ${COURT_STYLE[c.verdict]}`}>{c.verdict.toUpperCase()}</span>
+                <span className="text-[13.5px] font-semibold text-zinc-900">{c.charge}</span>
+              </div>
+              <blockquote className="mt-1 text-[12.5px] italic text-zinc-500">“{c.claim}”</blockquote>
+              <p className="mt-1.5 text-[13px] text-zinc-700">
+                <span className="font-semibold">Prosecution:</span> {c.prosecution}
+              </p>
+              <p className="mt-1 text-[13px] text-zinc-700">
+                <span className="font-semibold">Defence:</span> {c.defense}
+              </p>
+              <Cites ids={c.chunkIds} chunks={chunks} />
+              <p className="mt-1.5 text-[13px] text-emerald-700">
+                <span className="font-semibold">Sentence:</span> {c.sentence}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11.5px] text-zinc-400">Verdicts follow the evidence: strong = acquitted, partial = probation, missing = guilty.</p>
+      </Card>
+      <Card title="Closing statement">
+        <p className="text-[13.5px] text-zinc-700">{r.closing}</p>
+      </Card>
+    </>
+  );
+}
+
+function AuraView({ r, chunks, share }: { r: ReportResult<"aura">; share: Share } & Ctx) {
+  const sorted = [...r.components].sort((a, b) => b.points - a.points);
+  return (
+    <>
+      <ScoreHeader score={r.total} label={`${r.tier} · ${r.archetype}`} sub={r.vibe} tone={r.total >= 700 ? "good" : r.total >= 0 ? "mid" : "bad"} />
+      <ShareCard tool={share.name} slug={share.slug} score={`${r.total >= 0 ? "+" : ""}${r.total}`} label={`${r.tier} · ${r.archetype}`} headline={r.vibe} accent="#db2777" />
+      <Card title="Aura ledger">
+        <ul className="divide-y divide-zinc-100">
+          {sorted.map((c, i) => (
+            <li key={i} className="flex items-start gap-3 py-2.5">
+              <span className={`w-16 shrink-0 text-right text-[14px] font-bold ${c.points >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {c.points >= 0 ? "+" : ""}
+                {c.points}
+              </span>
+              <div>
+                <p className="text-[13.5px] font-semibold text-zinc-900">{c.name}</p>
+                <p className="text-[12.5px] text-zinc-600">{c.reason}</p>
+                <Cites ids={c.chunkIds} chunks={chunks} />
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11.5px] text-zinc-400">Total is summed from the ledger. Tiers: 1500+ main character · 700+ aura farmer · 0+ respectable NPC · below 0 aura debt.</p>
+      </Card>
+      <Card title="Glow-up moves">
+        <Bullets items={r.glowUp} />
+      </Card>
+    </>
+  );
+}
+
+const BINGO_LINES = [
+  ...[0, 1, 2, 3, 4].map((r) => [0, 1, 2, 3, 4].map((c) => r * 5 + c)),
+  ...[0, 1, 2, 3, 4].map((c) => [0, 1, 2, 3, 4].map((r) => r * 5 + c)),
+  [0, 6, 12, 18, 24],
+  [4, 8, 12, 16, 20],
+];
+
+function BingoView({ r }: { r: ReportResult<"bingo"> }) {
+  const cells = [...r.squares.slice(0, 12), { phrase: "FREE (you're on mute)", quote: "", verified: false }, ...r.squares.slice(12, 24)];
+  const [marked, setMarked] = useState<Set<number>>(() => new Set([12]));
+  const lines = BINGO_LINES.filter((line) => line.every((i) => marked.has(i))).length;
+  const toggle = (i: number) =>
+    setMarked((m) => {
+      if (i === 12) return m;
+      const next = new Set(m);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+
+  return (
+    <>
+      <Card title={lines ? `BINGO ×${lines}` : "Click a square when someone says it"} right={<span className="text-[11.5px] text-zinc-400">{marked.size - 1}/24</span>}>
+        <div className="grid grid-cols-5 gap-1.5">
+          {cells.map((c, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => toggle(i)}
+              title={c.quote ? `“${c.quote}”` : undefined}
+              className={`flex aspect-square items-center justify-center rounded-lg border p-1 text-center text-[10.5px] font-semibold leading-tight transition-colors sm:text-[12px] ${
+                marked.has(i) ? "border-red-300 bg-red-500 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
+              }`}
+            >
+              {c.phrase}
+              {c.verified && !marked.has(i) && <span className="sr-only"> (found in your text)</span>}
+            </button>
+          ))}
+        </div>
+        {r.fromText && (
+          <p className="mt-3 text-[11.5px] text-zinc-500">
+            {r.squares.filter((s) => s.verified).length} of 24 squares were found verbatim in your text; hover to see where.
+          </p>
+        )}
+      </Card>
+      <p className="text-[13px] italic text-zinc-600">{r.commentary}</p>
+    </>
+  );
+}
+
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
 export function ReportView({
@@ -824,6 +1001,7 @@ export function ReportView({
   sentChunks,
   profileName,
   onSaveStory,
+  share,
 }: {
   kind: ReportKind;
   data: unknown;
@@ -832,12 +1010,14 @@ export function ReportView({
   profileName: string;
   /** Writes a STAR story back into the Career Vault. */
   onSaveStory?: (title: string, text: string) => Promise<void>;
+  /** Tool name and slug for share images. */
+  share: Share;
 }) {
   const chunks = new Map(sentChunks.map((c) => [c.id, c]));
   const body = (() => {
     switch (kind) {
       case "fit":
-        return <FitView r={data as ReportResult<"fit">} chunks={chunks} />;
+        return <FitView r={data as ReportResult<"fit">} chunks={chunks} share={share} />;
       case "jd":
         return <JdView r={data as ReportResult<"jd">} />;
       case "gap":
@@ -860,6 +1040,14 @@ export function ReportView({
         return <AnswerEvalView r={data as ReportResult<"answerEval">} chunks={chunks} />;
       case "offers":
         return <OffersView r={data as ReportResult<"offers">} />;
+      case "roast":
+        return <RoastView r={data as ReportResult<"roast">} share={share} />;
+      case "court":
+        return <CourtView r={data as ReportResult<"court">} chunks={chunks} share={share} />;
+      case "aura":
+        return <AuraView r={data as ReportResult<"aura">} chunks={chunks} share={share} />;
+      case "bingo":
+        return <BingoView r={data as ReportResult<"bingo">} />;
       case "mockPlan":
         // Rendered as an interactive session by PresetRunner.
         return null;

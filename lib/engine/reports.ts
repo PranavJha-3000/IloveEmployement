@@ -223,6 +223,61 @@ export const REPORT_SCHEMAS = {
     tradeoffs: z.array(z.string()),
     questionsToClarify: z.array(z.string()).describe("What to ask each company before deciding"),
   }),
+  roast: z.object({
+    headline: z.string().describe("One savage-but-fair line about the resume as a document"),
+    dimensions: z
+      .array(z.object({ name: z.string(), score: z.number().int().min(1).max(10), comment: z.string() }))
+      .describe("The 4–5 dimensions named in the task, each scored 1–10 (10 = excellent)"),
+    burns: z
+      .array(
+        z.object({
+          quote: z.string().describe("Exact text from the resume being roasted, copied verbatim"),
+          burn: z.string().describe("The joke, about the text, never the person"),
+          realFix: z.string().describe("The genuinely useful fix"),
+        }),
+      )
+      .describe("5–8 roasts, each anchored to a verbatim quote"),
+    buriedGold: z.array(z.string()).describe("Strong things the resume undersells"),
+    topFixes: z.array(z.string()),
+  }),
+  court: z.object({
+    caseTitle: z.string().describe("e.g. 'The People v. Your Resume'"),
+    charges: z
+      .array(
+        z.object({
+          claim: z.string().describe("A claim from the resume, copied verbatim"),
+          charge: z.string().describe("The comedic charge, e.g. 'Buzzword possession with intent to impress'"),
+          evidence,
+          prosecution: z.string(),
+          defense: z.string().describe("The best honest defence from the user's own material"),
+          sentence: z.string().describe("The real fix that would make the claim stand up"),
+          chunkIds,
+        }),
+      )
+      .describe("5–8 claims on trial"),
+    closing: z.string(),
+  }),
+  aura: z.object({
+    archetype: z.string().describe("A playful career archetype, e.g. 'Quiet Backend Assassin'"),
+    vibe: z.string().describe("Two sentences on the overall career aura"),
+    components: z
+      .array(
+        z.object({
+          name: z.string(),
+          points: z.number().int().min(-500).max(500).describe("Aura points gained (+) or lost (−) for this, grounded in the material"),
+          reason: z.string(),
+          chunkIds,
+        }),
+      )
+      .describe("6–10 aura events from the user's real career material"),
+    glowUp: z.array(z.string()).describe("Concrete moves that would raise the aura"),
+  }),
+  bingo: z.object({
+    squares: z
+      .array(z.object({ phrase: z.string().describe("Short, 1–5 words"), quote: z.string().describe("Verbatim text it was found in; empty for the classic board") }))
+      .describe("Exactly 24 phrases"),
+    commentary: z.string(),
+  }),
 } satisfies Record<ReportKind, z.ZodTypeAny>;
 
 export type ReportOutput<K extends ReportKind> = z.infer<(typeof REPORT_SCHEMAS)[K]>;
@@ -364,6 +419,33 @@ export const FINALIZERS = {
     const currentOk = o.current.total > 0 && quoteInText(o.current.quote, ctx.inputs.current ?? "");
     const rankedByFourYear = [...offers].sort((a, b) => b.totals.fourYearTotal - a.totals.fourYearTotal).map((x) => x.name);
     return { ...o, offers, current: currentOk ? o.current : { total: 0, quote: "" }, rankedByFourYear, unverified };
+  },
+  roast: (o: ReportOutput<"roast">, ctx: FinalizeContext) => {
+    // You can only roast what's actually there.
+    const burns = o.burns.filter((b) => quoteInText(b.quote, ctx.resumeText));
+    const avg = o.dimensions.reduce((s, d) => s + d.score, 0) / (o.dimensions.length || 1);
+    return { ...o, burns, droppedBurns: o.burns.length - burns.length, score: Math.round(avg * 10) };
+  },
+  court: (o: ReportOutput<"court">, ctx: FinalizeContext) => {
+    const VERDICT = { STRONG: "Acquitted", PARTIAL: "Probation", UNVERIFIED: "Hung jury", MISSING: "Guilty" } as const;
+    const charges = o.charges
+      .filter((c) => quoteInText(c.claim, ctx.resumeText))
+      .map((c) => ({ ...c, chunkIds: scrub(c.chunkIds, ctx), verdict: VERDICT[c.evidence] }));
+    const guilty = charges.filter((c) => c.verdict === "Guilty").length;
+    return { ...o, charges, guilty, droppedCharges: o.charges.length - charges.length };
+  },
+  aura: (o: ReportOutput<"aura">, ctx: FinalizeContext) => {
+    const components = o.components.map((c) => ({ ...c, chunkIds: scrub(c.chunkIds, ctx) }));
+    const total = components.reduce((s, c) => s + c.points, 0);
+    const tier = total >= 1500 ? "Main character" : total >= 700 ? "Certified aura farmer" : total >= 0 ? "Respectable NPC" : "Aura debt";
+    return { ...o, components, total, tier };
+  },
+  bingo: (o: ReportOutput<"bingo">, ctx: FinalizeContext) => {
+    const source = ctx.inputs.text ?? "";
+    const squares = o.squares
+      .slice(0, 24)
+      .map((s) => ({ ...s, verified: Boolean(source) && quoteInText(s.quote || s.phrase, source) }));
+    return { ...o, squares, fromText: Boolean(source) };
   },
 } satisfies { [K in ReportKind]: (o: ReportOutput<K>, ctx: FinalizeContext) => unknown };
 

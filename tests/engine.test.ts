@@ -272,3 +272,52 @@ test("answer grading: overall computed from dimension scores", () => {
   assert.deepStrictEqual(out.chunkIds, ["c1"]);
   assert.strictEqual(out.signals.hasNumbers, true);
 });
+
+// ── fun
+test("roast: burns that don't quote the resume are dropped; score from dimensions", () => {
+  const out = FINALIZERS.roast(
+    {
+      headline: "h",
+      dimensions: [{ name: "Clarity", score: 8, comment: "" }, { name: "Impact", score: 6, comment: "" }],
+      burns: [
+        { quote: "Mentored 3 junior engineers", burn: "b", realFix: "f" },
+        { quote: "Synergy evangelist", burn: "invented", realFix: "f" },
+      ],
+      buriedGold: [],
+      topFixes: [],
+    },
+    ctx(),
+  );
+  assert.strictEqual(out.burns.length, 1);
+  assert.strictEqual(out.droppedBurns, 1);
+  assert.strictEqual(out.score, 70);
+});
+test("court: verdicts follow evidence, unquotable claims are thrown out", () => {
+  const charge = (claim: string, evidence: Evidence) => ({ claim, charge: "c", evidence, prosecution: "", defense: "", sentence: "", chunkIds: [] });
+  const out = FINALIZERS.court(
+    {
+      caseTitle: "t",
+      closing: "",
+      charges: [charge("Led migration of 40 services to Kubernetes", "STRONG"), charge("Go, PostgreSQL, Kafka", "PARTIAL"), charge("Mentored 3 junior engineers", "MISSING"), charge("World-class leader", "MISSING")],
+    },
+    ctx(),
+  );
+  assert.deepStrictEqual(out.charges.map((c) => c.verdict), ["Acquitted", "Probation", "Guilty"]);
+  assert.strictEqual(out.guilty, 1);
+  assert.strictEqual(out.droppedCharges, 1);
+});
+test("aura: total summed in code and tiered", () => {
+  const out = FINALIZERS.aura(
+    { archetype: "a", vibe: "v", glowUp: [], components: [{ name: "x", points: 600, reason: "", chunkIds: [] }, { name: "y", points: 250, reason: "", chunkIds: ["ghost"] }] },
+    ctx(),
+  );
+  assert.strictEqual(out.total, 850);
+  assert.strictEqual(out.tier, "Certified aura farmer");
+  assert.deepStrictEqual(out.components[1].chunkIds, []);
+});
+test("bingo: squares verified against pasted text, capped at 24", () => {
+  const squares = [{ phrase: "circle back", quote: "let's circle back on this" }, { phrase: "boil the ocean", quote: "" }, ...Array.from({ length: 30 }, (_, i) => ({ phrase: `p${i}`, quote: "" }))];
+  const out = FINALIZERS.bingo({ squares, commentary: "" }, ctx({ inputs: { text: "OK team, let's circle back on this after the sync." } }));
+  assert.strictEqual(out.squares.length, 24);
+  assert.deepStrictEqual(out.squares.slice(0, 2).map((s) => s.verified), [true, false]);
+});

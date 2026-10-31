@@ -48,6 +48,7 @@ export function VaultManager() {
   const [newKind, setNewKind] = useState<VaultChunkKind>("story");
   const [newTitle, setNewTitle] = useState("");
   const [newText, setNewText] = useState("");
+  const [quickWin, setQuickWin] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -97,6 +98,14 @@ export function VaultManager() {
     await changed("Added to your vault.");
   }
 
+  async function logWin() {
+    if (!quickWin.trim()) return;
+    const date = new Date().toISOString().slice(0, 10);
+    await saveChunks([manualChunk("win", `Win · ${date}`, quickWin)]);
+    setQuickWin("");
+    await changed("Win logged. Self-reviews and promotion cases will find it.");
+  }
+
   async function handleExport() {
     const blob = new Blob([await exportVault()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -127,6 +136,37 @@ export function VaultManager() {
   return (
     <div className="space-y-8">
       {(status || error) && <p className={error ? "form-error" : "text-[13px] font-medium text-emerald-700"}>{error || status}</p>}
+
+      {/* Wins log */}
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5">
+        <h2 className="text-[15px] font-bold text-zinc-900">Log a win</h2>
+        <p className="mt-1 text-[13px] text-zinc-600">
+          One line, the moment it happens. Come review season, Self-Review and Promotion Case write from these.
+          {(() => {
+            const year = new Date().getFullYear();
+            const n = chunks.filter((c) => c.kind === "win" && new Date(c.createdAt).getFullYear() === year).length;
+            return n ? ` ${n} logged this year.` : "";
+          })()}
+        </p>
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void logWin();
+          }}
+        >
+          <input
+            className="field-control"
+            value={quickWin}
+            maxLength={500}
+            onChange={(e) => setQuickWin(e.target.value)}
+            placeholder="e.g. Shipped the refunds API two weeks early; support tickets down 30%"
+          />
+          <button type="submit" className="cta-primary shrink-0 disabled:opacity-50" disabled={!quickWin.trim()}>
+            Log it
+          </button>
+        </form>
+      </section>
 
       {/* Profile */}
       <section className="rounded-xl border border-zinc-200 p-5">

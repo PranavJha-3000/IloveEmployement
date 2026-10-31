@@ -16,7 +16,11 @@ export type ReportKind =
   | "star"
   | "mockPlan"
   | "answerEval"
-  | "offers";
+  | "offers"
+  | "roast"
+  | "court"
+  | "aura"
+  | "bingo";
 
 /** Outside evidence the server may fetch for a run. */
 export type ExternalSource = "github";
@@ -59,7 +63,7 @@ export interface MessagePreset extends PresetBase {
 }
 
 export interface ReportPreset extends PresetBase {
-  engine: "match" | "tailor" | "interview" | "offer";
+  engine: "match" | "tailor" | "interview" | "offer" | "fun";
   output: ReportKind;
   sources?: ExternalSource[];
 }

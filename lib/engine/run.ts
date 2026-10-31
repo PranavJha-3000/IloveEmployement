@@ -107,6 +107,13 @@ Evidence rules (non-negotiable):
 ${SHARED_RULES}
 - Professional tone. A single dry line of humour is fine where a field invites it; never mock the user.`;
 
+const FUN_RULES = `
+
+Comedy rules for this tool:
+- Roast the DOCUMENT and the career material, never the person. No jokes about or hints at race, ethnicity, gender, age, disability, religion, nationality, caste, sexual orientation, family status, appearance, health, or the origin of a name.
+- Every joke lands on something that is actually in the material, quoted verbatim where a quote is asked for. Anything you can't quote gets removed before the user sees it.
+- Every joke comes with a real, useful fix. Funny first, useful always. Allowed slang (sparingly): cooked, NPC, aura, delulu, skill issue, rizz, locked in.`;
+
 function buildBlocks(
   preset: Preset,
   inputs: Record<string, string>,
@@ -238,7 +245,7 @@ export async function runPreset(preset: Preset, body: RunRequestBody, ip: string
 
   const isMessage = preset.engine === "message";
   const schema: z.ZodTypeAny = isMessage ? messageSchema : REPORT_SCHEMAS[preset.output];
-  const system = isMessage ? MESSAGE_SYSTEM : REPORT_SYSTEM;
+  const system = isMessage ? MESSAGE_SYSTEM : preset.engine === "fun" ? REPORT_SYSTEM + FUN_RULES : REPORT_SYSTEM;
 
   try {
     let { object, usage } = await generateStructured(access.config, schema, system, prompt, isMessage ? 0.6 : 0.3);

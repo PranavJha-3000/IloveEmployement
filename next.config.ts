@@ -23,6 +23,13 @@ const RETIRED_ROUTES: Record<string, string> = {
   "/interview-boss-fight": "/tools/mock-interview",
   "/star-answer-builder": "/tools/star-story-builder",
   "/tell-me-about-yourself": "/tools/tell-me-about-yourself",
+  "/resume-roast": "/tools/resume-roast",
+  "/rizz-score": "/tools/resume-roast",
+  "/skill-issue": "/tools/resume-roast",
+  "/ats-boss-fight": "/tools/resume-roast",
+  "/resume-court": "/tools/resume-court",
+  "/employment-aura": "/tools/employment-aura",
+  "/cooked-meter": "/tools/job-fit-checker",
 };
 
 const nextConfig: NextConfig = {

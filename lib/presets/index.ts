@@ -1,4 +1,5 @@
 import type { PresetCategory } from "../engine/types";
+import { FUN_PRESETS } from "./fun";
 import { INTERVIEW_PRESETS } from "./interview";
 import { MATCH_PRESETS } from "./match";
 import { MESSAGE_PRESETS } from "./message";
@@ -8,7 +9,7 @@ import type { Preset } from "./types";
 
 export type { Preset, MessagePreset, ReportPreset } from "./types";
 
-export const PRESETS: Preset[] = [...MATCH_PRESETS, ...TAILOR_PRESETS, ...INTERVIEW_PRESETS, ...OFFER_PRESETS, ...MESSAGE_PRESETS];
+export const PRESETS: Preset[] = [...MATCH_PRESETS, ...TAILOR_PRESETS, ...INTERVIEW_PRESETS, ...OFFER_PRESETS, ...MESSAGE_PRESETS, ...FUN_PRESETS];
 
 /** Presets with their own page and card (hidden ones are internal steps of another tool). */
 export const PUBLIC_PRESETS = PRESETS.filter((p) => !p.hidden);

@@ -343,6 +343,7 @@ export function PresetRunner({ presetId }: { presetId: string }) {
             meta={result.meta}
             sentChunks={result.sent}
             profileName={profile.name}
+            share={{ name: preset.name, slug: preset.slug }}
             onSaveStory={async (title, text) => {
               await saveChunks([manualChunk("story", title, text, "star")]);
               announceVaultChange();

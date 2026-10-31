@@ -64,8 +64,8 @@ The marketplace (`lib/tools.ts`), header menus and `/tools/[slug]` pages (static
 ## Testing and evals
 
 - `npm test`: deterministic unit tests (scoring, finalizers, grounding, injection gate, context, chunker, retrieval, fusion) plus full-pipeline tests through `runPreset` with a scripted `MockLanguageModelV1` (fenced injection, dropped fake citations, review loop, free-tier limits, error redaction, both structured-output paths).
-- `npm run eval`: golden cases against a real model with behavioural expectations and guardrail metrics; writes `evals/REPORT.md`.
-- CI: typecheck, tests and build on push and PR.
+- `npm run eval`: the LLM eval harness. Runs 28 cases across the six engines against one or more models side by side, with a disk cache and request throttle for free-tier quotas, and prints a request estimate first. An LLM judge scores outputs on `evals/llm/RUBRIC.md`; the report adds citation precision and fabrication rate, and cost is computed from `evals/llm/prices.ts`. Main flags: `--dry`, `--estimate`, `--list-models`, `--models`, `--judge`, `--cases`, `--limit`, `--rpm`, `--max-requests`, `--labels-sheet` (blind offline labelling sheet) and `--agreement` (judge vs hand labels). Full runs write `evals/LLM.md`; partial runs write `evals/results/LLM.preview.md`. Keys come from `EVAL_*` variables (see `.env.example`), falling back to `FREE_TIER_*`. `evals/REPORT.md` is retired in favour of `evals/LLM.md`.
+- CI: typecheck, tests and build on push and PR; the CI job is keyless. The Evals workflow is manual (`workflow_dispatch`) and uses repository secrets only.
 
 ## Out of scope (deliberately)
 

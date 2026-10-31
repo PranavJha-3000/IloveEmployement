@@ -1,24 +1,26 @@
 ﻿// ─── Tool Marketplace Data ──────────────────────────────────────────────────
 // Maps every tool card on the landing page to its category, icon, and the
-// route it opens. Every tool lives at its own route under app/<tool>/ —
+// route it opens. Hand-built tools live at app/<tool>/; engine presets from
+// lib/presets are appended at the bottom and open /tools/<slug>.
 // app/page.tsx pushes tool.target via the router. (JD Translator additionally
 // opens as an in-page overlay on the home page via the navbar/footer.)
 
-export type CategoryId =
-  "all" | "analyze" | "optimize" | "investigate" | "prepare" | "chaos";
+import type { PresetCategory } from "./engine/types";
+import { PRESETS, PRESET_CATEGORY_LABELS } from "./presets";
+
+export type CategoryId = "all" | PresetCategory;
 
 export interface Category {
   id: CategoryId;
   label: string;
 }
 
+/** Ordered along the employment lifecycle, from finding a job to growing in it. */
+const CATEGORY_ORDER: PresetCategory[] = ["target", "materials", "outreach", "interview", "offer", "transition", "work", "growth", "fun"];
+
 export const CATEGORIES: Category[] = [
   { id: "all", label: "All" },
-  { id: "analyze", label: "Analyze" },
-  { id: "optimize", label: "Optimize" },
-  { id: "investigate", label: "Investigate" },
-  { id: "prepare", label: "Prepare" },
-  { id: "chaos", label: "Chaos" },
+  ...CATEGORY_ORDER.map((id) => ({ id, label: PRESET_CATEGORY_LABELS[id] })),
 ];
 
 export interface Tool {
@@ -102,7 +104,7 @@ export const TOOLS: Tool[] = [
     id: "resume-analyzer",
     name: "Resume Analyzer",
     description: "Find out how badly your resume matches the job.",
-    category: "analyze",
+    category: "materials",
     iconPaths: [I.fileSearch],
     accent: "#2563eb",
     tint: "#eff6ff",
@@ -113,7 +115,7 @@ export const TOOLS: Tool[] = [
     name: "Resume Roast",
     description:
       "A brutally honest diagnosis of what a recruiter is really thinking.",
-    category: "analyze",
+    category: "fun",
     iconPaths: [I.flame],
     accent: "#dc2626",
     tint: "#fef2f2",
@@ -124,7 +126,7 @@ export const TOOLS: Tool[] = [
     name: "Resume Rewriter",
     description:
       "Reposition your real experience for the target job. Truth filter always on.",
-    category: "optimize",
+    category: "materials",
     iconPaths: [I.penLine],
     accent: "#2563eb",
     tint: "#eff6ff",
@@ -135,7 +137,7 @@ export const TOOLS: Tool[] = [
     name: "Resume Fixer",
     description:
       "Find the weak sections and fix only what needs fixing. No full rewrite.",
-    category: "optimize",
+    category: "materials",
     iconPaths: [I.wrench],
     accent: "#059669",
     tint: "#ecfdf5",
@@ -146,7 +148,7 @@ export const TOOLS: Tool[] = [
     name: "Bullet Point Fixer",
     description:
       "Transform weak bullets into impact-oriented statements. Fix that bullet.",
-    category: "optimize",
+    category: "materials",
     iconPaths: [I.listChecks],
     accent: "#7c3aed",
     tint: "#f5f3ff",
@@ -156,7 +158,7 @@ export const TOOLS: Tool[] = [
     id: "job-fit",
     name: "Job Fit Checker",
     description: "Should you apply, or are you absolutely cooked?",
-    category: "analyze",
+    category: "target",
     iconPaths: [I.target],
     accent: "#059669",
     tint: "#ecfdf5",
@@ -167,7 +169,7 @@ export const TOOLS: Tool[] = [
     name: "Delulu Detector",
     description:
       "Are you qualified, or are we being delulu? Career-reality check.",
-    category: "analyze",
+    category: "target",
     iconPaths: [I.glasses],
     accent: "#7c3aed",
     tint: "#f5f3ff",
@@ -177,7 +179,7 @@ export const TOOLS: Tool[] = [
     id: "ats-checker",
     name: "ATS Checker",
     description: "See whether the resume robots can actually understand you.",
-    category: "analyze",
+    category: "materials",
     iconPaths: [I.robot],
     accent: "#7c3aed",
     tint: "#f5f3ff",
@@ -187,7 +189,7 @@ export const TOOLS: Tool[] = [
     id: "jd-translator",
     name: "JD Translator",
     description: "Decode corporate yapping into human language.",
-    category: "analyze",
+    category: "target",
     iconPaths: [I.languages],
     accent: "#d97706",
     tint: "#fffbeb",
@@ -200,7 +202,7 @@ export const TOOLS: Tool[] = [
     id: "linkedin-optimizer",
     name: "LinkedIn Optimizer",
     description: "Make your LinkedIn less NPC.",
-    category: "optimize",
+    category: "materials",
     iconPaths: [I.linkedin],
     accent: "#1d4ed8",
     tint: "#eff6ff",
@@ -211,22 +213,11 @@ export const TOOLS: Tool[] = [
     name: "Cover Letter Generator",
     description:
       "Write a job-specific cover letter without sounding like ChatGPT.",
-    category: "optimize",
+    category: "materials",
     iconPaths: [I.mail],
     accent: "#d97706",
     tint: "#fffbeb",
     target: "/cover-letter-generator",
-  },
-  {
-    id: "recruiter-message",
-    name: "Recruiter Message",
-    description:
-      "Generate a cold message that doesn't immediately scream desperation.",
-    category: "optimize",
-    iconPaths: [I.messages],
-    accent: "#7c3aed",
-    tint: "#f5f3ff",
-    target: "/recruiter-message",
   },
 
   // INVESTIGATE
@@ -234,7 +225,7 @@ export const TOOLS: Tool[] = [
     id: "jd-red-flags",
     name: "JD Red Flag Scanner",
     description: "Find the suspicious parts of the job description.",
-    category: "investigate",
+    category: "target",
     iconPaths: [I.shieldAlert],
     accent: "#dc2626",
     tint: "#fef2f2",
@@ -244,7 +235,7 @@ export const TOOLS: Tool[] = [
     id: "skill-gap",
     name: "Skill Gap Analyzer",
     description: "See exactly what you're missing for the role.",
-    category: "investigate",
+    category: "target",
     iconPaths: [I.gap],
     accent: "#2563eb",
     tint: "#eff6ff",
@@ -254,7 +245,7 @@ export const TOOLS: Tool[] = [
     id: "github-check",
     name: "GitHub Resume Checker",
     description: "Find out whether your GitHub actually backs up your resume.",
-    category: "investigate",
+    category: "materials",
     iconPaths: [I.github],
     accent: "#0f172a",
     tint: "#f1f5f9",
@@ -264,7 +255,7 @@ export const TOOLS: Tool[] = [
     id: "truth-detector",
     name: "Resume Truth Detector",
     description: "Separate actual evidence from trust-me-bro claims.",
-    category: "investigate",
+    category: "materials",
     iconPaths: [I.scale],
     accent: "#d97706",
     tint: "#fffbeb",
@@ -274,7 +265,7 @@ export const TOOLS: Tool[] = [
     id: "recruiter-simulator",
     name: "Recruiter Simulator",
     description: "See what a recruiter is likely to notice in 30 seconds.",
-    category: "investigate",
+    category: "interview",
     iconPaths: [I.eye],
     accent: "#7c3aed",
     tint: "#f5f3ff",
@@ -286,7 +277,7 @@ export const TOOLS: Tool[] = [
     id: "interview-prep",
     name: "Interview Prep",
     description: "Generate questions based on your resume and the actual JD.",
-    category: "prepare",
+    category: "interview",
     iconPaths: [I.clipboardList],
     accent: "#0891b2",
     tint: "#ecfeff",
@@ -296,7 +287,7 @@ export const TOOLS: Tool[] = [
     id: "boss-fight",
     name: "Interview Boss Fight",
     description: "Get interrogated before the interviewer gets the chance.",
-    category: "prepare",
+    category: "interview",
     iconPaths: [I.swords],
     accent: "#dc2626",
     tint: "#fef2f2",
@@ -306,7 +297,7 @@ export const TOOLS: Tool[] = [
     id: "star-builder",
     name: "STAR Answer Builder",
     description: "Turn your messy experience into interview-ready answers.",
-    category: "prepare",
+    category: "interview",
     iconPaths: [I.star],
     accent: "#d97706",
     tint: "#fffbeb",
@@ -316,7 +307,7 @@ export const TOOLS: Tool[] = [
     id: "tell-me-about",
     name: "Tell Me About Yourself",
     description: "Build the answer everyone asks and nobody likes preparing.",
-    category: "prepare",
+    category: "interview",
     iconPaths: [I.userCircle],
     accent: "#059669",
     tint: "#ecfdf5",
@@ -326,7 +317,7 @@ export const TOOLS: Tool[] = [
     id: "weakness-detector",
     name: "Weakness Detector",
     description: "Find the questions most likely to expose your skill gaps.",
-    category: "prepare",
+    category: "interview",
     iconPaths: [I.zap],
     accent: "#7c3aed",
     tint: "#f5f3ff",
@@ -338,7 +329,7 @@ export const TOOLS: Tool[] = [
     id: "employment-aura",
     name: "Employment Aura",
     description: "Measure your current employment aura.",
-    category: "chaos",
+    category: "fun",
     iconPaths: [I.gauge],
     accent: "#db2777",
     tint: "#fdf2f8",
@@ -348,7 +339,7 @@ export const TOOLS: Tool[] = [
     id: "rizz-score",
     name: "Rizz Score",
     description: "How convincing is this application, really?",
-    category: "chaos",
+    category: "fun",
     iconPaths: [I.sparkles],
     accent: "#dc2626",
     tint: "#fef2f2",
@@ -358,7 +349,7 @@ export const TOOLS: Tool[] = [
     id: "cooked-meter",
     name: "Cooked Meter",
     description: "See how cooked you are for this particular job.",
-    category: "chaos",
+    category: "fun",
     iconPaths: [I.skull],
     accent: "#525252",
     tint: "#f5f5f5",
@@ -368,7 +359,7 @@ export const TOOLS: Tool[] = [
     id: "resume-court",
     name: "Resume Court",
     description: "Put your resume claims on trial.",
-    category: "chaos",
+    category: "fun",
     iconPaths: [I.gavel],
     accent: "#b45309",
     tint: "#fffbeb",
@@ -378,7 +369,7 @@ export const TOOLS: Tool[] = [
     id: "ats-boss-fight",
     name: "ATS Boss Fight",
     description: "Fight the robots. Again.",
-    category: "chaos",
+    category: "fun",
     iconPaths: [I.gamepad],
     accent: "#4f46e5",
     tint: "#eef2ff",
@@ -388,13 +379,41 @@ export const TOOLS: Tool[] = [
     id: "skill-issue",
     name: "Skill Issue",
     description: "Find out exactly why you're getting rejected.",
-    category: "chaos",
+    category: "fun",
     iconPaths: [I.bug],
     accent: "#059669",
     tint: "#ecfdf5",
     target: "/skill-issue",
   },
 ];
+
+// ─── Engine presets ──────────────────────────────────────────────────────────
+// Accent/tint per category keeps preset cards visually grouped.
+const CATEGORY_COLORS: Record<PresetCategory, { accent: string; tint: string }> = {
+  target: { accent: "#059669", tint: "#ecfdf5" },
+  materials: { accent: "#2563eb", tint: "#eff6ff" },
+  outreach: { accent: "#7c3aed", tint: "#f5f3ff" },
+  interview: { accent: "#0891b2", tint: "#ecfeff" },
+  offer: { accent: "#d97706", tint: "#fffbeb" },
+  transition: { accent: "#b45309", tint: "#fff7ed" },
+  work: { accent: "#475569", tint: "#f1f5f9" },
+  growth: { accent: "#16a34a", tint: "#f0fdf4" },
+  fun: { accent: "#db2777", tint: "#fdf2f8" },
+};
+
+for (const preset of PRESETS) {
+  TOOLS.push({
+    id: preset.id,
+    name: preset.name,
+    description: preset.tagline,
+    category: preset.category,
+    iconPaths: [I[preset.icon as keyof typeof I] ?? I.messages],
+    ...CATEGORY_COLORS[preset.category],
+    target: `/tools/${preset.slug}`,
+  });
+}
+
+TOOLS.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
 
 // Guards the marketplace against duplicate entries sneaking back in: the grid
 // keys cards by `id`, so a repeated id renders the same tool twice and React

@@ -12,13 +12,13 @@ import { NavDropdown } from "./NavDropdown";
  */
 
 /** Promoted to always-visible links beside the logo, like iLovePDF's top picks. */
-const HERO_TOOL_IDS = ["resume-analyzer", "resume-roast"];
+const HERO_TOOL_IDS = ["resume-analyzer"];
 
 /**
- * Dropdown groups. The five marketplace categories collapse into three menus so
- * the bar stays at five items (two hero links + three menus). Each menu names
- * the categories it draws from instead of listing tools, so adding a tool to
- * lib/tools.ts is still all it takes for it to appear here.
+ * Dropdown groups. The lifecycle categories collapse into four menus so the
+ * bar stays short. Each menu names the categories it draws from instead of
+ * listing tools, so adding a tool to lib/tools.ts (or a preset to
+ * lib/presets) is still all it takes for it to appear here.
  */
 const NAV_MENUS: {
   id: string;
@@ -26,19 +26,10 @@ const NAV_MENUS: {
   categories: Exclude<CategoryId, "all">[];
   columns: 1 | 2 | 3;
 }[] = [
-  {
-    id: "resume-tools",
-    label: "Resume Tools",
-    categories: ["analyze", "optimize"],
-    columns: 2,
-  },
-  {
-    id: "research-prep",
-    label: "Research & Prep",
-    categories: ["investigate", "prepare"],
-    columns: 2,
-  },
-  { id: "chaos", label: "Chaos", categories: ["chaos"], columns: 2 },
+  { id: "job-search", label: "Job Search", categories: ["target", "materials"], columns: 2 },
+  { id: "apply-interview", label: "Apply & Interview", categories: ["outreach", "interview", "offer"], columns: 2 },
+  { id: "work-career", label: "Work & Career", categories: ["transition", "work", "growth"], columns: 2 },
+  { id: "fun", label: "Fun", categories: ["fun"], columns: 2 },
 ];
 
 interface HeaderProps {
@@ -140,7 +131,7 @@ export function Header({ onOpenTranslator }: HeaderProps) {
                 key={tool.id}
                 type="button"
                 onClick={openTranslator}
-                className="rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+                className="whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
               >
                 {tool.name}
               </button>
@@ -148,7 +139,7 @@ export function Header({ onOpenTranslator }: HeaderProps) {
               <Link
                 key={tool.id}
                 href={tool.target}
-                className="rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+                className="whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
               >
                 {tool.name}
               </Link>
@@ -185,14 +176,12 @@ export function Header({ onOpenTranslator }: HeaderProps) {
             columns={3}
           />
 
-          <button
-            className="ml-2 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-2 text-[13px] font-medium text-zinc-400 cursor-not-allowed select-none"
-            disabled
-            aria-disabled
-            title="Coming soon"
+          <Link
+            href="/vault"
+            className="ml-2 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-4 py-2 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:text-zinc-900"
           >
-            Dashboard
-          </button>
+            Career Vault
+          </Link>
         </div>
       </div>
 
@@ -275,13 +264,13 @@ export function Header({ onOpenTranslator }: HeaderProps) {
           ))}
 
           <div className="mt-5 border-t border-zinc-100 pt-4">
-            <button
-              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-400 cursor-not-allowed select-none"
-              disabled
-              aria-disabled
+            <Link
+              href="/vault"
+              onClick={() => setMobileOpen(false)}
+              className="block w-full rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-zinc-700"
             >
-              Dashboard (Coming Soon)
-            </button>
+              Career Vault
+            </Link>
           </div>
         </div>
       )}

@@ -131,7 +131,7 @@ export function NavDropdown({
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => onOpenChange(!open)}
-        className="flex items-center gap-1 rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+        className="flex items-center gap-1 whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
       >
         {icon}
         {label}

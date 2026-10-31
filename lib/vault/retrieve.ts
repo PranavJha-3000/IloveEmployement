@@ -66,7 +66,15 @@ export function retrieveVault(chunks: VaultChunk[], query: string, limit = 8, se
     ranked = [...pool].filter((c) => c.kind !== "experience").sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  // Diversity: at most 3 chunks under the same role/title.
+  return selectWithAnchor(summary, ranked, limit);
+}
+
+/**
+ * Diversity (at most 3 chunks per title) plus summary anchoring. Exported for
+ * the retrieval eval harness so embeddings-only is measured on equal terms.
+ */
+export function selectWithAnchor(summary: VaultChunk | undefined, ranked: VaultChunk[], limit: number): VaultContextChunk[] {
+  const toContext = (c: VaultChunk): VaultContextChunk => ({ id: c.id, kind: c.kind, title: c.title, text: c.text });
   const perTitle = new Map<string, number>();
   const picked: VaultChunk[] = [];
   for (const c of ranked) {

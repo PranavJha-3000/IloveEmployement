@@ -10,7 +10,9 @@ import type { VaultChunk } from "../engine/types";
 import { contentHash } from "../retrieval/fusion";
 import { loadVectors, saveVectors, type StoredVector } from "./store";
 
-export const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
+import { EMBEDDING_MODEL, EMBEDDING_DTYPE, embeddingText } from "../retrieval/embedText";
+
+export { EMBEDDING_MODEL };
 
 type Extractor = (texts: string[], opts: { pooling: "mean"; normalize: boolean }) => Promise<{ tolist(): number[][] }>;
 
@@ -23,7 +25,7 @@ export function loadEmbedder(onProgress?: (pct: number) => void): Promise<Extrac
       const { pipeline, env } = await import("@huggingface/transformers");
       env.allowLocalModels = false;
       const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, {
-        dtype: "q8",
+        dtype: EMBEDDING_DTYPE,
         progress_callback: (p: { status: string; progress?: number }) => {
           if (p.status === "progress" && typeof p.progress === "number") onProgress?.(Math.round(p.progress));
         },
@@ -43,7 +45,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   return out.tolist();
 }
 
-const chunkText = (c: Pick<VaultChunk, "title" | "text">) => `${c.title}: ${c.text}`;
+const chunkText = embeddingText;
 
 /** Which chunks have a current embedding. */
 export async function indexStatus(chunks: VaultChunk[]): Promise<{ indexed: number; total: number; vectors: StoredVector[] }> {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { VaultChunk } from "../engine/types";
 import { semanticRanking } from "../retrieval/fusion";
+import { embeddingQuery } from "../retrieval/embedText";
 import type { StoredVector } from "./store";
 import { embedTexts, indexStatus } from "./embeddings";
 
@@ -35,7 +36,7 @@ export function useSemanticOrder(chunks: VaultChunk[], query: string, enabled: b
     }
     let live = true;
     const t = setTimeout(() => {
-      embedTexts([query.slice(0, 2000)])
+      embedTexts([embeddingQuery(query)])
         .then(([q]) => live && setOrder(semanticRanking(q, vectors)))
         .catch(() => live && setOrder(null));
     }, 350);

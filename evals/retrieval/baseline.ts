@@ -49,7 +49,7 @@ export function compareToBaseline(
 
   if (fingerprintMismatch) {
     regressions.push(
-      "dataset fingerprint differs from baseline: run `npm run eval:retrieval -- --update-baseline` and commit the new baseline.json together with the dataset change",
+      "dataset fingerprint differs from baseline: run `npm run eval:retrieval -- --update-baseline --dataset-changed` and commit the new baseline.json together with the dataset change",
     );
   }
 
@@ -93,12 +93,33 @@ export interface BaselineUpdatePlan {
   improvements: string[];
 }
 
-export function planBaselineUpdate(oldRaw: unknown | null, next: KeywordBaseline, allowRegression: boolean): BaselineUpdatePlan {
+export interface BaselineUpdateOptions {
+  /** --allow-regression: accept lower metrics, or overwrite an unreadable/invalid old baseline. */
+  allowRegression: boolean;
+  /** --dataset-changed: accept a new dataset fingerprint (a deliberate re-record). */
+  datasetChanged?: boolean;
+}
+
+/**
+ * Decides whether --update-baseline may overwrite baseline.json. Fails closed: an
+ * invalid old baseline (nothing to compare against) needs --allow-regression, a
+ * dataset fingerprint change needs --dataset-changed, and any drop beyond epsilon
+ * needs --allow-regression, so a reviewer always sees a deliberate flag.
+ */
+export function planBaselineUpdate(oldRaw: unknown | null, next: KeywordBaseline, opts: BaselineUpdateOptions): BaselineUpdatePlan {
+  const { allowRegression, datasetChanged = false } = opts;
   const plan: BaselineUpdatePlan = { write: true, warnings: [], errors: [], improvements: [] };
   if (oldRaw === null || oldRaw === undefined) return plan;
   const old = validateBaseline(oldRaw);
   if (!old.ok) {
     plan.warnings.push(`previous baseline.json is invalid: ${old.problems.join("; ")}`);
+    if (!allowRegression) {
+      plan.write = false;
+      plan.errors.push(
+        "Refusing to overwrite an invalid baseline.json: without a valid previous baseline a drop cannot be detected. " +
+          "Restore it from git, or pass --allow-regression and explain the re-record in the commit message.",
+      );
+    }
     return plan;
   }
   const { recordedAt: _recordedAt, ...rest } = next;
@@ -108,6 +129,13 @@ export function planBaselineUpdate(oldRaw: unknown | null, next: KeywordBaseline
   plan.improvements.push(...cmp.improvements);
   if (old.baseline.fingerprint !== next.fingerprint) {
     plan.warnings.push(`dataset fingerprint changes ${old.baseline.fingerprint} -> ${next.fingerprint}`);
+    if (!datasetChanged) {
+      plan.write = false;
+      plan.errors.push(
+        "Refusing to re-record the baseline for a changed dataset. Pass --dataset-changed to confirm the dataset change is " +
+          "intended, and commit baseline.json together with it.",
+      );
+    }
   }
   if (cmp.regressions.length > 0 && !allowRegression) {
     plan.write = false;

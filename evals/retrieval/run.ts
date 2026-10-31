@@ -1,5 +1,5 @@
 // Retrieval eval runner. Flags: --ci, --update-baseline, --allow-regression,
-// --strategies a,b, --report <path>, --repeat <n>. Keyword-only runs never load the embedder.
+// --dataset-changed, --strategies a,b, --report <path>, --repeat <n>. Keyword-only runs never load the embedder.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -84,6 +84,7 @@ async function main(): Promise<void> {
   const ci = args.includes("--ci");
   const update = args.includes("--update-baseline");
   const allowRegression = args.includes("--allow-regression");
+  const datasetChanged = args.includes("--dataset-changed");
   const repeat = Math.max(1, Number(argValue(args, "--repeat") ?? 3) || 3);
   const reportPath = argValue(args, "--report") ?? path.join("evals", "RETRIEVAL.md");
   const requested = ci || update ? ["keyword"] : argValue(args, "--strategies")?.split(",").map((s) => s.trim()).filter(Boolean);
@@ -288,7 +289,7 @@ async function main(): Promise<void> {
         oldRaw = text;
       }
     }
-    const plan = planBaselineUpdate(oldRaw, baseline, allowRegression);
+    const plan = planBaselineUpdate(oldRaw, baseline, { allowRegression, datasetChanged });
     for (const w of plan.warnings) console.log(`WARNING ${w}`);
     for (const i of plan.improvements) console.log(`improvement ${i}`);
     if (!plan.write) {

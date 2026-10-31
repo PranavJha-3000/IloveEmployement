@@ -101,50 +101,74 @@ describe("compareToBaseline fail-closed", () => {
 });
 
 describe("planBaselineUpdate", () => {
+  const strict = { allowRegression: false };
   const lowered = (by: number): KeywordBaseline => ({
     ...baseline,
     overall: { ...baseline.overall, "ndcg@8": baseline.overall["ndcg@8"] + by },
   });
 
   it("writes on first recording", () => {
-    const plan = planBaselineUpdate(null, baseline, false);
+    const plan = planBaselineUpdate(null, baseline, strict);
     assert.equal(plan.write, true);
     assert.deepEqual(plan.errors, []);
   });
 
   it("refuses a drop without the flag and warns", () => {
-    const plan = planBaselineUpdate(baseline, lowered(-0.01), false);
+    const plan = planBaselineUpdate(baseline, lowered(-0.01), strict);
     assert.equal(plan.write, false);
     assert.ok(plan.errors.length > 0);
     assert.ok(plan.warnings.join("\n").includes("overall ndcg@8"));
   });
 
   it("allows a drop with allowRegression and keeps warnings", () => {
-    const plan = planBaselineUpdate(baseline, lowered(-0.01), true);
+    const plan = planBaselineUpdate(baseline, lowered(-0.01), { allowRegression: true });
     assert.equal(plan.write, true);
     assert.ok(plan.warnings.join("\n").includes("overall ndcg@8"));
   });
 
   it("writes improvements and within-epsilon changes", () => {
-    const up = planBaselineUpdate(baseline, lowered(0.05), false);
+    const up = planBaselineUpdate(baseline, lowered(0.05), strict);
     assert.equal(up.write, true);
     assert.deepEqual(up.errors, []);
     assert.ok(up.improvements.length > 0);
-    const tiny = planBaselineUpdate(baseline, lowered(-BASELINE_EPSILON / 2), false);
+    const tiny = planBaselineUpdate(baseline, lowered(-BASELINE_EPSILON / 2), strict);
     assert.equal(tiny.write, true);
   });
 
-  it("fingerprint change alone writes; with a drop it is still refused", () => {
-    const fp = planBaselineUpdate(baseline, { ...baseline, fingerprint: "zzz" }, false);
-    assert.equal(fp.write, true);
+  it("fingerprint change is refused without --dataset-changed", () => {
+    const fp = planBaselineUpdate(baseline, { ...baseline, fingerprint: "zzz" }, strict);
+    assert.equal(fp.write, false);
+    assert.ok(fp.errors.join("\n").includes("--dataset-changed"));
     assert.ok(fp.warnings.join("\n").includes("abc"));
-    const both = planBaselineUpdate(baseline, { ...lowered(-0.01), fingerprint: "zzz" }, false);
-    assert.equal(both.write, false);
+    // --allow-regression alone does not accept a dataset change.
+    assert.equal(planBaselineUpdate(baseline, { ...baseline, fingerprint: "zzz" }, { allowRegression: true }).write, false);
+    const ok = planBaselineUpdate(baseline, { ...baseline, fingerprint: "zzz" }, { allowRegression: false, datasetChanged: true });
+    assert.equal(ok.write, true);
+    assert.deepEqual(ok.errors, []);
   });
 
-  it("writes with a warning when the old baseline is invalid", () => {
-    const plan = planBaselineUpdate({ nope: true }, baseline, false);
+  it("fingerprint change with a drop needs both flags", () => {
+    const next = { ...lowered(-0.01), fingerprint: "zzz" };
+    assert.equal(planBaselineUpdate(baseline, next, { allowRegression: false, datasetChanged: true }).write, false);
+    assert.equal(planBaselineUpdate(baseline, next, { allowRegression: true, datasetChanged: false }).write, false);
+    assert.equal(planBaselineUpdate(baseline, next, { allowRegression: true, datasetChanged: true }).write, true);
+  });
+
+  it("refuses to overwrite an invalid old baseline without --allow-regression", () => {
+    const corrupted = clone();
+    corrupted.overall.mrr = "x";
+    for (const bad of [{ nope: true }, "not json {", corrupted]) {
+      const plan = planBaselineUpdate(bad, lowered(-0.2), strict);
+      assert.equal(plan.write, false);
+      assert.ok(plan.warnings.join("\n").includes("previous baseline.json is invalid"));
+      assert.ok(plan.errors.join("\n").includes("--allow-regression"));
+    }
+  });
+
+  it("overwrites an invalid old baseline with --allow-regression and keeps the warning", () => {
+    const plan = planBaselineUpdate({ nope: true }, baseline, { allowRegression: true });
     assert.equal(plan.write, true);
+    assert.deepEqual(plan.errors, []);
     assert.ok(plan.warnings.join("\n").includes("previous baseline.json is invalid"));
   });
 });

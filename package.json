@@ -9,7 +9,9 @@
     "lint": "next lint",
     "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
     "typecheck": "tsc --noEmit -p .",
-    "eval": "tsc -p tsconfig.eval.json && node .eval-build/evals/run.js"
+    "eval": "tsc -p tsconfig.eval.json && node .eval-build/evals/run.js",
+    "eval:retrieval": "tsc -p tsconfig.eval.json && node .eval-build/evals/retrieval/run.js",
+    "eval:retrieval:dump": "tsc -p tsconfig.eval.json && node .eval-build/evals/retrieval/dump.js"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.0",

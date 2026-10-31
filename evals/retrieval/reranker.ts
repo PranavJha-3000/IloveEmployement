@@ -36,6 +36,7 @@ export async function createNodeReranker(
   })) as unknown as SeqModel;
   const loadMs = performance.now() - t0;
 
+  let loggedDims = false;
   const score: PairScorer = async (query, passages) => {
     if (passages.length === 0) return [];
     const inputs = tokenizer(passages.map(() => query), { text_pair: passages, padding: true, truncation: true });
@@ -48,7 +49,12 @@ export async function createNodeReranker(
     else throw new Error(`Unsupported reranker logits dims [${dims.join(", ")}]`);
     if (out.length !== passages.length) throw new Error(`Reranker returned ${out.length} scores for ${passages.length} passages`);
     if (!out.every((s) => typeof s === "number" && Number.isFinite(s))) throw new Error("Reranker returned a non-finite score");
-    log(`logits dims [${dims.join(", ")}]`);
+    // Log the logits shape once: score() runs inside timed retrieve() calls,
+    // so per-call stdout writes would inflate the measured rerank latency.
+    if (!loggedDims) {
+      loggedDims = true;
+      log(`logits dims [${dims.join(", ")}]`);
+    }
     return out;
   };
 

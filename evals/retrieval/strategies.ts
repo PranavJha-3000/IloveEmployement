@@ -6,7 +6,8 @@
 
 import type { VaultChunk, VaultContextChunk } from "../../lib/engine/types";
 import { semanticRanking } from "../../lib/retrieval/fusion";
-import { RERANK_TOP_N, rerankCandidates, type PairScorer } from "../../lib/retrieval/rerank";
+import { rerankCandidates, type PairScorer } from "../../lib/retrieval/rerank";
+import { RERANK_CANDIDATES, SENSITIVITY_STRATEGIES } from "./decision";
 import { WHOLE_RESUME_LIMIT, rankBySemantic, rankVault, retrieveVault, selectWithAnchor } from "../../lib/vault/retrieve";
 
 export interface EmbeddingInput {
@@ -25,6 +26,8 @@ export interface RetrievalStrategy {
   id: string;
   label: string;
   needsEmbeddings: boolean;
+  /** Rerank strategies only: how many base candidates the cross-encoder reorders. */
+  topN?: number;
   prepare?: () => Promise<void>;
   retrieve(input: StrategyInput): VaultContextChunk[] | Promise<VaultContextChunk[]>;
 }
@@ -66,6 +69,8 @@ function loadNodeScorer(): Promise<PairScorer> {
   return scorerMemo;
 }
 
+const BASE_LABEL = { hybrid: "Hybrid", embeddings: "Embeddings" } as const;
+
 export const STRATEGIES: RetrievalStrategy[] = [
   {
     id: "keyword",
@@ -92,34 +97,26 @@ export const STRATEGIES: RetrievalStrategy[] = [
       return retrieveVault(input.chunks, input.query, input.limit, semanticRanking(queryVector, chunkVectors));
     },
   },
-  createRerankStrategy({
-    id: "hybrid+rerank",
-    label: "Hybrid + cross-encoder rerank (top 20)",
-    base: "hybrid",
-    topN: RERANK_TOP_N,
-    loadScorer: loadNodeScorer,
-  }),
-  createRerankStrategy({
-    id: "embeddings+rerank",
-    label: "Embeddings + cross-encoder rerank (top 20)",
-    base: "embeddings",
-    topN: RERANK_TOP_N,
-    loadScorer: loadNodeScorer,
-  }),
-  createRerankStrategy({
-    id: "hybrid+rerank@30",
-    label: "Hybrid + cross-encoder rerank (top 30, sensitivity)",
-    base: "hybrid",
-    topN: 30,
-    loadScorer: loadNodeScorer,
-  }),
-  createRerankStrategy({
-    id: "embeddings+rerank@30",
-    label: "Embeddings + cross-encoder rerank (top 30, sensitivity)",
-    base: "embeddings",
-    topN: 30,
-    loadScorer: loadNodeScorer,
-  }),
+  // The rerank candidate list and its top N come from decision.ts (which re-exports
+  // the lib RERANK_TOP_N), so the decision rule and the strategies cannot drift.
+  ...RERANK_CANDIDATES.map((c) =>
+    createRerankStrategy({
+      id: c.id,
+      label: `${BASE_LABEL[c.base]} + cross-encoder rerank (top ${c.topN})`,
+      base: c.base,
+      topN: c.topN,
+      loadScorer: loadNodeScorer,
+    }),
+  ),
+  ...SENSITIVITY_STRATEGIES.map((c) =>
+    createRerankStrategy({
+      id: c.id,
+      label: `${BASE_LABEL[c.base]} + cross-encoder rerank (top ${c.topN}, sensitivity)`,
+      base: c.base,
+      topN: c.topN,
+      loadScorer: loadNodeScorer,
+    }),
+  ),
 ];
 
 export function createRerankStrategy(opts: {
@@ -135,6 +132,7 @@ export function createRerankStrategy(opts: {
     id: opts.id,
     label: opts.label,
     needsEmbeddings: true,
+    topN: opts.topN,
     prepare: async () => {
       await load();
     },

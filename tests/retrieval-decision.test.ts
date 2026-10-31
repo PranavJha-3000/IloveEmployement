@@ -5,12 +5,17 @@ import path from "node:path";
 import { test } from "node:test";
 import { METRIC_KEYS, type MetricSet } from "../evals/retrieval/metrics";
 import { mulberry32, pairedBootstrapCI } from "../evals/retrieval/stats";
+import { RERANK_TOP_N as LIB_RERANK_TOP_N } from "../lib/retrieval/rerank";
+import { STRATEGIES } from "../evals/retrieval/strategies";
 import {
   ADDED_LATENCY_BUDGET_MS,
   BOOTSTRAP_ITERATIONS,
   BOOTSTRAP_SEED,
   DECISION_METRIC,
+  DECISION_STRATEGY_IDS,
   RERANK_CANDIDATES,
+  RERANK_TOP_N,
+  SENSITIVITY_STRATEGIES,
   addedLatency,
   decide,
   pairedComparison,
@@ -182,7 +187,30 @@ test("constants match DECISION.md", () => {
   assert.ok(md.includes(String(BOOTSTRAP_ITERATIONS)));
   assert.ok(md.includes(`${ADDED_LATENCY_BUDGET_MS} ms`));
   assert.ok(md.includes(DECISION_METRIC));
-  assert.ok(md.includes("top 20"));
+  assert.strictEqual(RERANK_TOP_N, 20, "DECISION.md pre-registers top 20");
+  assert.ok(md.includes(`top ${RERANK_TOP_N}`));
   assert.ok(md.includes("## Outcome"));
   assert.strictEqual(RERANK_CANDIDATES.length, 2);
+});
+
+test("top N and candidate list have a single source of truth", () => {
+  assert.strictEqual(RERANK_TOP_N, LIB_RERANK_TOP_N);
+  for (const c of RERANK_CANDIDATES) assert.strictEqual(c.topN, RERANK_TOP_N);
+  assert.deepStrictEqual(DECISION_STRATEGY_IDS, ["keyword", "embeddings", "hybrid", "hybrid+rerank", "embeddings+rerank"]);
+  const rerank = STRATEGIES.filter((s) => s.topN !== undefined);
+  assert.deepStrictEqual(
+    rerank.map((s) => [s.id, s.topN]),
+    [...RERANK_CANDIDATES, ...SENSITIVITY_STRATEGIES].map((c) => [c.id, c.topN]),
+  );
+  // Labels are unchanged by the refactor (they appear in RETRIEVAL.md).
+  assert.deepStrictEqual(
+    rerank.map((s) => s.label),
+    [
+      "Hybrid + cross-encoder rerank (top 20)",
+      "Embeddings + cross-encoder rerank (top 20)",
+      "Hybrid + cross-encoder rerank (top 30, sensitivity)",
+      "Embeddings + cross-encoder rerank (top 30, sensitivity)",
+    ],
+  );
+  for (const s of STRATEGIES.filter((x) => !x.id.includes("+rerank"))) assert.strictEqual(s.topN, undefined);
 });

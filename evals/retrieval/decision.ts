@@ -1,8 +1,13 @@
 // The Phase 2 decision rule (evals/retrieval/DECISION.md) as a pure function.
-// Imports metrics and stats only; never run.ts. No clock, no files, no randomness
-// beyond the seeded bootstrap, so the same results JSON always gives the same decision.
+// Imports metrics, stats and the pure rerank constants only; never run.ts. No clock,
+// no files, no randomness beyond the seeded bootstrap, so the same results JSON
+// always gives the same decision.
+import { RERANK_TOP_N } from "../../lib/retrieval/rerank";
 import { PRIMARY_METRIC, percentile, type MetricKey, type MetricSet } from "./metrics";
 import { pairedBootstrapCI } from "./stats";
+
+// Single source of truth: the strategies rerank exactly this N (lib/retrieval/rerank.ts).
+export { RERANK_TOP_N };
 
 export const DECISION_RULE_VERSION = 1;
 export const DECISION_METRIC: MetricKey = PRIMARY_METRIC;
@@ -10,17 +15,20 @@ export const BOOTSTRAP_ITERATIONS = 10000;
 export const BOOTSTRAP_SEED = 20261031;
 export const BOOTSTRAP_CONFIDENCE = 0.95;
 export const ADDED_LATENCY_BUDGET_MS = 150;
-export const RERANK_TOP_N = 20;
+/** Sensitivity top N; reported but never adopted by the decision rule. */
+export const SENSITIVITY_TOP_N = 30;
 export const SHIPPED_STRATEGY = "hybrid";
 export const EXISTING_STRATEGIES = ["keyword", "embeddings", "hybrid"] as const;
 export const RERANK_CANDIDATES = [
-  { id: "hybrid+rerank", base: "hybrid" },
-  { id: "embeddings+rerank", base: "embeddings" },
+  { id: "hybrid+rerank", base: "hybrid", topN: RERANK_TOP_N },
+  { id: "embeddings+rerank", base: "embeddings", topN: RERANK_TOP_N },
 ] as const;
 export const SENSITIVITY_STRATEGIES = [
-  { id: "hybrid+rerank@30", base: "hybrid" },
-  { id: "embeddings+rerank@30", base: "embeddings" },
+  { id: "hybrid+rerank@30", base: "hybrid", topN: SENSITIVITY_TOP_N },
+  { id: "embeddings+rerank@30", base: "embeddings", topN: SENSITIVITY_TOP_N },
 ] as const;
+/** Every strategy decide() needs; run.ts only calls decide() when all of them ran. */
+export const DECISION_STRATEGY_IDS: readonly string[] = [...EXISTING_STRATEGIES, ...RERANK_CANDIDATES.map((c) => c.id)];
 export const TIE_EPSILON = 1e-9;
 
 export interface StrategyRun {
@@ -118,7 +126,7 @@ export function decide(strategies: StrategyRun[]): Decision {
     if (!s) throw new Error(`decide: missing required strategy "${id}"`);
     return s;
   };
-  for (const id of [...EXISTING_STRATEGIES, ...RERANK_CANDIDATES.map((c) => c.id)]) need(id);
+  for (const id of DECISION_STRATEGY_IDS) need(id);
 
   const metric = DECISION_METRIC;
   const reasons: string[] = [];
@@ -153,7 +161,7 @@ export function decide(strategies: StrategyRun[]): Decision {
       eligible,
     });
     reasons.push(
-      `${c.id} (top ${RERANK_TOP_N}): ${metric} ${f4(value)} ${beatsBest ? ">" : "<="} best existing ${f4(bestExisting.value)}; ` +
+      `${c.id} (top ${c.topN}): ${metric} ${f4(value)} ${beatsBest ? ">" : "<="} best existing ${f4(bestExisting.value)}; ` +
         `delta vs ${SHIPPED_STRATEGY} ${f4(delta.meanDelta)} 95% CI [${f4(delta.lo)}, ${f4(delta.hi)}] ` +
         `${ciExcludesZero ? "excludes" : "includes"} 0; ` +
         `added p50 latency ${f2(lat.p50)} ms ${latencyOk ? "within" : "exceeds"} the ${ADDED_LATENCY_BUDGET_MS} ms latency budget; ` +

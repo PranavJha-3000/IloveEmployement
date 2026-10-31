@@ -12,6 +12,7 @@ import {
   BOOTSTRAP_CONFIDENCE,
   BOOTSTRAP_ITERATIONS,
   BOOTSTRAP_SEED,
+  DECISION_STRATEGY_IDS,
   RERANK_CANDIDATES,
   SENSITIVITY_STRATEGIES,
   addedLatency,
@@ -188,7 +189,7 @@ async function main(): Promise<void> {
 
   // Paired statistics, added latency and the mechanical decision.
   const runById = new Map(strategies.map((s) => [s.id, s]));
-  const rerankIds = STRATEGIES.map((s) => s.id).filter((id) => id.includes("+rerank") && runById.has(id));
+  const rerankIds = STRATEGIES.filter((s) => s.topN !== undefined && runById.has(s.id)).map((s) => s.id);
   const scopes: Scope[] = ["overall", "lexical", "paraphrase"];
   const comparisons: PairedComparison[] = [];
   for (const id of rerankIds) {
@@ -206,10 +207,9 @@ async function main(): Promise<void> {
     const base = baseOf.get(id);
     if (base && runById.has(base)) added.push(addedLatency(runById.get(id)!, runById.get(base)!));
   }
-  const decisionIds = ["keyword", "embeddings", "hybrid", "hybrid+rerank", "embeddings+rerank"];
-  const decision = decisionIds.every((id) => runById.has(id)) ? decide(strategies) : null;
+  const decision = DECISION_STRATEGY_IDS.every((id) => runById.has(id)) ? decide(strategies) : null;
   const rerankInfo = rerankIds.length ? getRerankInfo() : null;
-  const topNs = [...new Set(selected.filter((s) => s.id.includes("+rerank")).map((s) => (s.id.includes("@") ? Number(s.id.split("@")[1]) : 20)))].sort((a, b) => a - b);
+  const topNs = [...new Set(selected.flatMap((s) => (s.topN === undefined ? [] : [s.topN])))].sort((a, b) => a - b);
 
   let gitSha = "unknown";
   try {

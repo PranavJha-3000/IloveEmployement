@@ -18,4 +18,6 @@ jobs:
       - run: npm run typecheck
       # Unit tests + full-pipeline tests against a scripted model. No API key needed.
       - run: npm test
+      # Retrieval regression gate: keyword (BM25) metrics vs evals/retrieval/baseline.json. Offline, no API key.
+      - run: npm run eval:retrieval -- --ci
       - run: npm run build

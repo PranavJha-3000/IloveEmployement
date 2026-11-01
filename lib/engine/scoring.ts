@@ -3,6 +3,8 @@
 // verdicts. Same classifications in → same score out, every time, and the
 // formula is visible to the user instead of a vibe-based "73/100".
 
+import { canonicalizeSkill, skillsMentioned, surfaceForms } from "../skills/normalize";
+
 export type Evidence = "STRONG" | "PARTIAL" | "MISSING" | "UNVERIFIED";
 export type Importance = "must" | "nice";
 
@@ -66,8 +68,35 @@ export interface KeywordCoverage {
   importance: Importance;
   found: boolean;
   matchedAs: string;
+  /** Canonical skill name when the term (or one of its synonyms) is in the taxonomy. */
+  canonical: string | null;
   /** The model judged the user has this capability (cites vault chunks). */
   evidenced: boolean;
+}
+
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Forms the taxonomy lists as ordinary words ("Go", "Rust") only count when written with that exact capitalisation. */
+function caseSensitiveFormPresent(form: string, rawText: string): boolean {
+  return new RegExp(`(?<![A-Za-z0-9+#.])${escapeRe(form)}(?![A-Za-z0-9+#])`).test(rawText);
+}
+
+/**
+ * Whether a skill appears in the text under its own name or any alias.
+ * `term` itself keeps the legacy whole-term rule; aliases of a taxonomy skill
+ * that are ordinary words need their exact capitalisation.
+ */
+function skillFormFound(form: string, hay: string, rawText: string, entryCaseSensitive: readonly string[], isOriginal: boolean): boolean {
+  if (!containsTerm(hay, form)) return false;
+  if (isOriginal) return true;
+  return entryCaseSensitive.includes(form) ? caseSensitiveFormPresent(form, rawText) : true;
+}
+
+/** Candidates for one source term: the term as written first, then every taxonomy form of it. */
+function candidatesFor(source: string): { form: string; original: boolean; caseSensitive: readonly string[] }[] {
+  const entry = canonicalizeSkill(source).entry;
+  const cs = entry?.caseSensitive ?? [];
+  return [{ form: source, original: true, caseSensitive: cs }, ...surfaceForms(source).map((form) => ({ form, original: false, caseSensitive: cs }))];
 }
 
 export function keywordCoverage(
@@ -78,14 +107,75 @@ export function keywordCoverage(
   let earned = 0;
   let possible = 0;
   const items = keywords.map((k) => {
-    const candidates = [k.term, ...k.synonyms];
-    const hit = candidates.find((c) => containsTerm(hay, c));
+    const seen = new Set<string>();
+    const candidates = [k.term, ...k.synonyms]
+      .flatMap(candidatesFor)
+      .filter((c) => {
+        const key = c.form.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    const hit = candidates.find((c) => skillFormFound(c.form, hay, resumeText, c.caseSensitive, c.original))?.form;
     const w = IMPORTANCE_WEIGHT[k.importance];
     possible += w;
     if (hit) earned += w;
-    return { term: k.term, importance: k.importance, found: Boolean(hit), matchedAs: hit ?? "", evidenced: k.evidencedBy.length > 0 };
+    const canonical = [k.term, ...k.synonyms].map((t) => canonicalizeSkill(t)).find((c) => c.known)?.name ?? null;
+    return { term: k.term, importance: k.importance, found: Boolean(hit), matchedAs: hit ?? "", canonical, evidenced: k.evidencedBy.length > 0 };
   });
   return { items, score: possible ? Math.round((earned / possible) * 100) : 0 };
+}
+
+/** True when `skill` (or any alias of it) is in `rawText`. Used to decide which skills a tailored resume may keep. */
+export function skillInText(skill: string, rawText: string): boolean {
+  const hay = normalize(rawText);
+  return candidatesFor(skill).some((c) => skillFormFound(c.form, hay, rawText, c.caseSensitive, c.original));
+}
+
+// ─── Canonical skill evidence for requirements ───────────────────────────────
+
+export interface SkillMatch {
+  skills: string[];
+  matchedAs: string[];
+  correctedFrom: "MISSING";
+}
+
+/**
+ * When a requirement names taxonomy skills and EVERY one of them is in the
+ * resume under some alias, returns which skills and how they were written.
+ * Null when it names no taxonomy skill or any named skill is absent.
+ */
+export function canonicalSkillEvidence(requirement: string, resumeText: string): { skills: string[]; matchedAs: string[] } | null {
+  const mentioned = skillsMentioned(requirement);
+  if (!mentioned.length) return null;
+  const hay = normalize(resumeText);
+  const skills: string[] = [];
+  const matchedAs: string[] = [];
+  for (const { entry } of mentioned) {
+    const cs = entry.caseSensitive ?? [];
+    const found = surfaceForms(entry.name).find((f) => skillFormFound(f, hay, resumeText, cs, false));
+    if (!found) return null;
+    skills.push(entry.name);
+    matchedAs.push(found);
+  }
+  return { skills, matchedAs };
+}
+
+/**
+ * Code-side correction of the model's classification: MISSING becomes PARTIAL
+ * (never STRONG) when the resume provably contains every named skill. Returns a
+ * new array; the correction is attached as `skillMatch` so the UI can show it.
+ */
+export function applySkillEvidence<R extends { requirement: string; evidence: Evidence }>(
+  reqs: R[],
+  resumeText: string,
+): (R & { skillMatch?: SkillMatch })[] {
+  return reqs.map((r) => {
+    if (r.evidence !== "MISSING") return { ...r };
+    const ev = canonicalSkillEvidence(r.requirement, resumeText);
+    if (!ev) return { ...r };
+    return { ...r, evidence: "PARTIAL" as const, skillMatch: { ...ev, correctedFrom: "MISSING" as const } };
+  });
 }
 
 export interface FormatCheck {

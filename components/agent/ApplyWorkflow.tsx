@@ -37,7 +37,10 @@ import { withRunLock } from "@/lib/agent/runLock";
 import type { AgentJob, AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "@/lib/agent/types";
 import type { MessageResult } from "@/lib/engine/schemas";
 import { getPresetById } from "@/lib/presets";
-import { announceVaultChange, listAgentRuns, loadAgentRun, saveAgentRun } from "@/lib/vault/store";
+import { resumeToText } from "@/lib/engine/resumeText";
+import type { ReportResult } from "@/lib/engine/reports";
+import { announceVaultChange, listAgentRuns, loadAgentRun, saveAgentRun, saveResumeVersion } from "@/lib/vault/store";
+import { jobHintFromJd, tailoredVersionFromAgentRun } from "@/lib/vault/tailoredVersion";
 import { useSemanticOrder } from "@/lib/vault/useSemantic";
 import { useVault } from "@/lib/vault/useVault";
 import { ArtifactEditor } from "./ArtifactEditor";
@@ -115,6 +118,29 @@ function artifactText(step: AgentStepRecord): string {
 function fitGaps(step: AgentStepRecord | undefined): string[] {
   const gaps = (step?.output?.data as { gaps?: { gap?: unknown }[] } | undefined)?.gaps;
   return (gaps ?? []).map((g) => g.gap).filter((g): g is string => typeof g === "string" && g.length > 0);
+}
+
+/** Best effort and silent: a failed save never touches the run or its loop. Never logs resume text. */
+function saveTailoredVersion(rec: AgentRunRecord, step: AgentStepRecord, profileName: string) {
+  if (step.tool !== "tailor_resume" || step.status !== "done") return;
+  const data = step.output?.data as ReportResult<"resume"> | undefined;
+  if (!data || !Array.isArray(data.sections)) return;
+  try {
+    const hint = jobHintFromJd(rec.job.description);
+    const version = tailoredVersionFromAgentRun({
+      runId: rec.id,
+      text: resumeToText(data, profileName),
+      job: {
+        title: step.target?.jobTitle?.trim() || rec.job.role.trim() || hint.title,
+        company: step.target?.company ?? rec.job.company,
+        ...(step.target?.jobUrl ?? rec.job.url ? { url: step.target?.jobUrl ?? rec.job.url } : {}),
+      },
+      now: Date.now(),
+    });
+    void saveResumeVersion(version).then(announceVaultChange, () => console.error("Saving the tailored version failed."));
+  } catch {
+    console.error("Saving the tailored version failed.");
+  }
 }
 
 export function ApplyWorkflow() {
@@ -278,6 +304,8 @@ export function ApplyWorkflow() {
               const rebased = rebaseStepResponse(recordRef.current, rec, json, Date.now());
               rec = rebased.record;
               settle(rec);
+              // Phase 5: a finished tailor step is also kept as a resume version (id agent-<runId>, so it never duplicates).
+              if (json.kind === "step") saveTailoredVersion(rec, json.step, profile.name ?? "");
               if (!rebased.current || json.kind === "blocked") break;
               if (json.remaining !== null) setRemaining(json.remaining);
               setLiveMessage(liveStep(json.step.tool === "finish" ? next.allowed[0] : (json.step.tool as AgentWorkTool), json.step, json.next));

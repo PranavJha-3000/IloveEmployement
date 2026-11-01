@@ -8,6 +8,7 @@ import type { ReportKind } from "@/lib/presets/types";
 import { CopyButton } from "@/components/shared/CopyButton";
 import { resumeToText } from "@/lib/engine/resumeText";
 import { RunDetails, RunWarnings } from "./RunDetails";
+import Link from "next/link";
 import { ShareCard } from "./ShareCard";
 
 // ─── Shared pieces ───────────────────────────────────────────────────────────
@@ -377,7 +378,118 @@ function printResume(textContent: string) {
 
 const CHANGE_STYLE = { kept: "text-zinc-400", reworded: "text-blue-600", tailored: "text-emerald-600", reordered: "text-violet-600" } as const;
 
-function ResumeView({ r, chunks, name }: { r: ReportResult<"resume">; name: string } & Ctx) {
+type SaveVersion = (v: { text: string; job: { title: string; company: string; url?: string } }) => Promise<void>;
+
+function SaveVersionForm({ text, hint, onSave }: { text: string; hint?: { title: string; company: string }; onSave: SaveVersion }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function begin() {
+    setTitle(hint?.title ?? "");
+    setCompany(hint?.company ?? "");
+    setUrl("");
+    setError("");
+    setSaved(false);
+    setOpen(true);
+  }
+
+  async function save() {
+    const link = url.trim();
+    if (link && !/^https?:\/\//i.test(link)) {
+      setError("Use a link that starts with https://");
+      return;
+    }
+    if (!title.trim()) {
+      setError("Add the job title this version is for.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await onSave({ text, job: { title: title.trim(), company: company.trim(), ...(link ? { url: link } : {}) } });
+      setSaved(true);
+      setOpen(false);
+    } catch {
+      setError("We couldn't save this version. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mb-3">
+      {!open && (
+        <button type="button" onClick={begin} className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 hover:border-zinc-300">
+          Save as version
+        </button>
+      )}
+      {open && (
+        <form
+          className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+          aria-label="Save as version"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="field-label" htmlFor="version-title">
+                Job title
+              </label>
+              <input id="version-title" className="field-control" required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="version-company">
+                Company
+              </label>
+              <input id="version-company" className="field-control" maxLength={200} value={company} onChange={(e) => setCompany(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="version-url">
+              Posting link (optional)
+            </label>
+            <input id="version-url" className="field-control" type="url" inputMode="url" maxLength={2048} value={url} onChange={(e) => setUrl(e.target.value)} aria-invalid={error ? true : undefined} />
+          </div>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="cta-primary" disabled={saving}>
+              {saving ? "Saving…" : "Save version"}
+            </button>
+            <button type="button" className="cta-secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      <p role="status" aria-live="polite" className={saved ? "mt-2 text-[13px] font-medium text-emerald-700" : "sr-only"}>
+        {saved ? (
+          <>
+            Saved to Resume versions in your Career Vault. <Link href="/vault" className="underline">Open the vault</Link>
+          </>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
+function ResumeView({
+  r,
+  chunks,
+  name,
+  onSaveVersion,
+  versionJobHint,
+}: { r: ReportResult<"resume">; name: string; onSaveVersion?: SaveVersion; versionJobHint?: { title: string; company: string } } & Ctx) {
   const plain = resumeToText(r, name);
   return (
     <>
@@ -395,6 +507,7 @@ function ResumeView({ r, chunks, name }: { r: ReportResult<"resume">; name: stri
           </div>
         }
       >
+        {onSaveVersion && <SaveVersionForm text={plain} hint={versionJobHint} onSave={onSaveVersion} />}
         <p className="text-[15px] font-bold text-zinc-900">{r.headline}</p>
         <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-700">{r.summary.text}</p>
         <Cites ids={r.summary.chunkIds} chunks={chunks} />
@@ -989,6 +1102,8 @@ export function ReportView({
   sentChunks,
   profileName,
   onSaveStory,
+  onSaveVersion,
+  versionJobHint,
   share,
 }: {
   kind: ReportKind;
@@ -998,6 +1113,9 @@ export function ReportView({
   profileName: string;
   /** Writes a STAR story back into the Career Vault. */
   onSaveStory?: (title: string, text: string) => Promise<void>;
+  /** Saves the tailored resume as a version in the Career Vault. */
+  onSaveVersion?: (v: { text: string; job: { title: string; company: string; url?: string } }) => Promise<void>;
+  versionJobHint?: { title: string; company: string };
   /** Tool name and slug for share images. */
   share: Share;
 }) {
@@ -1013,7 +1131,7 @@ export function ReportView({
       case "ats":
         return <AtsView r={data as ReportResult<"ats">} chunks={chunks} />;
       case "resume":
-        return <ResumeView r={data as ReportResult<"resume">} chunks={chunks} name={profileName} />;
+        return <ResumeView r={data as ReportResult<"resume">} chunks={chunks} name={profileName} onSaveVersion={onSaveVersion} versionJobHint={versionJobHint} />;
       case "bullets":
         return <BulletsView r={data as ReportResult<"bullets">} />;
       case "linkedin":

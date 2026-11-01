@@ -8,7 +8,8 @@ import { getPresetById } from "@/lib/presets";
 import { DEFAULT_VAULT_LIMIT, type ReportKind } from "@/lib/presets/types";
 import { chunkResume, manualChunk } from "@/lib/vault/chunker";
 import { retrieveVault } from "@/lib/vault/retrieve";
-import { announceVaultChange, deleteChunksFromSource, saveChunks } from "@/lib/vault/store";
+import { announceVaultChange, deleteChunksFromSource, saveChunks, saveResumeVersion } from "@/lib/vault/store";
+import { jobHintFromJd, tailoredVersionFromTool } from "@/lib/vault/tailoredVersion";
 import { useSemanticOrder } from "@/lib/vault/useSemantic";
 import { useVault } from "@/lib/vault/useVault";
 import { AccessPanel, useAccess } from "./AccessPanel";
@@ -356,6 +357,15 @@ export function PresetRunner({ presetId }: { presetId: string }) {
               await saveChunks([manualChunk("story", title, text, "star")]);
               announceVaultChange();
             }}
+            {...(preset.id === "tailor-resume"
+              ? {
+                  versionJobHint: jobHintFromJd(inputs.jobDescription ?? ""),
+                  onSaveVersion: async (v: { text: string; job: { title: string; company: string; url?: string } }) => {
+                    await saveResumeVersion(tailoredVersionFromTool({ ...v, now: Date.now() }));
+                    announceVaultChange();
+                  },
+                }
+              : {})}
           />
         )}
         {phase === "idle" && !result && (

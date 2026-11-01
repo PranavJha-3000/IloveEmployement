@@ -46,6 +46,15 @@ A **preset** (`lib/presets/*.ts`) is configuration: fields, knowledge tags, a va
 
 The marketplace (`lib/tools.ts`), header menus and `/tools/[slug]` pages (statically generated) are all derived from the preset registry.
 
+## Agent workflow (Apply to this job)
+
+The `/apply` page runs a gated, budgeted workflow over four existing presets: fit check, tailored resume, cover letter and outreach message. It is not a preset itself (it is not in `TOOLS`, header menus or `/tools/[slug]`); the home grid shows it as a featured card and the header links to it.
+
+- **Stateless step endpoint:** `POST /api/agent/step` does exactly one step per request. Order: zod validation, budget recomputed from the step records sent by the client, policy gate or stop (no model call when the policy stops the run), `resolveAccess` once (so one free run is charged per step), a planner tool call over `fit_check`, `tailor_resume`, `cover_letter`, `outreach_message` and `finish`, policy validation of the planner choice (invalid choices are rejected and counted), then `runPreset` for the mapped preset, so every grounding guarantee of the standalone tools applies unchanged.
+- **Order and gates:** fit check always runs first. Gate A after the fit check needs approval; a SKIP verdict stops the run unless the user overrides it with a second confirmation. Tailor resume and cover letter then run automatically. Gate B asks before the outreach message.
+- **Budgets:** 6 steps and 50,000 tokens by default (`lib/agent/config.ts`), with a bounded number of "continue with a new budget" resets. A new step does not start when too few tokens remain, and null provider usage is charged an estimate.
+- **Client-driven loop:** `components/agent/ApplyWorkflow.tsx` calls the endpoint step by step and persists the run after every step. A step interrupted by closing the tab is restarted on resume. API keys are never stored in a run record.
+
 ## Deterministic logic (`lib/engine/scoring.ts`)
 
 - **Fit score:** must-haves weigh 2, nice-to-haves 1; STRONG = 1, PARTIAL = ½, UNVERIFIED = ¼, MISSING = 0. Verdict: APPLY ≥ 70 with no missing must-have; STRETCH ≥ 50 with at most one; LONG_SHOT ≥ 30; otherwise SKIP.
@@ -56,15 +65,15 @@ The marketplace (`lib/tools.ts`), header menus and `/tools/[slug]` pages (static
 
 ## Career Vault (`lib/vault/*`)
 
-- **Storage:** IndexedDB `iloveemployement` v2: `chunks`, `meta` (profile), `vectors` (semantic index). Export/import as JSON.
+- **Storage:** IndexedDB `iloveemployement` v3: `chunks`, `meta`, `vectors`, `agentRuns`. Export, import and clear include saved application runs. Tailored resume steps keep the job title, company and job URL. The `/vault` page lists runs under "Applications in progress" with resume and delete.
 - **Chunking:** sections by heading → role blocks → one chunk per bullet, titled with its role header; summary, skills, education, wins, projects. Manual stories, wins and notes; STAR Builder and the wins log write back.
 - **Retrieval:** BM25 with kind weights (stories, wins and bullets above containers), max 3 chunks per role, the summary always anchored. Whole-resume tools (limit > 12) keep document order and drop containers duplicated by their bullets.
 - **Hybrid:** once the user builds the semantic index, query and chunks are embedded on-device (Transformers.js, `Xenova/all-MiniLM-L6-v2` q8) and the cosine ranking is fused with BM25 by Reciprocal Rank Fusion (k = 60). A partial index falls back to keyword-only.
 
 ## Testing and evals
 
-- `npm test`: deterministic unit tests (scoring, finalizers, grounding, injection gate, context, chunker, retrieval, fusion) plus full-pipeline tests through `runPreset` with a scripted `MockLanguageModelV1` (fenced injection, dropped fake citations, review loop, free-tier limits, error redaction, both structured-output paths).
-- `npm run eval`: the LLM eval harness. Runs 28 cases across the six engines against one or more models side by side, with a disk cache and request throttle for free-tier quotas, and prints a request estimate first. An LLM judge scores outputs on `evals/llm/RUBRIC.md`; the report adds citation precision and fabrication rate, and cost is computed from `evals/llm/prices.ts`. Main flags: `--dry`, `--estimate`, `--list-models`, `--models`, `--judge`, `--cases`, `--limit`, `--rpm`, `--max-requests`, `--labels-sheet` (blind offline labelling sheet) and `--agreement` (judge vs hand labels). Full runs write `evals/LLM.md`; partial runs write `evals/results/LLM.preview.md`. Keys come from `EVAL_*` variables (see `.env.example`), falling back to `FREE_TIER_*`. `evals/REPORT.md` is retired in favour of `evals/LLM.md`.
+- `npm test`: deterministic unit tests (scoring, finalizers, grounding, injection gate, context, chunker, retrieval, fusion), the agent tests (`tests/agent-policy.test.ts`, `agent-step.test.ts`, `agent-store.test.ts`, `agent-client.test.ts`, `agent-evals.test.ts`), plus full-pipeline tests through `runPreset` with a scripted `MockLanguageModelV1` (fenced injection, dropped fake citations, review loop, free-tier limits, error redaction, both structured-output paths).
+- `npm run eval`: the LLM eval harness. Runs 28 cases across the six engines against one or more models side by side, with a disk cache and request throttle for free-tier quotas, and prints a request estimate first. An LLM judge scores outputs on `evals/llm/RUBRIC.md`; the report adds citation precision and fabrication rate, and cost is computed from `evals/llm/prices.ts`. Main flags: `--dry`, `--estimate`, `--list-models`, `--models`, `--judge`, `--cases`, `--limit`, `--rpm`, `--max-requests`, `--labels-sheet` (blind offline labelling sheet) and `--agreement` (judge vs hand labels). `--agent` runs the separate agent workflow cases (`evals/agentCases.ts`); they are not part of the 28 default cases, whose fingerprint is unchanged. Full runs write `evals/LLM.md`; partial runs write `evals/results/LLM.preview.md`. Keys come from `EVAL_*` variables (see `.env.example`), falling back to `FREE_TIER_*`. `evals/REPORT.md` is retired in favour of `evals/LLM.md`.
 - CI: typecheck, tests and build on push and PR; the CI job is keyless. The Evals workflow is manual (`workflow_dispatch`) and uses repository secrets only.
 
 ## Out of scope (deliberately)

@@ -6,6 +6,7 @@ import type { Evidence, FitScore } from "@/lib/engine/scoring";
 import type { RunMeta, VaultContextChunk } from "@/lib/engine/types";
 import type { ReportKind } from "@/lib/presets/types";
 import { CopyButton } from "@/components/shared/CopyButton";
+import { resumeToText } from "@/lib/engine/resumeText";
 import { RunDetails, RunWarnings } from "./RunDetails";
 import { ShareCard } from "./ShareCard";
 
@@ -347,22 +348,6 @@ function AtsView({ r, chunks }: { r: ReportResult<"ats"> } & Ctx) {
       </Card>
     </>
   );
-}
-
-function resumeToText(r: ReportResult<"resume">, name: string): string {
-  const out: string[] = [];
-  if (name) out.push(name);
-  out.push(r.headline, "", "SUMMARY", r.summary.text, "");
-  for (const s of r.sections) {
-    out.push(s.title.toUpperCase());
-    for (const e of s.entries) {
-      out.push(e.heading);
-      for (const b of e.bullets) out.push(`• ${b.text}`);
-      out.push("");
-    }
-  }
-  if (r.skills.length) out.push("SKILLS", r.skills.join(", "));
-  return out.join("\n").trim();
 }
 
 function download(name: string, content: string, type: string) {

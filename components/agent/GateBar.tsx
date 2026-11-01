@@ -32,6 +32,7 @@ const DESTRUCTIVE = "min-h-[44px] rounded-xl border border-[#c4241f] bg-white px
 export function GateBar(props: GateBarProps) {
   const { mode, busy, firstButtonRef } = props;
   const [pressed, setPressed] = useState(false);
+  const [narrow, setNarrow] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [recipientName, setRecipientName] = useState("");
   const [recipientRole, setRecipientRole] = useState<OutreachOptions["recipientRole"]>("recruiter");
@@ -39,6 +40,15 @@ export function GateBar(props: GateBarProps) {
   const opener = useRef<HTMLButtonElement | null>(null);
   const keepRef = useRef<HTMLButtonElement | null>(null);
   const uid = useId();
+
+  // Under 1024px the bar keeps the primary action plus one secondary; the rest move under "More".
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023.98px)");
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   // A press disables every action at once; it re-enables when the parent finishes (busy falls) or the mode changes.
   useEffect(() => setPressed(false), [mode, busy]);
@@ -82,9 +92,18 @@ export function GateBar(props: GateBarProps) {
           <button type="button" className="cta-secondary" disabled={disabled} onClick={act(props.onEdit)}>
             Edit
           </button>
-          <button type="button" className="cta-secondary" disabled={disabled} onClick={act(props.onStop)}>
-            Stop here
-          </button>
+          {narrow ? (
+            <details className="agent-more">
+              <summary>More</summary>
+              <button type="button" className="cta-secondary" disabled={disabled} onClick={act(props.onStop)}>
+                Stop here
+              </button>
+            </details>
+          ) : (
+            <button type="button" className="cta-secondary" disabled={disabled} onClick={act(props.onStop)}>
+              Stop here
+            </button>
+          )}
         </>
       )}
 

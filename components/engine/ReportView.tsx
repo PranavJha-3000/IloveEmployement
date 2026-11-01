@@ -1051,6 +1051,9 @@ export function ReportView({
         return <AuraView r={data as ReportResult<"aura">} chunks={chunks} share={share} />;
       case "bingo":
         return <BingoView r={data as ReportResult<"bingo">} />;
+      case "profile":
+        // Rendered by ProfileReview in the vault, not on a tool page.
+        return null;
       case "mockPlan":
         // Rendered as an interactive session by PresetRunner.
         return null;

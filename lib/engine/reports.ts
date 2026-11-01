@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { answerSignals, applySkillEvidence, formatChecks, keywordCoverage, offerTotals, scoreRequirements, skillInText } from "./scoring";
 import type { ReportKind } from "../presets/types";
+import { ModelProfileSchema, refinedResult } from "../profile/refine";
 
 const evidence = z.enum(["STRONG", "PARTIAL", "MISSING", "UNVERIFIED"]);
 const importance = z.enum(["must", "nice"]);
@@ -278,6 +279,8 @@ export const REPORT_SCHEMAS = {
       .describe("Exactly 24 phrases"),
     commentary: z.string(),
   }),
+  // Model-facing profile shape: deliberately no confidence field (FINALIZERS.profile computes it).
+  profile: ModelProfileSchema,
 } satisfies Record<ReportKind, z.ZodTypeAny>;
 
 export type ReportOutput<K extends ReportKind> = z.infer<(typeof REPORT_SCHEMAS)[K]>;
@@ -454,6 +457,8 @@ export const FINALIZERS = {
       .map((s) => ({ ...s, verified: Boolean(source) && quoteInText(s.quote || s.phrase, source) }));
     return { ...o, squares, fromText: Boolean(source) };
   },
+  // Confidence is computed here from the resume text; the model never supplies it.
+  profile: (o: ReportOutput<"profile">, ctx: FinalizeContext) => refinedResult(o, ctx.inputs.resumeText ?? ""),
 } satisfies { [K in ReportKind]: (o: ReportOutput<K>, ctx: FinalizeContext) => unknown };
 
 export type ReportResult<K extends ReportKind> = ReturnType<(typeof FINALIZERS)[K]>;
@@ -475,6 +480,17 @@ export function generatedText(kind: ReportKind, o: Record<string, unknown>): str
       return (o as ReportOutput<"star">).spoken;
     case "answerEval":
       return (o as ReportOutput<"answerEval">).strongerAnswer;
+    case "profile": {
+      // Every string value, so the invented-figure check flags numbers absent from the resume.
+      const out: string[] = [];
+      const walk = (v: unknown) => {
+        if (typeof v === "string") out.push(v);
+        else if (Array.isArray(v)) v.forEach(walk);
+        else if (v && typeof v === "object") Object.values(v).forEach(walk);
+      };
+      walk(o);
+      return out.join("\n");
+    }
     default:
       return "";
   }

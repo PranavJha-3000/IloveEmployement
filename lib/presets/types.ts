@@ -20,7 +20,8 @@ export type ReportKind =
   | "roast"
   | "court"
   | "aura"
-  | "bingo";
+  | "bingo"
+  | "profile";
 
 /** Outside evidence the server may fetch for a run. */
 export type ExternalSource = "github";

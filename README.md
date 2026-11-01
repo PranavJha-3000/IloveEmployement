@@ -68,8 +68,12 @@ flowchart LR
 | **Prompt-injection defence** | `lib/engine/injection.ts` | Strips invisible/bidi characters, flags instruction-shaped lines, fences pasted text as untrusted data. |
 | **Drafter → reviewer** | `lib/engine/review.ts` | An adversarial second pass on resumes and cover letters; one revision if it finds anything serious. |
 | **Write-back memory** | STAR Builder, wins log | Stories and wins saved to the vault are retrieved by every other tool. |
-| **Evals** | `evals/*` | 10 golden cases (fit/mismatch, injection resistance, no fabrication, format limits, offer extraction) against a real model, with guardrail metrics. |
-| **Tests** | `tests/*` | 43 tests: deterministic engine units plus full-pipeline runs against a scripted model. No key needed. |
+| **Retrieval evaluation** | `evals/retrieval/*`, [`evals/RETRIEVAL.md`](evals/RETRIEVAL.md) | A labelled retrieval set scores keyword, embedding and hybrid strategies (recall, MRR, nDCG) with bootstrap confidence intervals. A decision rule committed before measuring rejected the cross-encoder reranker (no gain, over the latency budget), so none ships. CI gates the keyword baseline. |
+| **Agent workflow** | `/apply`, `lib/agent/*` | "Apply to this job" runs fit check, tailor, cover letter and outreach as a policy-driven loop. A SKIP verdict stops it, step budgets are enforced, and runs are saved so they can be resumed. |
+| **Document intelligence** | `lib/profile/*`, `lib/skills/*`, `components/vault/*` | A resume becomes a typed profile: a deterministic extractor plus optional model refinement, with confidence computed in code. You review and confirm it; a skill taxonomy maps aliases ("JS") to canonical names for fit and ATS scoring. Confirming saves a base resume version; tailored versions record the targeted job and can be compared in a diff. |
+| **Profile extraction eval** | `evals/profile/*`, [`evals/PROFILE.md`](evals/PROFILE.md) | Field-level precision and recall of the extractor against 13 labelled resumes, gated in CI. |
+| **LLM evals** | `evals/llm/*`, `evals/LLM.md` (pending) | 28 golden cases across the six engines plus 4 agent cases, scored against a real model with an LLM judge. The harness is built; `evals/LLM.md` does not exist yet because the first full run is still pending. |
+| **Tests** | `tests/*` | 495 tests: deterministic engine, retrieval, agent and profile units plus full-pipeline runs against a scripted model. No key needed. |
 
 ## Privacy
 
@@ -100,12 +104,15 @@ Open [localhost:3000](http://localhost:3000). With no environment variables, eve
 
 ```bash
 npm run typecheck
-npm test                      # 43 tests, no network
-npm run eval -- --dry         # list the golden cases
-npm run eval -- --models google:<model> --judge google:<model>   # key from .env (EVAL_* or FREE_TIER_*), writes evals/LLM.md
+npm test                      # 495 tests, no network
+npm run eval:retrieval -- --ci   # retrieval regression gate, offline; report in evals/RETRIEVAL.md
+npm run eval:profile -- --ci     # profile extraction accuracy gate, offline; report in evals/PROFILE.md
+npm run eval -- --dry         # list the 28 golden cases
+npm run eval -- --agent --dry # list the 4 agent workflow cases
+npm run eval -- --models google:<model> --judge google:<model>   # key from .env (EVAL_* or FREE_TIER_*), writes evals/LLM.md (first full run still pending)
 ```
 
-CI (`.github/workflows/ci.yml`) runs typecheck, tests and build on every push and PR. Evals run on demand (`evals.yml`) with an `EVAL_API_KEY` secret.
+CI (`.github/workflows/ci.yml`) runs typecheck, tests, the retrieval and profile eval gates and build on every push and PR. Evals run on demand (`evals.yml`) with an `EVAL_API_KEY` secret.
 
 ## Add a tool
 

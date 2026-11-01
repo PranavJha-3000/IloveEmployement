@@ -14,7 +14,7 @@ key-files:
     - .planning/phases/04-agent-workflow/04-BASELINE.md
     - components/agent/ApplicationsList.tsx
 decisions:
-  - "Human checkpoint approved by the user after a real-model walkthrough of /apply"
+  - "User approved the real-model flow but rejected the /apply visual design (cramped sidebar form, inconsistent with the tool pages, too much text); redesigned as a two-stage page (cc28d7e) pending final sign-off"
   - "Pre-checkpoint browser check without model calls found a 4px horizontal overflow on /vault at 375px (ApplicationsList row actions); fixed by letting the action group wrap and giving Delete a 44px target"
 metrics:
   completed: 2026-11-01
@@ -45,7 +45,9 @@ platform.md documents the agent workflow, every gate passes against the baseline
 
 ## Human verification
 
-Resume signal: **approved** (real-model walkthrough of the /apply flow by the user).
+Flow: **approved** by the user after a real-model walkthrough.
+
+Visual design: **rejected** (cramped sidebar form, inconsistent with the other tool pages, too much text). Redesigned in cc28d7e: stage 1 uses the tool-page two-column layout with a wide form and a How it works card; stage 2 has a compact run header above full-width step cards. Checked at 1280px and 375px (no horizontal scroll). Final sign-off pending.
 
 ## Notes for later
 

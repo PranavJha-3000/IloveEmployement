@@ -36,18 +36,33 @@ export function upgradeVaultDb(db: VaultUpgradeTarget, oldVersion: number): void
   // Phase 5 adds its v4 store after this block.
 }
 
+export const VAULT_BLOCKED_MESSAGE = "Close other IloveEmployement tabs to finish the update, then reload.";
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") return reject(new Error("IndexedDB unavailable"));
+    let settled = false;
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (event) => upgradeVaultDb(req.result, event.oldVersion);
     req.onsuccess = () => {
       const db = req.result;
       // Let another tab's upgrade proceed instead of blocking on this connection.
       db.onversionchange = () => db.close();
+      // Opened after we already gave up on a blocked upgrade: do not hold the connection.
+      if (settled) return db.close();
+      settled = true;
       resolve(db);
     };
-    req.onerror = () => reject(req.error);
+    // A tab still running older code holds the old version open: fail (callers degrade) instead of hanging.
+    req.onblocked = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(VAULT_BLOCKED_MESSAGE));
+    };
+    req.onerror = () => {
+      settled = true;
+      reject(req.error);
+    };
   });
 }
 
@@ -58,6 +73,8 @@ async function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectS
     const req = fn(t.objectStore(store));
     t.oncomplete = () => resolve(req ? (req.result as T) : undefined);
     t.onerror = () => reject(t.error);
+    // QuotaExceededError aborts the transaction without an error event on it.
+    t.onabort = () => reject(t.error ?? new Error("Transaction aborted"));
   });
 }
 

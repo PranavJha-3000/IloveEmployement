@@ -10,7 +10,14 @@ import {
   toStorable,
 } from "../lib/agent/record";
 import type { AgentRunRecord, AgentStepRecord } from "../lib/agent/types";
-import { buildVaultExport, parseVaultImport, upgradeVaultDb } from "../lib/vault/store";
+import {
+  buildVaultExport,
+  loadChunks,
+  parseVaultImport,
+  saveAgentRun,
+  upgradeVaultDb,
+  VAULT_BLOCKED_MESSAGE,
+} from "../lib/vault/store";
 
 const job = { description: "Build APIs", company: "Razorpay", role: "Backend Engineer" };
 
@@ -186,4 +193,38 @@ test("parseVaultImport handles old exports, invalid runs and wrong format", () =
     () => parseVaultImport(JSON.stringify({ format: "nope", chunks: [] })),
     /isn't an IloveEmployement vault export/,
   );
+});
+
+test("a blocked v3 upgrade and an aborted transaction settle instead of hanging (WR-05)", async () => {
+  const g = globalThis as { indexedDB?: unknown };
+  const saved = g.indexedDB;
+  try {
+    // Another tab on the old code keeps v2 open: open() fires only "blocked".
+    g.indexedDB = {
+      open() {
+        const req: Record<string, unknown> = {};
+        setTimeout(() => (req.onblocked as (() => void) | undefined)?.(), 0);
+        return req;
+      },
+    };
+    assert.deepStrictEqual(await loadChunks(), []);
+    await assert.rejects(saveAgentRun(createRunRecord(job, { id: "r1", now: 1 })), { message: VAULT_BLOCKED_MESSAGE });
+
+    // Quota exceeded: the transaction aborts with no error event.
+    g.indexedDB = {
+      open() {
+        const req: Record<string, unknown> = {};
+        const t: Record<string, unknown> = { error: Object.assign(new Error("quota"), { name: "QuotaExceededError" }), objectStore: () => ({ put: () => ({}) }) };
+        req.result = { transaction: () => t, close: () => undefined };
+        setTimeout(() => {
+          (req.onsuccess as () => void)();
+          setTimeout(() => (t.onabort as () => void)(), 0);
+        }, 0);
+        return req;
+      },
+    };
+    await assert.rejects(saveAgentRun(createRunRecord(job, { id: "r2", now: 1 })), { name: "QuotaExceededError" });
+  } finally {
+    g.indexedDB = saved;
+  }
 });

@@ -414,7 +414,7 @@ No CONTEXT.md and no live user. Each item below is a decision made by default.
 4. **Low-confidence threshold**: 0.8 on a 0-1 confidence returned per field by the extractor. If the extractor (Phase 5 plans) gives no per-field confidence, the fallback is "missing, malformed, or failed validation = low confidence". The planner must expose a confidence value or boolean per field in the profile type.
 5. **New Warning color** (amber) introduced for low-confidence and unknown skills, because red is reserved for the brand accent and destructive actions and green for success.
 6. **Skills list is flat**, ordered as found in the resume, with no category grouping, unless the taxonomy already carries categories.
-7. **Removing a role/school/project**: inline Undo status instead of a modal if cheap; otherwise `window.confirm` like the rest of the vault.
+7. **Removing a role/school/project**: inline two-button confirmation with focus on "Keep …" (same as Phase 4); no `window.confirm`.
 8. **Version removal always allowed** (with confirmation), even for the base. Tailored versions are self-contained text and are not invalidated.
 9. **ResumeField on tool pages** is left unchanged (no extraction there). Optional one-line help-text pointer only.
 10. **Diff granularity is line-based** with word-level emphasis inside changed pairs, **unified layout only** (no side-by-side), and no export of diffs.

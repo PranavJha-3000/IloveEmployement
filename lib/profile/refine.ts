@@ -104,3 +104,80 @@ export function refinedResult(o: ModelProfile, resumeText: string): ExtractionRe
     warnings: [],
   };
 }
+
+// ─── Merge ───────────────────────────────────────────────────────────────────
+
+const CONTACT_SCALARS = ["name", "email", "phone", "location"] as const;
+
+const linkKey = (l: string) => l.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+
+/**
+ * Field-by-field merge of the deterministic and refined extractions. A value is
+ * preferred when its code-computed confidence clears the threshold; an invented
+ * (ungrounded) refined value therefore never displaces a grounded deterministic
+ * one. Refined links and skills are only taken when grounded. Confidence of the
+ * merged profile is recomputed from the source text.
+ */
+export function mergeExtractions(det: ExtractionResult, refined: ExtractionResult, sourceText: string): ExtractionResult {
+  const ok = (r: ExtractionResult, path: string) => (r.confidence[path] ?? 0) >= LOW_CONFIDENCE_THRESHOLD;
+
+  const dc = det.profile.contact;
+  const rc = refined.profile.contact;
+  const merged: StructuredProfile = {
+    contact: { name: "", email: "", phone: "", location: "", links: [] },
+    roles: [],
+    education: [],
+    skills: [],
+    projects: [],
+  };
+  for (const k of CONTACT_SCALARS) {
+    const path = `contact.${k}`;
+    if (rc[k] && ok(refined, path)) merged.contact[k] = rc[k];
+    else if (dc[k] && ok(det, path)) merged.contact[k] = dc[k];
+    else merged.contact[k] = rc[k] || dc[k];
+  }
+
+  const links: string[] = [];
+  const seen = new Set<string>();
+  const pushLink = (l: string) => {
+    const key = linkKey(l);
+    if (!key || seen.has(key) || links.length >= 10) return;
+    seen.add(key);
+    links.push(l);
+  };
+  dc.links.forEach(pushLink);
+  rc.links.forEach((l, i) => {
+    if (ok(refined, `contact.links.${i}`)) pushLink(l);
+  });
+  merged.contact.links = links;
+
+  const groundedCount = (r: ExtractionResult, section: "roles" | "education" | "projects", keys: string[]) => {
+    const list = r.profile[section] as unknown[];
+    let n = 0;
+    for (let i = 0; i < list.length; i++) if (keys.every((k) => ok(r, `${section}.${i}.${k}`))) n += 1;
+    return n;
+  };
+  const pick = <T,>(section: "roles" | "education" | "projects", keys: string[], d: T[], r: T[]): T[] => {
+    const rn = groundedCount(refined, section, keys);
+    const dn = groundedCount(det, section, keys);
+    return rn > 0 && rn >= dn ? r : d;
+  };
+  merged.roles = pick("roles", ["title", "company"], det.profile.roles, refined.profile.roles);
+  merged.education = pick("education", ["degree", "institution"], det.profile.education, refined.profile.education);
+  merged.projects = pick("projects", ["name"], det.profile.projects, refined.profile.projects);
+
+  const rawSkills = det.profile.skills.flatMap((s) => (s.matchedFrom.length ? s.matchedFrom : [s.name]));
+  refined.profile.skills.forEach((s, i) => {
+    if (ok(refined, `skills.${i}`)) rawSkills.push(...(s.matchedFrom.length ? s.matchedFrom : [s.name]));
+  });
+  merged.skills = normalizeSkills(rawSkills).slice(0, 150);
+
+  const profile = StructuredProfileSchema.parse(merged);
+  return {
+    profile,
+    confidence: computeConfidence(profile, sourceText),
+    method: "refined",
+    sourceHash: det.sourceHash,
+    warnings: [...new Set([...det.warnings, ...refined.warnings])],
+  };
+}

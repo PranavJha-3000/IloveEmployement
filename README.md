@@ -91,7 +91,7 @@ Open [localhost:3000](http://localhost:3000). With no environment variables, eve
 
 | Variable | Purpose |
 |---|---|
-| `FREE_TIER_PROVIDER`, `FREE_TIER_API_KEY`, `FREE_TIER_MODEL` | Server key for keyless visitors (e.g. `google` / `gemini-2.0-flash`) |
+| `FREE_TIER_PROVIDER`, `FREE_TIER_API_KEY`, `FREE_TIER_MODEL` | Server key for keyless visitors (e.g. `google` / `gemini-3.5-flash-lite`) |
 | `FREE_TIER_DAILY_LIMIT` | Runs per IP per day (default 15) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Shared rate limiting across serverless instances (in-memory otherwise) |
 | `GITHUB_TOKEN` | Optional: raises the GitHub API limit for Proof Check |

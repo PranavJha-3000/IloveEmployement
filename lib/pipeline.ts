@@ -35,7 +35,7 @@ export function classifyAIError(err: unknown): AiErrorInfo {
     return { category: "rate_limit", message: "Provider rate limit hit. Wait a moment and retry, or switch to a different model.", status: 429 };
   }
   if (/timeout|timed out|etimedout|econnaborted|abort/i.test(message)) {
-    return { category: "timeout", message: "The analysis timed out. Try a faster model (e.g. gpt-4o-mini or gemini-2.0-flash).", status: 504 };
+    return { category: "timeout", message: "The analysis timed out. Try a faster model (e.g. gpt-4o-mini or gemini-3.5-flash-lite).", status: 504 };
   }
   if (/model.*(not found|does not exist|invalid)|unsupported (model|value)/i.test(message)) {
     return { category: "model", message: "Model not found for this provider. Check the model name.", status: 400 };

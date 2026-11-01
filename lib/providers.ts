@@ -12,8 +12,8 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
   google: {
     id: "google",
     label: "Google Gemini",
-    defaultModel: "gemini-2.0-flash",
-    models: ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
+    defaultModel: "gemini-3.5-flash-lite",
+    models: ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
     docsUrl: "https://aistudio.google.com/apikey",
   },
   openrouter: {

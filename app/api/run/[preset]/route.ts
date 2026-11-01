@@ -10,7 +10,8 @@ import { runPreset } from "@/lib/engine/run";
 import type { RunRequestBody } from "@/lib/engine/types";
 import { getPresetById } from "@/lib/presets";
 
-export const maxDuration = 60;
+// Reviewed presets make up to three model calls (draft, review, revise), each capped at 55 s.
+export const maxDuration = 180;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ preset: string }> }) {
   const { preset: presetId } = await params;

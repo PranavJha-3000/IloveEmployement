@@ -27,7 +27,7 @@ import {
 } from "../lib/agent/client";
 import { AGENT_MAX_BUDGET_RESETS, AGENT_PLANNER_TIMEOUT_MS, AGENT_STEP_BUDGET, AGENT_TOKEN_BUDGET } from "../lib/agent/config";
 import { DEFAULT_TIMEOUT } from "../lib/pipeline";
-import { createRunRecord } from "../lib/agent/record";
+import { createRunRecord, isJobUrl } from "../lib/agent/record";
 import { withRunLock, type RunLockManager } from "../lib/agent/runLock";
 import type { AgentBudgetView, AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "../lib/agent/types";
 import type { RunMeta, VaultChunk } from "../lib/engine/types";
@@ -343,4 +343,15 @@ test("the agent route's maxDuration covers the planner plus three generations (W
   const m = /export const maxDuration = (\d+);/.exec(src);
   assert.ok(m, "route exports a literal maxDuration");
   assert.ok(Number(m[1]) * 1000 >= AGENT_PLANNER_TIMEOUT_MS + 3 * DEFAULT_TIMEOUT, `maxDuration ${m[1]}s is too short`);
+});
+
+test("job links: only http(s) or none; a saved bad link is dropped from the request (WR-10)", () => {
+  assert.ok(isJobUrl(undefined) && isJobUrl("") && isJobUrl(" https://x.co/j ") && isJobUrl("http://x.co"));
+  assert.ok(!isJobUrl("ftp://x.co") && !isJobUrl("javascript:alert(1)") && !isJobUrl("x.co/jobs"));
+  const rec = { ...fresh(), job: { ...JOB, url: "ftp://jobs.example.com/1" } };
+  const req = buildStepRequest(rec, { vault: {} });
+  assert.ok(!("url" in req.job));
+  assert.strictEqual(req.job.role, JOB.role);
+  const ok = buildStepRequest({ ...fresh(), job: { ...JOB, url: "https://jobs.example.com/1" } }, { vault: {} });
+  assert.strictEqual(ok.job.url, "https://jobs.example.com/1");
 });

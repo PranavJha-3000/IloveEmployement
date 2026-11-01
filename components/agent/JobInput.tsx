@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { AGENT_JD_MAX, AGENT_NOTES_MAX, AGENT_TEXT_MAX, AGENT_URL_MAX } from "@/lib/agent/config";
+import { isJobUrl, JOB_URL_ERROR } from "@/lib/agent/record";
 import type { AgentJob } from "@/lib/agent/types";
 
 export interface JobInputProps {
@@ -15,6 +16,8 @@ export function JobInput({ value, onChange, disabled = false }: JobInputProps) {
   const set = <K extends keyof AgentJob>(key: K, v: AgentJob[K]) => onChange({ ...value, [key]: v });
   const jdHelp = `${uid}-jd-help`;
   const hasExtras = Boolean(value.url?.trim() || value.notes?.trim());
+  const urlError = isJobUrl(value.url) ? "" : JOB_URL_ERROR;
+  const urlHelp = `${uid}-url-error`;
 
   return (
     <div className="space-y-5">
@@ -84,8 +87,15 @@ export function JobInput({ value, onChange, disabled = false }: JobInputProps) {
               disabled={disabled}
               maxLength={AGENT_URL_MAX}
               value={value.url ?? ""}
+              aria-invalid={urlError ? true : undefined}
+              aria-describedby={urlError ? urlHelp : undefined}
               onChange={(e) => set("url", e.target.value)}
             />
+            {urlError && (
+              <p id={urlHelp} className="field-help text-red-600">
+                {urlError}
+              </p>
+            )}
           </div>
           <div>
             <label className="field-label" htmlFor={`${uid}-notes`}>

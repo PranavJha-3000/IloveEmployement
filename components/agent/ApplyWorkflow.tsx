@@ -32,7 +32,7 @@ import {
   saveArtifactEdit,
   stopRun,
 } from "@/lib/agent/client";
-import { createRunRecord, isAgentRunRecord, jobLabel, normalizeForResume } from "@/lib/agent/record";
+import { createRunRecord, isAgentRunRecord, isJobUrl, jobLabel, normalizeForResume } from "@/lib/agent/record";
 import { withRunLock } from "@/lib/agent/runLock";
 import type { AgentJob, AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "@/lib/agent/types";
 import type { MessageResult } from "@/lib/engine/schemas";
@@ -65,7 +65,7 @@ const cleanJob = (j: AgentJob): AgentJob => ({
   description: j.description.trim(),
   company: j.company.trim(),
   role: j.role.trim(),
-  ...(j.url?.trim() ? { url: j.url.trim() } : {}),
+  ...(j.url?.trim() && isJobUrl(j.url) ? { url: j.url.trim() } : {}),
   ...(j.notes?.trim() ? { notes: j.notes.trim() } : {}),
 });
 
@@ -469,7 +469,7 @@ export function ApplyWorkflow() {
           <div className="agent-confirm" role="group" aria-label="Edit job details">
             <JobInput value={editingJob} onChange={setEditingJob} />
             <div className="agent-confirm-actions" style={{ marginTop: 16 }}>
-              <button type="button" className="cta-primary" disabled={!editingJob.description.trim() || busy} onClick={() => rerun(editingJob)}>
+              <button type="button" className="cta-primary" disabled={!editingJob.description.trim() || !isJobUrl(editingJob.url) || busy} onClick={() => rerun(editingJob)}>
                 Re-run fit check
               </button>
               <button type="button" className="cta-secondary" onClick={() => setEditingJob(null)}>
@@ -567,6 +567,7 @@ export function ApplyWorkflow() {
   const missing = [
     ...(draft.description.trim() ? [] : ["Job description"]),
     ...(access.ready ? [] : ["an AI source (free tier or your own key)"]),
+    ...(isJobUrl(draft.url) ? [] : ["a job link starting with http:// or https://"]),
   ];
   const noVault = loaded && chunks.length === 0;
   const canStart = missing.length === 0 && !noVault && !busy;

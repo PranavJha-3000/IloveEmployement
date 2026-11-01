@@ -237,6 +237,14 @@ export function normalizeForResume(r: AgentRunRecord): AgentRunRecord {
   };
 }
 
+export const JOB_URL_ERROR = "Use a link that starts with http:// or https://.";
+
+/** The step endpoint accepts only http(s) job links (or none). Mirrors lib/agent/schema.ts. */
+export function isJobUrl(url: string | undefined): boolean {
+  const v = url?.trim() ?? "";
+  return v === "" || /^https?:\/\//i.test(v);
+}
+
 export function jobLabel(job: Pick<AgentJob, "role" | "company">): string {
   const role = typeof job.role === "string" ? job.role.trim() : "";
   const company = typeof job.company === "string" ? job.company.trim() : "";

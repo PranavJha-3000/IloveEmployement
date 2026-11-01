@@ -15,6 +15,7 @@ import {
   type AgentWorkTool,
 } from "./config";
 import { budgetLimits, countUsage, finiteCount, finiteUsage, latestFitStep, nextAction } from "./policy";
+import { isJobUrl } from "./record";
 import type {
   AgentApprovals,
   AgentJob,
@@ -98,6 +99,13 @@ export function localNextAction(record: AgentRunRecord): AgentNextAction {
   );
 }
 
+/** A saved run with a link the server rejects would 400 on every step: send it without the link. */
+function requestJob(job: AgentJob): AgentJob {
+  const { url: raw, ...rest } = job;
+  const url = raw?.trim();
+  return url && isJobUrl(url) ? { ...rest, url } : rest;
+}
+
 /** Step summaries only (no artifacts) and vault chunks only for tools the policy allows now. */
 export function buildStepRequest(record: AgentRunRecord, ctx: StepRequestContext): AgentStepRequest {
   const action = localNextAction(record);
@@ -112,7 +120,7 @@ export function buildStepRequest(record: AgentRunRecord, ctx: StepRequestContext
   }
   const req: AgentStepRequest = {
     runId: record.id,
-    job: record.job,
+    job: requestJob(record.job),
     steps: record.steps.map(summarizeStep),
     approvals: record.approvals,
     budget: {

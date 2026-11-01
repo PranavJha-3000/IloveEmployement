@@ -1,0 +1,16 @@
+Phase 5 pre-phase bundle baseline
+git sha: f333c58 (Phase 4 complete, before any Phase 5 source change)
+date: 2026-11-01
+source: NOT a fresh build. next.config.ts has no distDir override, so a build would overwrite .next
+        (a dev server is using it). Numbers are copied from
+        .planning/phases/04-agent-workflow/04-BASELINE.md "After Phase 4" (plan 04-10 gates).
+
++ First Load JS shared by all  103 kB
+
+Route                First Load JS
+/                    138 kB
+/tools/[slug]        157 kB
+/vault               143 kB
+/apply               164 kB
+
+Allowed growth of the shared line in Phase 5: at most 3 kB.

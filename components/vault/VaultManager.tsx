@@ -1,20 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { VaultChunk, VaultChunkKind, VaultProfile } from "@/lib/engine/types";
-import { chunkResume, manualChunk } from "@/lib/vault/chunker";
+import { applyQuickProfile } from "@/lib/profile/sync";
+import { planConfirm } from "@/lib/profile/confirm";
+import type { StructuredProfile } from "@/lib/profile/schema";
+import type { VaultChunkKind, VaultProfile } from "@/lib/engine/types";
+import { manualChunk } from "@/lib/vault/chunker";
 import {
   announceVaultChange,
   clearVault,
   deleteChunk,
-  deleteChunksFromSource,
   exportVault,
   importVault,
   saveChunks,
   saveProfile,
+  saveStructuredProfile,
 } from "@/lib/vault/store";
 import { useVault } from "@/lib/vault/useVault";
 import { ApplicationsList } from "@/components/agent/ApplicationsList";
+import { ProfileReview } from "./ProfileReview";
+import { ResumeImport } from "./ResumeImport";
 import { SemanticIndex } from "./SemanticIndex";
 
 const KIND_LABEL: Record<VaultChunkKind, string> = {
@@ -40,18 +45,17 @@ const PROFILE_FIELDS: { key: keyof VaultProfile; label: string; placeholder: str
 ];
 
 export function VaultManager() {
-  const { chunks, profile, loaded, reload } = useVault();
+  const { chunks, profile, structuredProfile, loaded, reload } = useVault();
   const [draftProfile, setDraftProfile] = useState(profile);
-  const [resumeText, setResumeText] = useState("");
-  const [preview, setPreview] = useState<VaultChunk[] | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [savedReviewOpen, setSavedReviewOpen] = useState(false);
+  const [savedConfirming, setSavedConfirming] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
   const [newKind, setNewKind] = useState<VaultChunkKind>("story");
   const [newTitle, setNewTitle] = useState("");
   const [newText, setNewText] = useState("");
   const [quickWin, setQuickWin] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setDraftProfile(profile), [profile]);
@@ -63,33 +67,21 @@ export function VaultManager() {
     setError("");
   }
 
-  async function handleUpload(file: File) {
-    setBusy(true);
-    setError("");
+  async function confirmSaved(p: StructuredProfile) {
+    if (!structuredProfile) return;
+    setSavedConfirming(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/parse-document", { method: "POST", body: form });
-      const json = (await res.json()) as { text?: string; error?: string };
-      if (!res.ok || !json.text) throw new Error(json.error || "Couldn't read that file.");
-      setResumeText(json.text);
-      setPreview(chunkResume(json.text));
+      const plan = planConfirm({ profile: p, method: structuredProfile.method, resumeText: null, existingVaultProfile: profile, now: Date.now() });
+      await saveStructuredProfile({ ...plan.confirmed, sourceHash: structuredProfile.sourceHash });
+      await saveProfile(plan.vaultProfile);
+      setSavedReviewOpen(false);
+      await changed("Profile confirmed and saved to your vault.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't read that file.");
+      console.error("Saving the structured profile failed.", err instanceof Error ? err.name : "error");
+      setError("We couldn't save your profile. Nothing was lost; try again.");
     } finally {
-      setBusy(false);
+      setSavedConfirming(false);
     }
-  }
-
-  async function commitResume() {
-    if (!preview?.length) return;
-    const hasResume = chunks.some((c) => c.source === "resume");
-    if (hasResume && !window.confirm("Replace the resume chunks already in your vault? Stories, wins and notes you added stay.")) return;
-    await deleteChunksFromSource("resume");
-    await saveChunks(preview);
-    setPreview(null);
-    setResumeText("");
-    await changed(`Saved ${preview.length} chunks from your resume.`);
   }
 
   async function addManual() {
@@ -195,61 +187,40 @@ export function VaultManager() {
           className="cta-secondary mt-4"
           onClick={async () => {
             await saveProfile(draftProfile);
+            if (structuredProfile) {
+              await saveStructuredProfile({ ...structuredProfile, profile: applyQuickProfile(structuredProfile.profile, draftProfile) });
+            }
             await changed("Profile saved.");
           }}
         >
           Save profile
         </button>
-      </section>
-
-      {/* Resume import */}
-      <section className="rounded-xl border border-zinc-200 p-5">
-        <h2 className="text-[15px] font-bold text-zinc-900">Add your resume</h2>
-        <p className="mt-1 text-[13px] text-zinc-500">Upload a PDF/DOCX/TXT or paste the text. You'll see exactly how it's split before anything is saved.</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="cta-secondary" disabled={busy} onClick={() => fileRef.current?.click()}>
-            {busy ? "Reading…" : "Upload file"}
+        {structuredProfile && !savedReviewOpen && (
+          <button type="button" className="cta-secondary mt-4 ml-2" onClick={() => setSavedReviewOpen(true)}>
+            Review structured profile
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,.docx,.txt"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && void handleUpload(e.target.files[0])}
-          />
-        </div>
-        <textarea
-          className="field-control mt-3"
-          rows={8}
-          value={resumeText}
-          placeholder="…or paste your resume here"
-          onChange={(e) => {
-            setResumeText(e.target.value);
-            setPreview(e.target.value.trim() ? chunkResume(e.target.value) : null);
-          }}
-        />
-        {preview && (
-          <div className="mt-4">
-            <p className="text-[13px] font-semibold text-zinc-800">
-              {preview.length} chunks:{" "}
-              {KIND_ORDER.map((k) => [k, preview.filter((c) => c.kind === k).length] as const)
-                .filter(([, n]) => n)
-                .map(([k, n]) => `${n} ${KIND_LABEL[k].toLowerCase()}`)
-                .join(", ")}
-            </p>
-            <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg bg-zinc-50 p-3 text-[12px] text-zinc-600">
-              {preview.map((c) => (
-                <li key={c.id} className="truncate">
-                  <span className="font-semibold text-zinc-800">[{c.kind}]</span> {c.title} — {c.text.slice(0, 100)}
-                </li>
-              ))}
-            </ul>
-            <button type="button" className="cta-primary mt-3" onClick={() => void commitResume()}>
-              Save to vault
-            </button>
+        )}
+        {structuredProfile && savedReviewOpen && (
+          <div className="mt-5">
+            <ProfileReview
+              initial={{ saved: structuredProfile }}
+              confirming={savedConfirming}
+              onDiscard={() => setSavedReviewOpen(false)}
+              onConfirm={confirmSaved}
+            />
           </div>
         )}
       </section>
+
+      {/* Resume import */}
+      <ResumeImport
+        chunks={chunks}
+        profile={profile}
+        structuredProfile={structuredProfile}
+        onChanged={changed}
+        onReviewOpenChange={setReviewOpen}
+        onOpenSavedReview={() => setSavedReviewOpen(true)}
+      />
 
       <SemanticIndex chunks={chunks} />
 

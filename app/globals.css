@@ -279,9 +279,12 @@ textarea.field-control { resize: vertical; }
 .nav-item .tool-card-icon { height: 36px; margin: 0; width: 36px; }
 
 /* ─── Agent workflow (Phase 4) ─── */
-.agent-layout { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
-.agent-aside { background: var(--mist); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; }
-.agent-aside h2 { font-size: 13px; font-weight: 600; line-height: 1.4; margin: 0 0 8px; }
+.agent-runbar { align-items: center; background: var(--paper); border: 1px solid var(--rule); border-radius: 14px; display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 16px 20px; }
+.agent-runbar .agent-check { margin-top: 0; }
+.agent-how { display: grid; gap: 16px; list-style: none; margin: 16px 0 0; padding: 0; }
+.agent-how li { display: flex; gap: 12px; }
+.agent-how-num { align-items: center; background: var(--paper); border: 1px solid var(--rule); border-radius: 999px; display: inline-flex; flex: none; font-size: 13px; font-weight: 600; height: 28px; justify-content: center; width: 28px; }
+.agent-more-details > summary { color: var(--slate); cursor: pointer; font-size: 13px; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
 .agent-saved { color: var(--faint); font-size: 13px; font-weight: 400; line-height: 1.4; }
 .agent-timeline { list-style: none; margin: 0; padding: 0 0 0 32px; position: relative; }
 .agent-timeline::before { background: var(--rule); bottom: 16px; content: ""; left: 15px; position: absolute; top: 16px; width: 2px; }
@@ -347,8 +350,6 @@ textarea.field-control { resize: vertical; }
   .agent-working { display: inline; }
 }
 @media (min-width: 1024px) {
-  .agent-layout { gap: 32px; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); }
-  .agent-aside { align-self: start; position: sticky; top: calc(var(--header-h) + 16px); }
   .agent-step { padding: 24px; }
 }
 @media (max-width: 1023.98px) {
@@ -368,5 +369,5 @@ textarea.field-control { resize: vertical; }
 @media (max-width: 1023.98px) {
   .agent-budget-toggle { display: inline-flex; }
   .agent-budget-meters[data-open="false"] { display: none; }
-  .agent-layout[data-input-focus="true"] .agent-actionbar { display: none; }
+  [data-input-focus="true"] .agent-actionbar { display: none; }
 }

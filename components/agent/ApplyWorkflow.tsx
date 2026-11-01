@@ -540,94 +540,48 @@ export function ApplyWorkflow() {
   const done = record?.status === "completed";
   const resumeButton =
     record && !busy && resumed && next?.kind === "step" ? (
-      <button type="button" className="cta-primary" style={{ marginTop: 16, width: "100%" }} onClick={() => resume(record)}>
+      <button type="button" className="cta-primary" style={{ marginTop: 16 }} onClick={() => resume(record)}>
         Resume application
       </button>
     ) : null;
   const pausedButton =
     record && !busy && record.status === "paused" && next?.kind === "step" && !resumed ? (
-      <button type="button" className="cta-primary" style={{ marginTop: 16, width: "100%" }} onClick={() => void advance(record)}>
+      <button type="button" className="cta-primary" onClick={() => void advance(record)}>
         Resume application
       </button>
     ) : null;
 
-  const summary =
-    record === null ? null : (
-      <div>
-        <h2>{jobLabel(record.job)}</h2>
-        <p className="agent-wrap" style={{ margin: 0, fontSize: 15 }}>
-          {record.job.description.length.toLocaleString("en-US")} characters of job description
-        </p>
-        <p className="agent-meta" style={{ margin: "8px 0 0" }}>
-          {record.status === "awaiting_approval" ? "Waiting for you. Nothing runs until you continue." : "Your progress is saved to your Career Vault."}
-        </p>
-      </div>
-    );
+  // ─── Stage 1: the job form (same layout as the other tool pages) ───────────
 
-  return (
-    <div className="agent-layout" data-input-focus={inputFocus || undefined}>
-      <aside className="agent-aside">
-        {record === null ? (
-          <form onSubmit={start}>
-            <JobInput value={draft} onChange={setDraft} disabled={busy} />
-            {loaded && noVault && (
-              <div className="rounded-xl border border-zinc-200 p-4" style={{ marginTop: 16 }}>
-                <p className="text-[14px] text-zinc-600">
-                  <span className="font-semibold text-zinc-800">Make it about you.</span> Add your resume to your{" "}
-                  <Link href="/vault" className="font-semibold text-red-600 hover:underline">
-                    Career Vault
-                  </Link>{" "}
-                  first, then every step writes from your real experience, with citations.
-                </p>
-              </div>
-            )}
-            <div style={{ marginTop: 16 }}>
-              <AccessPanel access={access} remaining={remaining} />
-            </div>
-            {!access.requestConfig && <p className="field-help">{FREE_NOTE}</p>}
-            <button type="submit" disabled={!canStart} className="cta-primary w-full disabled:cursor-not-allowed disabled:opacity-50" style={{ marginTop: 16 }}>
-              Start application
-            </button>
-            {(missing.length > 0 || noVault) && (
-              <p className="field-help" style={{ textAlign: "center" }}>
-                Still needed: {[...missing, ...(noVault ? ["your resume in the Career Vault"] : [])].join(", ")}
+  if (record === null) {
+    return (
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]" data-input-focus={inputFocus || undefined}>
+        <form className="space-y-5" onSubmit={start}>
+          <JobInput value={draft} onChange={setDraft} disabled={busy} />
+          {loaded && noVault && (
+            <div className="rounded-xl border border-zinc-200 p-4">
+              <p className="text-[14px] text-zinc-600">
+                <span className="font-semibold text-zinc-800">Make it about you.</span> Add your resume to your{" "}
+                <Link href="/vault" className="font-semibold text-red-600 hover:underline">
+                  Career Vault
+                </Link>{" "}
+                first. Every step writes from it, with citations.
               </p>
-            )}
-          </form>
-        ) : (
-          <div>
-            {summary}
-            <div style={{ marginTop: 16 }}>
-              <AccessPanel access={access} remaining={remaining} />
             </div>
-            {!access.requestConfig && <p className="field-help">{FREE_NOTE}</p>}
-            {resumeButton}
-            {pausedButton}
-            {view && (
-              <BudgetMeter
-                budget={{
-                  stepsUsed: view.stepsUsed,
-                  tokensUsed: view.tokensUsed,
-                  stepBudget: view.stepBudget,
-                  tokenBudget: view.tokenBudget,
-                  rejectedChoices: view.rejectedChoices,
-                }}
-              />
-            )}
-            <label className="agent-check">
-              <input type="checkbox" checked={record.pauseAfterStep} onChange={(e) => setPause(e.target.checked)} />
-              Pause after this step
-            </label>
-            {savedAt !== null && (
-              <p className="agent-saved">Saved to your Career Vault {new Date(savedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
-            )}
-          </div>
-        )}
-      </aside>
+          )}
+          <AccessPanel access={access} remaining={remaining} />
+          <button type="submit" disabled={!canStart} className="cta-primary w-full disabled:cursor-not-allowed disabled:opacity-50">
+            Start application
+          </button>
+          {(missing.length > 0 || noVault) && (
+            <p className="text-center text-[13px] text-zinc-500">
+              Still needed: {[...missing, ...(noVault ? ["your resume in the Career Vault"] : [])].join(", ")}
+            </p>
+          )}
+        </form>
 
-      <section aria-label="Application progress">
-        {record === null && offered && (
-          <div style={{ marginBottom: 16 }}>
+        <div className="space-y-4">
+          {offered && (
             <RunBanner kind="resumed" stepName={pickUp(localNextAction(offered))} headingRef={bannerRef}>
               <p className="agent-meta" style={{ margin: "8px 0 0" }}>
                 {jobLabel(offered.job)}
@@ -636,19 +590,76 @@ export function ApplyWorkflow() {
                 Resume application
               </button>
             </RunBanner>
-          </div>
-        )}
-
-        {record === null && (
-          <div className="empty" style={{ maxWidth: "none" }}>
-            <h2>Paste a job, get a full application</h2>
-            <p>
-              Add the job description above and press Start application. Your progress is saved to your Career Vault, so you can close this page and pick it up later.
+          )}
+          <section className="rounded-2xl bg-zinc-50 p-6" aria-labelledby="apply-how">
+            <h2 id="apply-how" className="text-[15px] font-bold text-zinc-900">
+              How it works
+            </h2>
+            <ol className="agent-how">
+              {AGENT_WORK_TOOLS.map((tool, i) => (
+                <li key={tool}>
+                  <span className="agent-how-num" aria-hidden>
+                    {i + 1}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-zinc-900">{AGENT_TOOL_LABELS[tool]}</span>
+                    <span className="block text-[13px] text-zinc-500">{HOW_IT_WORKS[tool]}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-4 text-[13px] text-zinc-500">
+              {access.requestConfig ? "Saved as you go, so you can close the page and pick it up later." : FREE_NOTE}
             </p>
-          </div>
-        )}
+          </section>
+        </div>
+      </div>
+    );
+  }
 
-        {record && (
+  // ─── Stage 2: the run ──────────────────────────────────────────────────────
+
+  return (
+    <div className="mx-auto max-w-[880px] space-y-6" data-input-focus={inputFocus || undefined}>
+      <div className="agent-runbar">
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-[17px] font-bold text-zinc-900">{jobLabel(record.job)}</h2>
+          <p className="agent-meta" style={{ margin: "2px 0 0" }}>
+            {record.status === "awaiting_approval" ? "Waiting for you. Nothing runs until you continue." : "Saved to your Career Vault as you go."}
+            {savedAt !== null &&
+              ` Last saved ${new Date(savedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.`}
+          </p>
+        </div>
+        {view && (
+          <BudgetMeter
+            budget={{
+              stepsUsed: view.stepsUsed,
+              tokensUsed: view.tokensUsed,
+              stepBudget: view.stepBudget,
+              tokenBudget: view.tokenBudget,
+              rejectedChoices: view.rejectedChoices,
+            }}
+          />
+        )}
+        <label className="agent-check">
+          <input type="checkbox" checked={record.pauseAfterStep} onChange={(e) => setPause(e.target.checked)} />
+          Pause after each step
+        </label>
+      </div>
+
+      {access.ready ? (
+        <details className="agent-more-details">
+          <summary>Change AI source</summary>
+          <div className="mt-2">
+            <AccessPanel access={access} remaining={remaining} />
+          </div>
+        </details>
+      ) : (
+        <AccessPanel access={access} remaining={remaining} />
+      )}
+      {pausedButton}
+
+      <section aria-label="Application progress">
           <div style={{ display: "grid", gap: 16 }}>
             {resumed && (
               <RunBanner kind="resumed" stepName={pickUp(next as AgentNextAction)} headingRef={bannerRef}>
@@ -657,6 +668,7 @@ export function ApplyWorkflow() {
                     Last activity {new Date(record.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 ) : null}
+                {resumeButton}
               </RunBanner>
             )}
             {skipStop && <RunBanner kind="skipped" gaps={fitGaps(fitStep)} />}
@@ -727,8 +739,14 @@ export function ApplyWorkflow() {
             )}
             <StepTimeline cards={cards} liveMessage={liveMessage} />
           </div>
-        )}
       </section>
     </div>
   );
 }
+
+const HOW_IT_WORKS: Record<(typeof AGENT_WORK_TOOLS)[number], string> = {
+  fit_check: "Every requirement checked against your vault. You approve before anything else runs.",
+  tailor_resume: "Your resume reordered and reworded for this job, citing your real experience.",
+  cover_letter: "A short letter from your own stories. You can edit it.",
+  outreach_message: "A note to the recruiter or hiring manager, only if you say so.",
+};

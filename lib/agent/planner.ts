@@ -100,7 +100,9 @@ export async function planNextTool(
       abortSignal: AbortSignal.timeout(AGENT_PLANNER_TIMEOUT_MS),
     });
     const call = result.toolCalls[0];
-    const usage = result.usage ?? null;
+    // Missing provider usage arrives as NaN: report it as null so the step charges the estimate.
+    const u = result.usage;
+    const usage = u && Number.isFinite(u.promptTokens) && Number.isFinite(u.completionTokens) ? u : null;
     if (!call) return { toolName: allowed[0], args: {}, usage, plannedBy: "policy-fallback" };
     return { toolName: call.toolName, args: (call.args ?? {}) as Record<string, unknown>, usage, plannedBy: "model" };
   } catch (err) {

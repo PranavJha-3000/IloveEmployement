@@ -4,16 +4,43 @@
 import {
   AGENT_MAX_BUDGET_RESETS,
   AGENT_MIN_TOKENS_FOR_STEP,
+  AGENT_NULL_USAGE_ESTIMATE,
   AGENT_STEP_BUDGET,
   AGENT_TOKEN_BUDGET,
   AGENT_WORK_TOOLS,
   type AgentWorkTool,
 } from "./config";
-import type { AgentApprovals, AgentNextAction, AgentStepSummary } from "./types";
+import type { AgentApprovals, AgentNextAction, AgentStepSummary, AgentUsage } from "./types";
 
 export interface AgentPolicyState {
   steps: AgentStepSummary[];
   approvals: AgentApprovals;
+}
+
+const isCount = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
+
+/**
+ * Tokens for one model call. The AI SDK reports a provider's missing usage as NaN (not null),
+ * so any non-finite count is charged the null-usage estimate and cannot evade the budget.
+ */
+export function usageTokens(u: { promptTokens: number; completionTokens: number } | null | undefined): number {
+  const p = u?.promptTokens;
+  const c = u?.completionTokens;
+  return isCount(p) && isCount(c) ? p + c : AGENT_NULL_USAGE_ESTIMATE;
+}
+
+/** Step usage with every field finite. A non-finite total (NaN, saved as null) is charged the estimate. */
+export function finiteUsage(u: Partial<AgentUsage> | null | undefined): AgentUsage {
+  return {
+    planner: isCount(u?.planner) ? u.planner : 0,
+    tool: isCount(u?.tool) ? u.tool : 0,
+    total: isCount(u?.total) ? u.total : AGENT_NULL_USAGE_ESTIMATE,
+  };
+}
+
+/** A non-finite budget counter falls back to 0; usage is recounted from the steps anyway. */
+export function finiteCount(n: unknown): number {
+  return isCount(n) ? n : 0;
 }
 
 export function countUsage(steps: AgentStepSummary[]): {
@@ -33,7 +60,7 @@ export function countUsage(steps: AgentStepSummary[]): {
       s.status === "running"
     ) {
       stepsUsed += 1;
-      tokensUsed += s.usage?.total ?? 0;
+      tokensUsed += s.usage ? finiteUsage(s.usage).total : 0;
     }
     if (s.status === "rejected") rejectedChoices += 1;
   }

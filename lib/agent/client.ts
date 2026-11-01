@@ -13,7 +13,7 @@ import {
   AGENT_TOOL_PRESETS,
   type AgentWorkTool,
 } from "./config";
-import { budgetLimits, countUsage, latestFitStep, nextAction } from "./policy";
+import { budgetLimits, countUsage, finiteCount, finiteUsage, latestFitStep, nextAction } from "./policy";
 import type {
   AgentApprovals,
   AgentJob,
@@ -76,7 +76,8 @@ export function summarizeStep(s: AgentStepRecord): AgentStepSummary {
     id: s.id,
     tool: s.tool,
     status: s.status,
-    usage: s.usage,
+    // Records saved while usage was NaN hold null here; the request schema needs finite numbers.
+    usage: finiteUsage(s.usage),
     ...(s.verdict !== undefined ? { verdict: s.verdict } : {}),
     ...(s.invalidated !== undefined ? { invalidated: s.invalidated } : {}),
   };
@@ -88,8 +89,8 @@ export function localNextAction(record: AgentRunRecord): AgentNextAction {
   return nextAction(
     { steps, approvals: record.approvals },
     {
-      stepsUsed: Math.max(usage.stepsUsed, record.budget.stepsUsed),
-      tokensUsed: Math.max(usage.tokensUsed, record.budget.tokensUsed),
+      stepsUsed: Math.max(usage.stepsUsed, finiteCount(record.budget.stepsUsed)),
+      tokensUsed: Math.max(usage.tokensUsed, finiteCount(record.budget.tokensUsed)),
     },
     budgetLimits(record.budget.resets),
   );
@@ -114,8 +115,8 @@ export function buildStepRequest(record: AgentRunRecord, ctx: StepRequestContext
     approvals: record.approvals,
     budget: {
       resets: record.budget.resets,
-      claimedStepsUsed: record.budget.stepsUsed,
-      claimedTokensUsed: record.budget.tokensUsed,
+      claimedStepsUsed: Math.trunc(finiteCount(record.budget.stepsUsed)),
+      claimedTokensUsed: finiteCount(record.budget.tokensUsed),
     },
     vault,
     ...(Object.keys(retrieval).length ? { retrieval } : {}),

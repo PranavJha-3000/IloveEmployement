@@ -8,7 +8,6 @@ import { runPreset } from "../engine/run";
 import { classifyAIError } from "../pipeline";
 import { getPresetById } from "../presets";
 import {
-  AGENT_NULL_USAGE_ESTIMATE,
   AGENT_TOOLS,
   AGENT_TOOL_PRESETS,
   AGENT_WORK_TOOLS,
@@ -16,7 +15,7 @@ import {
   type AgentWorkTool,
 } from "./config";
 import { planNextTool } from "./planner";
-import { budgetLimits, countUsage, nextAction, validateChoice } from "./policy";
+import { budgetLimits, countUsage, nextAction, usageTokens, validateChoice } from "./policy";
 import { parseAgentStepRequest } from "./schema";
 import type {
   AgentApprovals,
@@ -135,9 +134,7 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
     const info = classifyAIError(err);
     return { status: info.status, body: { error: info.message } };
   }
-  const plannerTokens = planned.usage
-    ? planned.usage.promptTokens + planned.usage.completionTokens
-    : AGENT_NULL_USAGE_ESTIMATE;
+  const plannerTokens = usageTokens(planned.usage);
 
   const after = (step: AgentStepRecord) => {
     const steps = [...req.steps, step];
@@ -209,7 +206,7 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
     };
   } else {
     const { data, meta } = outcome.result;
-    const toolTokens = meta.usage ? meta.usage.promptTokens + meta.usage.completionTokens : AGENT_NULL_USAGE_ESTIMATE;
+    const toolTokens = usageTokens(meta.usage);
     step = {
       ...base,
       status: "done",

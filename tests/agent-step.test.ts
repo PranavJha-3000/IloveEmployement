@@ -12,6 +12,9 @@ import {
 } from "../lib/agent/client";
 import { AGENT_VAULT, FIT_SKIP, scriptAgentModel } from "./agentScript";
 import { createRunRecord, isAgentRunRecord, normalizeForResume } from "../lib/agent/record";
+import { AGENT_NULL_USAGE_ESTIMATE } from "../lib/agent/config";
+import { countUsage } from "../lib/agent/policy";
+import { parseAgentStepRequest } from "../lib/agent/schema";
 import { agentStep, type AgentStepOptions, type AgentStepResult } from "../lib/agent/step";
 import type { AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "../lib/agent/types";
 import { setModelFactory } from "../lib/engine/run";
@@ -331,4 +334,51 @@ test("15. free tier counts one run per executed step; blocked gate requests are 
       else process.env[k] = v;
     }
   }
+});
+
+test("16. NaN provider usage charges the null-usage estimate and later requests stay schema-valid", async () => {
+  scriptAgentModel({ plan: FULL_PLAN, usage: { promptTokens: NaN, completionTokens: NaN } });
+  const first = await go(fresh());
+  assert.strictEqual(first.res.kind, "step");
+  if (first.res.kind !== "step") return;
+  assert.deepStrictEqual(first.res.step.usage, {
+    planner: AGENT_NULL_USAGE_ESTIMATE,
+    tool: AGENT_NULL_USAGE_ESTIMATE,
+    total: 2 * AGENT_NULL_USAGE_ESTIMATE,
+  });
+  assert.strictEqual(first.res.budget.tokensUsed, 2 * AGENT_NULL_USAGE_ESTIMATE);
+
+  // The wire response is JSON (NaN would become null); the next request must still parse.
+  const wire = JSON.parse(JSON.stringify(first.res)) as AgentStepResponse;
+  const rec = approveGateA(applyStepResponse(fresh(), wire, 2000), 3000);
+  assert.ok(parseAgentStepRequest(buildStepRequest(rec, { vault: VAULT, config: KEY })).ok);
+  const second = await go(rec);
+  assert.strictEqual(second.res.kind, "step");
+});
+
+test("17. a record already saved with null usage recovers: charged the estimate, request valid", () => {
+  const base = fresh();
+  const broken = {
+    ...base,
+    steps: [
+      {
+        id: "f1",
+        tool: "fit_check",
+        status: "done",
+        verdict: "APPLY",
+        plannedBy: "model",
+        inputs: {},
+        usage: { planner: null, tool: null, total: null },
+        startedAt: 1,
+      },
+    ],
+    approvals: { gateA: { fitStepId: "f1", approvedAt: 2 } },
+    budget: { ...base.budget, stepsUsed: null, tokensUsed: null },
+  } as unknown as AgentRunRecord;
+  const req = buildStepRequest(broken, { vault: VAULT, config: KEY });
+  assert.ok(parseAgentStepRequest(req).ok);
+  assert.strictEqual(req.steps[0].usage.total, AGENT_NULL_USAGE_ESTIMATE);
+  assert.strictEqual(req.budget.claimedTokensUsed, 0);
+  assert.deepStrictEqual(localNextAction(broken), { kind: "step", allowed: ["tailor_resume", "cover_letter"] });
+  assert.strictEqual(countUsage(broken.steps).tokensUsed, AGENT_NULL_USAGE_ESTIMATE);
 });

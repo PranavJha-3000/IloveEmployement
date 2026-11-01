@@ -15,6 +15,7 @@ import {
   loadChunks,
   parseVaultImport,
   saveAgentRun,
+  shouldImportRun,
   upgradeVaultDb,
   VAULT_BLOCKED_MESSAGE,
 } from "../lib/vault/store";
@@ -242,4 +243,13 @@ test("isAgentRunRecord rejects malformed job, budget, approvals and usage; keeps
   // Saved by an older build when the provider reported NaN usage: still loads, then recovers.
   assert.ok(bad({ budget: { ...r.budget, tokensUsed: null }, steps: [step({ usage: { planner: null, tool: null, total: null } as never })] }));
   assert.strictEqual(jobLabel({} as never), "this job");
+});
+
+test("shouldImportRun: an older backup never overwrites a newer local run (WR-07)", () => {
+  const older = createRunRecord(job, { id: "r1", now: 100 });
+  const newer = { ...older, updatedAt: 200 };
+  assert.strictEqual(shouldImportRun(undefined, older), true);
+  assert.strictEqual(shouldImportRun(newer, older), false);
+  assert.strictEqual(shouldImportRun(newer, newer), false);
+  assert.strictEqual(shouldImportRun(older, newer), true);
 });

@@ -227,12 +227,22 @@ export async function exportVault(): Promise<string> {
   return buildVaultExport({ profile, chunks, agentRuns }, new Date().toISOString());
 }
 
-export async function importVault(json: string): Promise<{ chunks: number; agentRuns: number }> {
+/** An imported run only replaces a local copy that is older; a backup never rolls back newer work. */
+export function shouldImportRun(existing: Pick<AgentRunRecord, "updatedAt"> | undefined, incoming: AgentRunRecord): boolean {
+  return !existing || incoming.updatedAt > existing.updatedAt;
+}
+
+export async function importVault(json: string): Promise<{ chunks: number; agentRuns: number; keptNewer: number }> {
   const { profile, chunks, agentRuns } = parseVaultImport(json);
   await saveChunks(chunks);
   if (profile) await saveProfile({ ...EMPTY_PROFILE, ...profile });
-  for (const r of agentRuns) await saveAgentRun(r);
-  return { chunks: chunks.length, agentRuns: agentRuns.length };
+  let imported = 0;
+  for (const r of agentRuns) {
+    if (!shouldImportRun(await loadAgentRun(r.id), r)) continue;
+    await saveAgentRun(r);
+    imported += 1;
+  }
+  return { chunks: chunks.length, agentRuns: imported, keptNewer: agentRuns.length - imported };
 }
 
 /** Notifies open tool pages that the vault changed in another tab or component. */

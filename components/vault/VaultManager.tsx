@@ -120,8 +120,9 @@ export function VaultManager() {
 
   async function handleImport(file: File) {
     try {
-      const { chunks: n, agentRuns: m } = await importVault(await file.text());
-      await changed(m > 0 ? `Imported ${n} chunks and ${m} applications.` : `Imported ${n} chunks.`);
+      const { chunks: n, agentRuns: m, keptNewer } = await importVault(await file.text());
+      const kept = keptNewer > 0 ? ` Kept ${keptNewer} newer ${keptNewer === 1 ? "application" : "applications"} already on this browser.` : "";
+      await changed((m > 0 ? `Imported ${n} chunks and ${m} applications.` : `Imported ${n} chunks.`) + kept);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
     }

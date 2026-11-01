@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit -p .",
     "eval": "tsc -p tsconfig.eval.json && node .eval-build/evals/llm/run.js",
     "eval:retrieval": "tsc -p tsconfig.eval.json && node .eval-build/evals/retrieval/run.js",
+    "eval:profile": "tsc -p tsconfig.eval.json && node .eval-build/evals/profile/run.js",
     "eval:retrieval:dump": "tsc -p tsconfig.eval.json && node .eval-build/evals/retrieval/dump.js"
   },
   "dependencies": {

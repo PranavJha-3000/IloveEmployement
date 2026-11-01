@@ -145,3 +145,23 @@ export function normalizeResumeLines(text: string): string[] {
   while (out.length && out[out.length - 1] === "") out.pop();
   return out;
 }
+
+// ─── Resume diff view model ──────────────────────────────────────────────────
+
+export type DiffRow =
+  | { type: "context"; text: string }
+  | { type: "added"; text: string; changeIndex: number }
+  | { type: "removed"; text: string; changeIndex: number }
+  | { type: "changed"; from: WordSegment[]; to: WordSegment[]; changeIndex: number }
+  | { type: "collapsed"; count: number; lines: string[] };
+
+export interface ResumeDiff {
+  rows: DiffRow[];
+  counts: { added: number; removed: number; changed: number };
+  identical: boolean;
+  changeCount: number;
+}
+
+export function buildResumeDiff(_fromText: string, _toText: string, _opts?: { context?: number; collapseOver?: number }): ResumeDiff {
+  throw new Error("not implemented");
+}

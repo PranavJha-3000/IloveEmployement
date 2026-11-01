@@ -47,6 +47,54 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** Usage counters: finite, or null where an old build saved NaN (charged as an estimate on load). */
+const isCounter = (v: unknown) => isNum(v) || v === null;
+const isOptStr = (v: unknown) => v === undefined || typeof v === "string";
+
+function isUsage(v: unknown): boolean {
+  return isObj(v) && isCounter(v.planner) && isCounter(v.tool) && isCounter(v.total);
+}
+
+function isJob(v: unknown): boolean {
+  return (
+    isObj(v) &&
+    typeof v.description === "string" &&
+    typeof v.company === "string" &&
+    typeof v.role === "string" &&
+    isOptStr(v.url) &&
+    isOptStr(v.notes)
+  );
+}
+
+function isBudget(v: unknown): boolean {
+  return (
+    isObj(v) &&
+    isCounter(v.stepsUsed) &&
+    isCounter(v.tokensUsed) &&
+    isNum(v.stepBudget) &&
+    isNum(v.tokenBudget) &&
+    isCounter(v.rejectedChoices) &&
+    isNum(v.resets)
+  );
+}
+
+function isApprovals(v: unknown): boolean {
+  if (!isObj(v)) return false;
+  const { gateA, gateB, skipOverride } = v;
+  if (gateA !== undefined && !(isObj(gateA) && typeof gateA.fitStepId === "string" && isNum(gateA.approvedAt))) return false;
+  if (gateB !== undefined && !(isObj(gateB) && (gateB.decision === "draft" || gateB.decision === "decline") && isNum(gateB.approvedAt))) {
+    return false;
+  }
+  if (
+    skipOverride !== undefined &&
+    !(isObj(skipOverride) && typeof skipOverride.fitStepId === "string" && isNum(skipOverride.confirmedAt))
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function isStep(v: unknown): v is AgentStepRecord {
   if (!isObj(v)) return false;
   return (
@@ -56,7 +104,7 @@ function isStep(v: unknown): v is AgentStepRecord {
     typeof v.status === "string" &&
     (STEP_STATUSES as readonly string[]).includes(v.status) &&
     isObj(v.inputs) &&
-    isObj(v.usage) &&
+    isUsage(v.usage) &&
     typeof v.startedAt === "number"
   );
 }
@@ -67,9 +115,9 @@ export function isAgentRunRecord(v: unknown): v is AgentRunRecord {
   if (v.schemaVersion !== 1) return false;
   if (typeof v.createdAt !== "number" || typeof v.updatedAt !== "number") return false;
   if (typeof v.status !== "string" || !(RUN_STATUSES as readonly string[]).includes(v.status)) return false;
-  if (!isObj(v.job) || typeof v.job.description !== "string") return false;
+  if (!isJob(v.job)) return false;
   if (!Array.isArray(v.steps) || !v.steps.every(isStep)) return false;
-  if (!isObj(v.approvals) || !isObj(v.budget)) return false;
+  if (!isApprovals(v.approvals) || !isBudget(v.budget)) return false;
   if (typeof v.pauseAfterStep !== "boolean") return false;
   return true;
 }
@@ -140,8 +188,8 @@ export function normalizeForResume(r: AgentRunRecord): AgentRunRecord {
 }
 
 export function jobLabel(job: Pick<AgentJob, "role" | "company">): string {
-  const role = job.role.trim();
-  const company = job.company.trim();
+  const role = typeof job.role === "string" ? job.role.trim() : "";
+  const company = typeof job.company === "string" ? job.company.trim() : "";
   if (role && company) return `${role} at ${company}`;
   return role || company || "this job";
 }

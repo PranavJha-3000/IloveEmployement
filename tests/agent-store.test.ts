@@ -228,3 +228,18 @@ test("a blocked v3 upgrade and an aborted transaction settle instead of hanging 
     g.indexedDB = saved;
   }
 });
+
+test("isAgentRunRecord rejects malformed job, budget, approvals and usage; keeps legacy null usage (WR-06)", () => {
+  const r = createRunRecord(job, { id: "r1", now: 5 });
+  const bad = (over: Record<string, unknown>) => isAgentRunRecord({ ...r, ...over });
+  assert.ok(!bad({ job: { description: "x" } }));
+  assert.ok(!bad({ job: { ...job, role: 3 } }));
+  assert.ok(!bad({ budget: { ...r.budget, stepBudget: "6" } }));
+  assert.ok(!bad({ budget: {} }));
+  assert.ok(!bad({ approvals: { gateA: { fitStepId: 1, approvedAt: 1 } } }));
+  assert.ok(!bad({ approvals: { gateB: { decision: "yes", approvedAt: 1 } } }));
+  assert.ok(!bad({ steps: [step({ usage: { planner: 1, tool: 1, total: "2" } as never })] }));
+  // Saved by an older build when the provider reported NaN usage: still loads, then recovers.
+  assert.ok(bad({ budget: { ...r.budget, tokensUsed: null }, steps: [step({ usage: { planner: null, tool: null, total: null } as never })] }));
+  assert.strictEqual(jobLabel({} as never), "this job");
+});

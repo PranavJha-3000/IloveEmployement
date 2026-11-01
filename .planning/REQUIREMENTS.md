@@ -29,12 +29,12 @@
 
 ### Agent Workflow
 
-- [ ] **AGENT-01**: An "Apply to this job" workflow takes a job description and runs a bounded tool-calling loop over existing engines (fit check, tailor resume, cover letter, outreach message) as tools
-- [ ] **AGENT-02**: The loop enforces a step budget and token budget, and stops with a clear reason when exceeded
-- [ ] **AGENT-03**: Workflow state (steps, tool calls, outputs) persists in the vault so a run can be resumed
-- [ ] **AGENT-04**: The user approves or edits at checkpoints (e.g. after fit check, before drafting outreach); a SKIP verdict ends the workflow unless overridden
-- [ ] **AGENT-05**: Every artifact from the workflow carries the same grounding guarantees as the standalone tools
-- [ ] **AGENT-06**: The workflow is covered by scripted-model tests (tool selection, budget stop, approval gating) and by at least 3 eval cases
+- [x] **AGENT-01**: An "Apply to this job" workflow takes a job description and runs a bounded tool-calling loop over existing engines (fit check, tailor resume, cover letter, outreach message) as tools
+- [x] **AGENT-02**: The loop enforces a step budget and token budget, and stops with a clear reason when exceeded
+- [x] **AGENT-03**: Workflow state (steps, tool calls, outputs) persists in the vault so a run can be resumed
+- [x] **AGENT-04**: The user approves or edits at checkpoints (e.g. after fit check, before drafting outreach); a SKIP verdict ends the workflow unless overridden
+- [x] **AGENT-05**: Every artifact from the workflow carries the same grounding guarantees as the standalone tools
+- [x] **AGENT-06**: The workflow is covered by scripted-model tests (tool selection, budget stop, approval gating) and by at least 3 eval cases
 
 ### Document Intelligence
 
@@ -83,12 +83,12 @@
 | LEVAL-04 | Phase 3 | Pending |
 | LEVAL-05 | Phase 3 | Pending |
 | LEVAL-06 | Phase 3 | Pending |
-| AGENT-01 | Phase 4 | Pending |
-| AGENT-02 | Phase 4 | Pending |
-| AGENT-03 | Phase 4 | Pending |
-| AGENT-04 | Phase 4 | Pending |
-| AGENT-05 | Phase 4 | Pending |
-| AGENT-06 | Phase 4 | Pending |
+| AGENT-01 | Phase 4 | Complete |
+| AGENT-02 | Phase 4 | Complete |
+| AGENT-03 | Phase 4 | Complete |
+| AGENT-04 | Phase 4 | Complete |
+| AGENT-05 | Phase 4 | Complete |
+| AGENT-06 | Phase 4 | Complete |
 | DOC-01 | Phase 5 | Pending |
 | DOC-02 | Phase 5 | Pending |
 | DOC-03 | Phase 5 | Pending |

@@ -23,13 +23,13 @@ Nothing about the user gets invented: every generated claim traces to the user's
 - ✓ 43 tests (unit + pipeline with a scripted model), 10-case behavioural eval harness, CI
 - ✓ Retrieval evaluation: 85 graded queries over 3 synthetic resumes, recall@k / MRR / nDCG per strategy in `evals/RETRIEVAL.md`, keyword baseline gated in CI — Validated in Phase 1: Retrieval Evaluation
 - ✓ Reranker evaluated against a pre-registered rule (paired bootstrap CI, latency budget) and rejected with recorded numbers; app stays on hybrid — Validated in Phase 2: Reranking
+- ✓ "Apply to this job" agent workflow: stateless one-step tool-calling endpoint over the existing engines, server-side order/gate/budget policy, SKIP stop with confirmed override, resumable runs in IndexedDB v3, per-run cross-tab lock; 321 offline tests, 4 agent eval cases behind --agent — Validated in Phase 4: Agent Workflow
 
 ### Active
 
 <!-- Milestone: AI engineering depth. Each item must end in a measured, publishable result. -->
 
 - [ ] Real-model eval runs with model comparison, cost, citation precision and a calibrated LLM judge
-- [ ] Bounded tool-calling "Apply to this job" agent workflow with human approval checkpoints
 - [ ] Structured profile extraction with skill normalization and resume versions
 - [ ] Per-run observability traces
 
@@ -88,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-01 after Phase 2 (Reranking)*
+*Last updated: 2026-11-01 after Phase 4 (Agent Workflow)*

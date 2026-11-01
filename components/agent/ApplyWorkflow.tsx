@@ -429,8 +429,10 @@ export function ApplyWorkflow() {
   const userStopped = record?.status === "stopped" && record.stopReason?.kind === "user";
   const allowed = next?.kind === "step" ? next.allowed : [];
   const firstAllowed = allowed[0];
+  // remaining is only known after a step response this session; unknown (after a reload) is allowed
+  // and the server's 429 reports an exhausted free tier.
   const canContinueBudget =
-    budgetStop && record !== null && record.budget.resets < AGENT_MAX_BUDGET_RESETS && (Boolean(access.requestConfig) || (remaining !== null && remaining >= 1));
+    budgetStop && record !== null && record.budget.resets < AGENT_MAX_BUDGET_RESETS && (Boolean(access.requestConfig) || remaining === null || remaining >= 1);
 
   function stateFor(tool: AgentWorkTool): StepCardState {
     if (!record) return "locked";

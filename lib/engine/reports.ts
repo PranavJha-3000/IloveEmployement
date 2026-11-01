@@ -7,7 +7,7 @@
 // Isomorphic (no server imports) so result types can be shared with the UI.
 
 import { z } from "zod";
-import { answerSignals, containsTerm, formatChecks, keywordCoverage, offerTotals, scoreRequirements } from "./scoring";
+import { answerSignals, applySkillEvidence, formatChecks, keywordCoverage, offerTotals, scoreRequirements, skillInText } from "./scoring";
 import type { ReportKind } from "../presets/types";
 
 const evidence = z.enum(["STRONG", "PARTIAL", "MISSING", "UNVERIFIED"]);
@@ -307,7 +307,11 @@ function quoteInText(quote: string, text: string): boolean {
 
 export const FINALIZERS = {
   fit: (o: ReportOutput<"fit">, ctx: FinalizeContext) => {
-    const requirements = o.requirements.map((r) => ({ ...r, chunkIds: scrub(r.chunkIds, ctx) }));
+    // DOC-02: a MISSING the resume provably satisfies under an alias is corrected to PARTIAL by code.
+    const requirements = applySkillEvidence(
+      o.requirements.map((r) => ({ ...r, chunkIds: scrub(r.chunkIds, ctx) })),
+      ctx.resumeText,
+    );
     return { ...o, requirements, strengths: o.strengths.map((s) => ({ ...s, chunkIds: scrub(s.chunkIds, ctx) })), score: scoreRequirements(requirements) };
   },
   jd: (o: ReportOutput<"jd">, ctx: FinalizeContext) => {
@@ -320,7 +324,10 @@ export const FINALIZERS = {
     return { ...o, redFlags, greenFlags, quality };
   },
   gap: (o: ReportOutput<"gap">, ctx: FinalizeContext) => {
-    const requirements = o.requirements.map((r) => ({ ...r, chunkIds: scrub(r.chunkIds, ctx) }));
+    const requirements = applySkillEvidence(
+      o.requirements.map((r) => ({ ...r, chunkIds: scrub(r.chunkIds, ctx) })),
+      ctx.resumeText,
+    );
     return {
       ...o,
       requirements,
@@ -350,8 +357,8 @@ export const FINALIZERS = {
         }),
       })),
     }));
-    const hay = ` ${ctx.sourceText.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ")} `;
-    const unsupportedSkills = o.skills.filter((s) => !containsTerm(hay, s));
+    // A skill is supported when the source has it under its own name or any taxonomy alias ("k8s" supports "Kubernetes").
+    const unsupportedSkills = o.skills.filter((s) => !skillInText(s, ctx.sourceText));
     return {
       ...o,
       summary: { ...o.summary, chunkIds: scrub(o.summary.chunkIds, ctx) },

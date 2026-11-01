@@ -86,10 +86,20 @@ function caseSensitiveFormPresent(form: string, rawText: string): boolean {
  * `term` itself keeps the legacy whole-term rule; aliases of a taxonomy skill
  * that are ordinary words need their exact capitalisation.
  */
-function skillFormFound(form: string, hay: string, rawText: string, entryCaseSensitive: readonly string[], isOriginal: boolean): boolean {
-  if (!containsTerm(hay, form)) return false;
-  if (isOriginal) return true;
+function skillFormFound(form: string, hs: Haystacks, rawText: string, entryCaseSensitive: readonly string[], isOriginal: boolean): boolean {
+  if (isOriginal) return containsTerm(hs.strict, form);
+  // Aliases also tolerate a sentence-final period ("...on k8s.") that the strict normaliser keeps attached.
+  if (!containsTerm(hs.strict, form) && !containsTerm(hs.loose, form)) return false;
   return entryCaseSensitive.includes(form) ? caseSensitiveFormPresent(form, rawText) : true;
+}
+
+interface Haystacks {
+  strict: string;
+  loose: string;
+}
+
+function haystacks(rawText: string): Haystacks {
+  return { strict: normalize(rawText), loose: ` ${rawText.toLowerCase().replace(/[^a-z0-9+#]+/g, " ")} ` };
 }
 
 /** Candidates for one source term: the term as written first, then every taxonomy form of it. */
@@ -103,7 +113,7 @@ export function keywordCoverage(
   resumeText: string,
   keywords: { term: string; importance: Importance; synonyms: string[]; evidencedBy: string[] }[],
 ): { items: KeywordCoverage[]; score: number } {
-  const hay = normalize(resumeText);
+  const hay = haystacks(resumeText);
   let earned = 0;
   let possible = 0;
   const items = keywords.map((k) => {
@@ -128,7 +138,7 @@ export function keywordCoverage(
 
 /** True when `skill` (or any alias of it) is in `rawText`. Used to decide which skills a tailored resume may keep. */
 export function skillInText(skill: string, rawText: string): boolean {
-  const hay = normalize(rawText);
+  const hay = haystacks(rawText);
   return candidatesFor(skill).some((c) => skillFormFound(c.form, hay, rawText, c.caseSensitive, c.original));
 }
 
@@ -148,7 +158,7 @@ export interface SkillMatch {
 export function canonicalSkillEvidence(requirement: string, resumeText: string): { skills: string[]; matchedAs: string[] } | null {
   const mentioned = skillsMentioned(requirement);
   if (!mentioned.length) return null;
-  const hay = normalize(resumeText);
+  const hay = haystacks(resumeText);
   const skills: string[] = [];
   const matchedAs: string[] = [];
   for (const { entry } of mentioned) {

@@ -82,7 +82,7 @@ function RequirementsTable({
   reqs,
   chunks,
 }: {
-  reqs: { requirement: string; importance: "must" | "nice"; evidence: Evidence; proof: string; chunkIds: string[] }[];
+  reqs: { requirement: string; importance: "must" | "nice"; evidence: Evidence; proof: string; chunkIds: string[]; skillMatch?: { matchedAs: string[] } }[];
   chunks: Map<string, VaultContextChunk>;
 }) {
   return (
@@ -95,6 +95,9 @@ function RequirementsTable({
             <span className="text-[11px] text-zinc-400">{r.importance === "must" ? "must-have" : "nice-to-have"}</span>
           </div>
           {r.proof && <p className="mt-1 text-[12.5px] text-zinc-600">{r.proof}</p>}
+          {r.skillMatch && (
+            <p className="mt-1 text-[12.5px] text-zinc-600">Found in your resume as {r.skillMatch.matchedAs.join(", ")}; marked partial because the fit check didn&apos;t cite it.</p>
+          )}
           <Cites ids={r.chunkIds} chunks={chunks} />
         </li>
       ))}
@@ -308,7 +311,7 @@ function AtsView({ r, chunks }: { r: ReportResult<"ats"> } & Ctx) {
           {r.coverage.items.map((k) => (
             <span
               key={k.term}
-              title={k.found ? `Matched as "${k.matchedAs}"` : k.evidenced ? "You have this; add the wording" : "Not in your material"}
+              title={k.found ? (k.canonical && k.matchedAs.toLowerCase() !== k.term.toLowerCase() ? `Matched as "${k.matchedAs}" (${k.canonical})` : `Matched as "${k.matchedAs}"`) : k.evidenced ? "You have this; add the wording" : "Not in your material"}
               className={`rounded-full border px-2.5 py-1 text-[12px] font-medium ${
                 k.found ? "border-emerald-200 bg-emerald-50 text-emerald-700" : k.evidenced ? "border-amber-200 bg-amber-50 text-amber-700" : "border-zinc-200 bg-zinc-50 text-zinc-500"
               }`}

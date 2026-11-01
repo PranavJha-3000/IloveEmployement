@@ -1,7 +1,34 @@
 // DOC-02: scoring and finalizers match on canonical skills. No model calls.
 import assert from "node:assert";
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
+import { MockLanguageModelV1 } from "ai/test";
+import { runPreset, setModelFactory } from "../lib/engine/run";
+import { FINALIZERS, type FinalizeContext } from "../lib/engine/reports";
 import { applySkillEvidence, canonicalSkillEvidence, keywordCoverage } from "../lib/engine/scoring";
+import type { RunMeta, VaultContextChunk } from "../lib/engine/types";
+import { getPresetById } from "../lib/presets";
+
+const KEY = { provider: "openai" as const, apiKey: "sk-test-not-real-1234567890", model: "mock" };
+
+/** Scripts the model: each generate call returns the next object as JSON. */
+function script(...responses: unknown[]) {
+  let i = 0;
+  setModelFactory(
+    () =>
+      new MockLanguageModelV1({
+        doGenerate: async () => {
+          const next = responses[Math.min(i++, responses.length - 1)];
+          return { rawCall: { rawPrompt: null, rawSettings: {} }, finishReason: "stop", usage: { promptTokens: 100, completionTokens: 50 }, text: JSON.stringify(next) };
+        },
+      }),
+  );
+}
+afterEach(() => setModelFactory(null));
+
+function ok(outcome: Awaited<ReturnType<typeof runPreset>>) {
+  if (!outcome.ok) throw new Error(`run failed: ${outcome.status} ${outcome.message}`);
+  return outcome.result as { data: Record<string, unknown>; meta: RunMeta };
+}
 
 const kw = (term: string, synonyms: string[] = []) => ({ term, importance: "must" as const, synonyms, evidencedBy: [] as string[] });
 
@@ -68,4 +95,77 @@ test("applySkillEvidence upgrades only MISSING to PARTIAL and does not mutate", 
 test("case-sensitive alias check escapes regex metacharacters", () => {
   const c = keywordCoverage("Wrote C++ and C# daily", [kw("C++"), kw("C#")]);
   assert.deepStrictEqual(c.items.map((i) => i.found), [true, true]);
+});
+
+// ─── Finalizers and pipeline ─────────────────────────────────────────────────
+
+const RESUME = "Frontend engineer. Built UIs in JS and ReactJS. Ran workloads on k8s. Services written in Go.";
+const ctx = (over: Partial<FinalizeContext> = {}): FinalizeContext => ({
+  validIds: new Set(["c1"]),
+  sourceText: RESUME,
+  resumeText: RESUME,
+  rawResume: RESUME,
+  inputs: {},
+  externalRefs: new Set(),
+  ...over,
+});
+
+const fitOutput = (requirements: { requirement: string; importance: "must" | "nice"; evidence: "STRONG" | "PARTIAL" | "MISSING" | "UNVERIFIED" }[]) => ({
+  headline: "h",
+  summary: "s",
+  requirements: requirements.map((r) => ({ ...r, proof: "", chunkIds: [] as string[] })),
+  strengths: [],
+  gaps: [],
+  interviewRisks: [],
+});
+
+test("fit: a MISSING requirement the resume satisfies under an alias becomes PARTIAL, visibly, and scores from the corrected evidence", () => {
+  const out = FINALIZERS.fit(fitOutput([{ requirement: "JavaScript", importance: "must", evidence: "MISSING" }]), ctx());
+  assert.strictEqual(out.requirements[0].evidence, "PARTIAL");
+  assert.deepStrictEqual(out.requirements[0].skillMatch?.matchedAs, ["JS"]);
+  assert.strictEqual(out.requirements[0].skillMatch?.correctedFrom, "MISSING");
+  assert.strictEqual(out.score.score, 50);
+  assert.strictEqual(out.score.counts.MISSING, 0);
+
+  const absent = FINALIZERS.fit(fitOutput([{ requirement: "Rust", importance: "must", evidence: "MISSING" }]), ctx());
+  assert.strictEqual(absent.requirements[0].evidence, "MISSING");
+  assert.strictEqual(absent.requirements[0].skillMatch, undefined);
+});
+
+test("gap: applies the same correction", () => {
+  const base = fitOutput([{ requirement: "Kubernetes", importance: "must", evidence: "MISSING" }]);
+  const out = FINALIZERS.gap({ summary: "s", requirements: base.requirements, transferable: [], plan: [], quickWins: [], honestNote: "n" } as unknown as Parameters<typeof FINALIZERS.gap>[0], ctx());
+  assert.strictEqual(out.requirements[0].evidence, "PARTIAL");
+  assert.deepStrictEqual(out.requirements[0].skillMatch?.skills, ["Kubernetes"]);
+});
+
+test("resume: keeps a skill the source has under an alias, still strips absent ones", () => {
+  const out = FINALIZERS.resume(
+    {
+      headline: "h",
+      summary: { text: "s", chunkIds: ["c1"] },
+      sections: [],
+      skills: ["Kubernetes", "JavaScript", "Rust", "Terraform"],
+      changes: [],
+      gapsLeft: [],
+    },
+    ctx(),
+  );
+  assert.deepStrictEqual(out.skills, ["Kubernetes", "JavaScript"]);
+  assert.deepStrictEqual(out.audit.removedSkills, ["Rust", "Terraform"]);
+});
+
+test("ats pipeline: a scripted keyword 'JavaScript' is found through the alias 'JS' in the vault", async () => {
+  script({
+    jobTitle: "Frontend Engineer",
+    keywords: [{ term: "JavaScript", importance: "must", synonyms: [], evidencedBy: ["c1"] }],
+    titleAlignment: "ok",
+    advice: [],
+  });
+  const vault: VaultContextChunk[] = [{ id: "c1", kind: "bullet", title: "Engineer, Acme | 2023", text: "Built UIs in JS" }];
+  const res = ok(await runPreset(getPresetById("ats-check")!, { inputs: { jobDescription: "JavaScript engineer" }, vault, config: KEY }, "t-ats"));
+  const coverage = res.data.coverage as { items: { found: boolean; matchedAs: string; canonical: string | null }[] };
+  assert.strictEqual(coverage.items[0].found, true);
+  assert.strictEqual(coverage.items[0].matchedAs, "JS");
+  assert.strictEqual(coverage.items[0].canonical, "JavaScript");
 });

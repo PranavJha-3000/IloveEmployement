@@ -17,6 +17,7 @@ import { countUsage } from "../lib/agent/policy";
 import { parseAgentStepRequest } from "../lib/agent/schema";
 import { agentStep, type AgentStepOptions, type AgentStepResult } from "../lib/agent/step";
 import type { AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "../lib/agent/types";
+import { MockLanguageModelV1 } from "ai/test";
 import { setModelFactory } from "../lib/engine/run";
 import type { AiRequestConfig } from "../lib/types";
 
@@ -402,4 +403,47 @@ test("18. after two rejected choices in a row the policy runs the first allowed 
   const fourth = await go(approveGateA(third.rec, 5000));
   assert.strictEqual(fourth.res.kind, "rejected");
   assert.strictEqual(s.plannerCalls(), 3);
+});
+
+function failingModel(fail: "planner" | "tool", message: string) {
+  setModelFactory(
+    () =>
+      new MockLanguageModelV1({
+        doGenerate: async (options) => {
+          const mode = options.mode as { type: string; tools?: unknown[] };
+          const isPlanner = mode.type === "regular" && Array.isArray(mode.tools) && mode.tools.length > 0;
+          if (isPlanner && fail === "tool") {
+            return {
+              rawCall: { rawPrompt: null, rawSettings: {} },
+              usage: { promptTokens: 100, completionTokens: 50 },
+              finishReason: "tool-calls" as const,
+              text: undefined,
+              toolCalls: [{ toolCallType: "function" as const, toolCallId: "t1", toolName: "fit_check", args: "{}" }],
+            };
+          }
+          throw new Error(message);
+        },
+      }),
+  );
+}
+
+test("19. planner and tool failures are charged error steps; a rejected key stays a plain error (WR-02)", async () => {
+  failingModel("planner", "upstream overloaded");
+  const planner = await go(fresh());
+  assert.strictEqual(planner.res.kind, "step");
+  if (planner.res.kind !== "step") return;
+  assert.strictEqual(planner.res.step.status, "error");
+  assert.strictEqual(planner.res.step.usage.total, AGENT_NULL_USAGE_ESTIMATE);
+  assert.strictEqual(planner.res.budget.stepsUsed, 1);
+  assert.strictEqual(planner.rec.status, "error");
+
+  failingModel("tool", "upstream overloaded");
+  const tool = await go(fresh());
+  assert.ok(tool.res.kind === "step" && tool.res.step.status === "error");
+  if (tool.res.kind !== "step") return;
+  assert.deepStrictEqual(tool.res.step.usage, { planner: 150, tool: AGENT_NULL_USAGE_ESTIMATE, total: 150 + AGENT_NULL_USAGE_ESTIMATE });
+
+  failingModel("planner", "401 Unauthorized: invalid api key");
+  const auth = await agentStep(buildStepRequest(fresh(), { vault: VAULT, config: KEY }), "test-ip");
+  assert.strictEqual(auth.status, 401);
 });

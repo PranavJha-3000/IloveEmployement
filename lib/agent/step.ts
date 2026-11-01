@@ -9,6 +9,7 @@ import { classifyAIError } from "../pipeline";
 import { getPresetById } from "../presets";
 import {
   AGENT_MAX_CONSECUTIVE_REJECTIONS,
+  AGENT_NULL_USAGE_ESTIMATE,
   AGENT_TOOLS,
   AGENT_TOOL_PRESETS,
   AGENT_WORK_TOOLS,
@@ -131,7 +132,8 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
   // A planner that keeps picking disallowed tools (for example steered by an injected JD) cannot
   // burn the budget: after the cap, the policy picks the first allowed tool without a planner call.
   const capped = trailingRejections(req.steps) >= AGENT_MAX_CONSECUTIVE_REJECTIONS;
-  let planned: PlannedTool;
+  let planned: PlannedTool | null = null;
+  let planError: { status: number; message: string } | null = null;
   if (capped) {
     planned = { toolName: action.allowed[0], args: {}, usage: null, plannedBy: "policy-fallback" };
   } else {
@@ -139,10 +141,13 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
       planned = await planNextTool(access.config, req, screened.text, action.allowed);
     } catch (err) {
       const info = classifyAIError(err);
-      return { status: info.status, body: { error: info.message } };
+      // A rejected key spent nothing and a retry cannot help: keep it a plain error response.
+      if (info.category === "auth") return { status: info.status, body: { error: info.message } };
+      planError = info;
     }
   }
-  const plannerTokens = capped ? 0 : usageTokens(planned.usage);
+  // A failed planner call may still have spent tokens: charge the estimate.
+  const plannerTokens = capped ? 0 : planned ? usageTokens(planned.usage) : AGENT_NULL_USAGE_ESTIMATE;
 
   const after = (step: AgentStepRecord) => {
     const steps = [...req.steps, step];
@@ -160,6 +165,25 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
       ),
     };
   };
+
+  // A planner failure after the free run was counted is a charged error step, so retries hit the budget.
+  if (!planned) {
+    const finishedAt = now();
+    const step: AgentStepRecord = {
+      id: newId(),
+      tool: action.allowed[0],
+      status: "error",
+      plannedBy: "policy-fallback",
+      inputs: {},
+      error: planError?.message ?? "Something went wrong.",
+      usage: { planner: plannerTokens, tool: 0, total: plannerTokens },
+      startedAt,
+      finishedAt,
+      durationMs: finishedAt - startedAt,
+    };
+    const { budget: b, next } = after(step);
+    return { status: 200, body: { kind: "step", step, budget: b, remaining: access.remaining, next } };
+  }
 
   // 6. Validate the choice; a rejected choice executes nothing but still counts.
   const choice = validateChoice(action, planned.toolName);
@@ -210,7 +234,8 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
       ...base,
       status: "error",
       error: outcome.message,
-      usage: { planner: plannerTokens, tool: 0, total: plannerTokens },
+      // The drafter or reviewer may have run before the failure: charge the estimate for the tool part.
+      usage: { planner: plannerTokens, tool: AGENT_NULL_USAGE_ESTIMATE, total: plannerTokens + AGENT_NULL_USAGE_ESTIMATE },
     };
   } else {
     const { data, meta } = outcome.result;

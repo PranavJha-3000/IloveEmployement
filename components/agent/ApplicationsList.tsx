@@ -108,13 +108,13 @@ export function ApplicationsList() {
                       <span>Last activity {relativeTime(r.updatedAt, now)}</span>
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <Link href={`/apply?run=${encodeURIComponent(r.id)}`} className="cta-secondary">
                       Resume application
                     </Link>
                     <button
                       type="button"
-                      className="text-[13px] font-semibold text-zinc-500 hover:text-[#c4241f]"
+                      className="min-h-[44px] text-[13px] font-semibold text-zinc-500 hover:text-[#c4241f]"
                       aria-expanded={confirmId === r.id}
                       onClick={(e) => {
                         openerRef.current = e.currentTarget;

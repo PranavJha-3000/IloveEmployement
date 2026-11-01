@@ -1,10 +1,19 @@
 // Renders evals/PROFILE.md. Pure and deterministic: no Date, no fs.
 import { FIELD_KEYS, prf, type FieldCounts } from "./metrics";
 
-/** Filled in by the LLM-refined measurement (Plan 11). */
+/** Measured by `npm run eval:profile -- --llm` (see evals/profile/llm.ts). */
+export interface LlmProfileModelResult {
+  key: string;
+  refined: FieldCounts;
+  llmOnly: FieldCounts;
+  resumesDone: number;
+  resumesTotal: number;
+  stoppedByQuota: boolean;
+  usage: { promptTokens: number; completionTokens: number };
+}
 export interface LlmProfileSection {
-  status: "measured";
-  markdown: string;
+  status: "measured" | "partial";
+  models: LlmProfileModelResult[];
 }
 
 export interface ProfileRunResult {
@@ -41,6 +50,27 @@ function macroF1(c: FieldCounts): string {
 
 export const LLM_PENDING_TEXT =
   "Pending: run after Phase 3 completes (`npm run eval:profile -- --llm`). Not measured in this phase because the free-tier quota is in use by the Phase 3 scheduled evaluation.";
+
+function renderLlm(llm: LlmProfileSection, det: FieldCounts): string[] {
+  const out: string[] = [];
+  out.push(llm.status === "partial" ? "Partial measurement: some resumes were not run (see each model below). Re-run to resume from the cache." : "Measured with the same metrics as the deterministic extractor.", "");
+  for (const m of llm.models) {
+    out.push(`### ${m.key}`, "");
+    out.push(`- Resumes done: ${m.resumesDone}/${m.resumesTotal}`);
+    if (m.stoppedByQuota) out.push("- Stopped early: daily quota exhausted. Completed resumes are cached; re-run after the quota resets.");
+    out.push(`- Tokens: ${m.usage.promptTokens} prompt, ${m.usage.completionTokens} completion`, "");
+    out.push("Refined (deterministic + LLM merge) versus deterministic only:", "");
+    out.push("| Field | Det P | Det R | Refined P | Refined R | Refined F1 | F1 change |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: |");
+    for (const k of FIELD_KEYS) {
+      const d = prf(det[k]);
+      const x = prf(m.refined[k]);
+      const delta = d.f1 === null || x.f1 === null ? "n/a" : (x.f1 - d.f1 >= 0 ? "+" : "") + (x.f1 - d.f1).toFixed(3);
+      out.push(`| ${k} | ${f3(d.precision)} | ${f3(d.recall)} | ${f3(x.precision)} | ${f3(x.recall)} | ${f3(x.f1)} | ${delta} |`);
+    }
+    out.push("", "LLM only:", "", ...fieldTable(m.llmOnly), "");
+  }
+  return out;
+}
 
 export function renderProfileReport(r: ProfileRunResult): string {
   const out: string[] = [];
@@ -86,7 +116,8 @@ export function renderProfileReport(r: ProfileRunResult): string {
   out.push("");
 
   out.push("## LLM-refined extraction", "");
-  out.push(r.llm.status === "pending" ? LLM_PENDING_TEXT : r.llm.markdown, "");
+  if (r.llm.status === "pending") out.push(LLM_PENDING_TEXT, "");
+  else out.push(...renderLlm(r.llm, r.overall), "");
 
   out.push("## Protocol", "");
   out.push("- Gold labels for rendered resumes are known by construction: profiles were authored first, then rendered into resume text by evals/profile/dataset/render.ts.");

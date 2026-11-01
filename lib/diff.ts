@@ -162,6 +162,82 @@ export interface ResumeDiff {
   changeCount: number;
 }
 
-export function buildResumeDiff(_fromText: string, _toText: string, _opts?: { context?: number; collapseOver?: number }): ResumeDiff {
-  throw new Error("not implemented");
+/**
+ * Unified resume diff. Delete runs are paired index by index with the insert
+ * run that follows them ("changed" rows, with word emphasis); leftovers become
+ * removed or added rows. Unchanged runs longer than `collapseOver` (default 6)
+ * keep `context` (default 3) lines beside each change and collapse the rest.
+ */
+export function buildResumeDiff(fromText: string, toText: string, opts: { context?: number; collapseOver?: number } = {}): ResumeDiff {
+  const context = Math.max(0, opts.context ?? 3);
+  const collapseOver = Math.max(0, opts.collapseOver ?? 6);
+  const a = normalizeResumeLines(fromText);
+  const b = normalizeResumeLines(toText);
+  const counts = { added: 0, removed: 0, changed: 0 };
+
+  if (a.length === b.length && a.every((line, i) => line === b[i])) {
+    return { rows: a.map((text) => ({ type: "context" as const, text })), counts, identical: true, changeCount: 0 };
+  }
+
+  // 1. Expand ops into rows. A change group is one contiguous non-equal block.
+  const ops = diffSequences(a, b);
+  const rows: DiffRow[] = [];
+  let group = -1;
+  for (let i = 0; i < ops.length; i++) {
+    const o = ops[i];
+    if (o.op === "equal") {
+      for (const text of o.items) rows.push({ type: "context", text });
+      continue;
+    }
+    group += 1;
+    // diffSequences emits delete before insert, so a replacement is delete + insert side by side.
+    const dels = o.op === "delete" ? o.items : [];
+    const next = ops[i + 1];
+    const ins = o.op === "insert" ? o.items : next && next.op === "insert" ? next.items : [];
+    if (o.op === "delete" && next && next.op === "insert") i += 1;
+    const pairs = Math.min(dels.length, ins.length);
+    for (let p = 0; p < pairs; p++) {
+      const w = diffWords(dels[p], ins[p]);
+      rows.push({ type: "changed", from: w.from, to: w.to, changeIndex: group });
+      counts.changed += 1;
+    }
+    for (let p = pairs; p < dels.length; p++) {
+      rows.push({ type: "removed", text: dels[p], changeIndex: group });
+      counts.removed += 1;
+    }
+    for (let p = pairs; p < ins.length; p++) {
+      rows.push({ type: "added", text: ins[p], changeIndex: group });
+      counts.added += 1;
+    }
+  }
+
+  // 2. Collapse long unchanged runs.
+  const out: DiffRow[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const row = rows[i];
+    if (row.type !== "context") {
+      out.push(row);
+      i += 1;
+      continue;
+    }
+    let j = i;
+    while (j < rows.length && rows[j].type === "context") j += 1;
+    const run = rows.slice(i, j) as Extract<DiffRow, { type: "context" }>[];
+    const before = i > 0; // a change precedes this run
+    const after = j < rows.length; // a change follows this run
+    if (run.length <= collapseOver || context * ((before ? 1 : 0) + (after ? 1 : 0)) >= run.length) {
+      out.push(...run);
+    } else {
+      const head = before ? context : 0;
+      const tail = after ? context : 0;
+      const hidden = run.slice(head, run.length - tail);
+      out.push(...run.slice(0, head));
+      out.push({ type: "collapsed", count: hidden.length, lines: hidden.map((r) => r.text) });
+      out.push(...run.slice(run.length - tail));
+    }
+    i = j;
+  }
+
+  return { rows: out, counts, identical: false, changeCount: group + 1 };
 }

@@ -18,7 +18,8 @@ import {
 } from "@/lib/vault/store";
 import { useVault } from "@/lib/vault/useVault";
 import { ApplicationsList } from "@/components/agent/ApplicationsList";
-import { ProfileReview } from "./ProfileReview";
+import { focusProfileReview, ProfileReview } from "./ProfileReview";
+import { ResumeVersions } from "./ResumeVersions";
 import { ResumeImport } from "./ResumeImport";
 import { SemanticIndex } from "./SemanticIndex";
 
@@ -45,7 +46,7 @@ const PROFILE_FIELDS: { key: keyof VaultProfile; label: string; placeholder: str
 ];
 
 export function VaultManager() {
-  const { chunks, profile, structuredProfile, loaded, reload } = useVault();
+  const { chunks, profile, structuredProfile, versions, loaded, reload } = useVault();
   const [draftProfile, setDraftProfile] = useState(profile);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [savedReviewOpen, setSavedReviewOpen] = useState(false);
@@ -112,9 +113,13 @@ export function VaultManager() {
 
   async function handleImport(file: File) {
     try {
-      const { chunks: n, agentRuns: m, keptNewer } = await importVault(await file.text());
+      const { chunks: n, agentRuns: m, keptNewer, versions: rv, versionsDropped } = await importVault(await file.text());
       const kept = keptNewer > 0 ? ` Kept ${keptNewer} newer ${keptNewer === 1 ? "application" : "applications"} already on this browser.` : "";
-      await changed((m > 0 ? `Imported ${n} chunks and ${m} applications.` : `Imported ${n} chunks.`) + kept);
+      const parts = [`${n} chunks`];
+      if (m > 0) parts.push(`${m} applications`);
+      if (rv > 0) parts.push(`${rv} resume ${rv === 1 ? "version" : "versions"}`);
+      const skipped = versionsDropped > 0 ? ` ${versionsDropped} invalid ${versionsDropped === 1 ? "version was" : "versions were"} skipped.` : "";
+      await changed(`Imported ${parts.join(" and ")}.` + kept + skipped);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
     }
@@ -226,6 +231,8 @@ export function VaultManager() {
 
       {/* Phase 4: Applications in progress. Phase 5 "Resume versions" goes directly below. */}
       <ApplicationsList />
+
+      <ResumeVersions versions={versions} loaded={loaded} reviewOpen={reviewOpen} onChanged={changed} onReviewProfile={reviewOpen ? focusProfileReview : undefined} />
 
       {/* Manual entries */}
       <section className="rounded-xl border border-zinc-200 p-5">

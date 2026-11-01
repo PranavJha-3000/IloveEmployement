@@ -14,6 +14,7 @@ import {
   saveProfile,
 } from "@/lib/vault/store";
 import { useVault } from "@/lib/vault/useVault";
+import { ApplicationsList } from "@/components/agent/ApplicationsList";
 import { SemanticIndex } from "./SemanticIndex";
 
 const KIND_LABEL: Record<VaultChunkKind, string> = {
@@ -119,15 +120,15 @@ export function VaultManager() {
 
   async function handleImport(file: File) {
     try {
-      const { chunks: n } = await importVault(await file.text());
-      await changed(`Imported ${n} chunks.`);
+      const { chunks: n, agentRuns: m } = await importVault(await file.text());
+      await changed(m > 0 ? `Imported ${n} chunks and ${m} applications.` : `Imported ${n} chunks.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
     }
   }
 
   async function handleClear() {
-    if (!window.confirm("Delete everything in your Career Vault on this browser? Export first if you want a backup.")) return;
+    if (!window.confirm("Delete everything in your Career Vault on this browser, including your saved applications? Export first if you want a backup.")) return;
     await clearVault();
     await changed("Vault cleared.");
   }
@@ -250,6 +251,9 @@ export function VaultManager() {
       </section>
 
       <SemanticIndex chunks={chunks} />
+
+      {/* Phase 4: Applications in progress. Phase 5 "Resume versions" goes directly below. */}
+      <ApplicationsList />
 
       {/* Manual entries */}
       <section className="rounded-xl border border-zinc-200 p-5">

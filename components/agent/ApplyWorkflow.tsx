@@ -13,14 +13,16 @@ import {
   type AgentWorkTool,
 } from "@/lib/agent/config";
 import {
-  applyStepResponse,
   approveGateA,
   approveGateB,
   buildStepRequest,
   continueWithNewBudget,
   declineOutreach,
   localNextAction,
+  loopBase,
+  markRunError,
   overrideSkip,
+  rebaseStepResponse,
   rerunFitCheck,
   retrieveForTools,
   revertArtifactEdit,
@@ -223,8 +225,17 @@ export function ApplyWorkflow() {
       abortRef.current = controller;
       let rec: AgentRunRecord = { ...start, status: "running" };
       commit(rec);
+      // Persist a record without taking over the UI when it has switched to another run.
+      const settle = (r: AgentRunRecord) => {
+        if (recordRef.current?.id === r.id) commit(r);
+        else void saveAgentRun(r).then(announceVaultChange, () => {});
+      };
       try {
         for (let i = 0; i < MAX_STEPS_PER_ADVANCE; i++) {
+          // Edits and pause toggles made while the last step ran live in recordRef, not in `rec`.
+          const base = loopBase(recordRef.current, rec);
+          if (!base.current) break;
+          rec = base.record;
           const next = localNextAction(rec);
           if (next.kind !== "step") break;
           const retrieved = retrieveForTools(chunks, rec.job, next.allowed, semanticOrder ?? undefined);
@@ -245,14 +256,15 @@ export function ApplyWorkflow() {
           const json = (await res.json()) as AgentStepResponse | { error: string };
           if (!res.ok || "error" in json) {
             const message = "error" in json ? json.error : "Something went wrong.";
-            commit({ ...rec, status: "error", updatedAt: Date.now() });
+            settle(markRunError(recordRef.current, rec, Date.now()));
             setFetchError(message);
             setLiveMessage("The step didn't finish. Your earlier steps are saved.");
             return;
           }
-          rec = applyStepResponse(rec, json, Date.now());
-          commit(rec);
-          if (json.kind === "blocked") break;
+          const rebased = rebaseStepResponse(recordRef.current, rec, json, Date.now());
+          rec = rebased.record;
+          settle(rec);
+          if (!rebased.current || json.kind === "blocked") break;
           if (json.remaining !== null) setRemaining(json.remaining);
           setLiveMessage(liveStep(json.step.tool === "finish" ? next.allowed[0] : (json.step.tool as AgentWorkTool), json.step, json.next));
 
@@ -272,7 +284,7 @@ export function ApplyWorkflow() {
         if (err instanceof DOMException && err.name === "AbortError") {
           setLiveMessage("Run stopped. Your finished steps are saved.");
         } else {
-          commit({ ...rec, status: "error", updatedAt: Date.now() });
+          settle(markRunError(recordRef.current, rec, Date.now()));
           setFetchError(err instanceof Error ? err.message : "Something went wrong.");
         }
       } finally {

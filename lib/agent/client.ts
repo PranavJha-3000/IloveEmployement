@@ -181,6 +181,47 @@ export function applyStepResponse(record: AgentRunRecord, res: AgentStepResponse
   return out;
 }
 
+/**
+ * The advance loop's view of a run. `latest` is the record the UI last committed (it may hold a
+ * pause toggle or a saved edit made while a step was in flight); `own` is the loop's copy.
+ * `current` is false when the UI switched to another run or the user stopped this one.
+ */
+export function loopBase(
+  latest: AgentRunRecord | null,
+  own: AgentRunRecord,
+): { record: AgentRunRecord; current: boolean } {
+  if (!latest || latest.id !== own.id) return { record: own, current: false };
+  return { record: latest, current: latest.status !== "stopped" };
+}
+
+/**
+ * Applies a step response onto the latest committed record instead of the loop's stale copy, so
+ * changes made while the step ran survive. A user stop made meanwhile wins: the paid step is kept,
+ * the run stays stopped. `current` false tells the loop to stop driving the run.
+ */
+export function rebaseStepResponse(
+  latest: AgentRunRecord | null,
+  own: AgentRunRecord,
+  res: AgentStepResponse,
+  now: number,
+): { record: AgentRunRecord; current: boolean } {
+  const base = loopBase(latest, own);
+  const applied = applyStepResponse(base.record, res, now);
+  if (base.record.status === "stopped") {
+    const kept: AgentRunRecord = { ...applied, status: "stopped" };
+    if (base.record.stopReason) kept.stopReason = base.record.stopReason;
+    return { record: kept, current: false };
+  }
+  return { record: applied, current: base.current };
+}
+
+/** Marks the latest committed record (not the loop's stale copy) as errored. A user stop wins. */
+export function markRunError(latest: AgentRunRecord | null, own: AgentRunRecord, now: number): AgentRunRecord {
+  const base = loopBase(latest, own).record;
+  if (base.status === "stopped") return base;
+  return { ...base, status: "error", updatedAt: now };
+}
+
 /** Gate A "Edit": replace the job inputs, invalidate every later step, clear approvals. Usage keeps counting. */
 export function rerunFitCheck(record: AgentRunRecord, patch: Partial<AgentJob>, now: number): AgentRunRecord {
   const steps = record.steps.map((s) =>

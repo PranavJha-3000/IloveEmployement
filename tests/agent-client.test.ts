@@ -8,7 +8,10 @@ import {
   continueWithNewBudget,
   declineOutreach,
   localNextAction,
+  loopBase,
+  markRunError,
   overrideSkip,
+  rebaseStepResponse,
   rerunFitCheck,
   retrieveForTools,
   revertArtifactEdit,
@@ -202,4 +205,50 @@ test("saveArtifactEdit warns on unsupported figures but still saves; revert remo
   assert.deepStrictEqual(clean.steps[0].edit?.grounding, []);
   const reverted = revertArtifactEdit(saved, "cl", 700);
   assert.strictEqual(reverted.steps[0].edit, undefined);
+});
+
+test("rebaseStepResponse: a pause toggled mid-step is kept and pauses the run (CR-02)", () => {
+  const own = approveGateA(atGateA(), 3000);
+  const latest = { ...own, pauseAfterStep: true, updatedAt: 3500 };
+  const s = step({ id: "t1", tool: "tailor_resume" });
+  const out = rebaseStepResponse(latest, own, resp(own, s, { kind: "step", allowed: ["cover_letter"] }), 4000);
+  assert.strictEqual(out.current, true);
+  assert.strictEqual(out.record.pauseAfterStep, true);
+  assert.strictEqual(out.record.status, "paused");
+  assert.deepStrictEqual(out.record.steps.map((x) => x.id), ["f1", "t1"]);
+});
+
+test("rebaseStepResponse: an artifact edit saved mid-step survives the response (CR-02)", () => {
+  const cover = step({ id: "c1", tool: "cover_letter", output: { data: { subject: "", body: "Hi" }, meta: META, sent: AGENT_VAULT } });
+  const own = applyStepResponse(approveGateA(atGateA(), 3000), resp(atGateA(), cover, { kind: "step", allowed: ["tailor_resume"] }), 3100);
+  const latest = saveArtifactEdit(own, "c1", { body: "My own words." }, 3200);
+  const s = step({ id: "t1", tool: "tailor_resume" });
+  const out = rebaseStepResponse(latest, own, resp(own, s, { kind: "gate", gate: "B" }), 4000);
+  assert.strictEqual(out.record.steps.find((x) => x.id === "c1")?.edit?.body, "My own words.");
+  assert.strictEqual(out.record.status, "awaiting_approval");
+});
+
+test("rebaseStepResponse: switched run or user stop ends the loop without losing the paid step (CR-02)", () => {
+  const own = approveGateA(atGateA(), 3000);
+  const s = step({ id: "t1", tool: "tailor_resume" });
+  const res = resp(own, s, { kind: "step", allowed: ["cover_letter"] });
+
+  const other = { ...fresh(), id: "run2" };
+  const switched = rebaseStepResponse(other, own, res, 4000);
+  assert.strictEqual(switched.current, false);
+  assert.strictEqual(switched.record.id, "run1");
+  assert.deepStrictEqual(switched.record.steps.map((x) => x.id), ["f1", "t1"]);
+
+  const stopped = stopRun(own, 3500);
+  const out = rebaseStepResponse(stopped, own, res, 4000);
+  assert.strictEqual(out.current, false);
+  assert.strictEqual(out.record.status, "stopped");
+  assert.strictEqual(out.record.stopReason?.kind, "user");
+  assert.deepStrictEqual(out.record.steps.map((x) => x.id), ["f1", "t1"]);
+
+  assert.strictEqual(loopBase(stopped, own).current, false);
+  assert.strictEqual(loopBase(null, own).current, false);
+  assert.strictEqual(markRunError(stopped, own, 5).status, "stopped");
+  assert.strictEqual(markRunError({ ...own, pauseAfterStep: true }, own, 5).pauseAfterStep, true);
+  assert.strictEqual(markRunError({ ...own, pauseAfterStep: true }, own, 5).status, "error");
 });

@@ -141,3 +141,87 @@ test("Phase 3 is untouched: no CASES id collides, harness version and fingerprin
   assert.equal(caseFingerprint(CASES), "1ht349n");
   assert.equal(profileCaseId("abc"), "profile-extract--abc");
 });
+
+// ─── Command wrapper and report section ──────────────────────────────────────
+
+import { runLlmCommand } from "../evals/profile/llm";
+import { main as profileMain } from "../evals/profile/run";
+import { renderProfileReport, type ProfileRunResult } from "../evals/profile/report";
+import { aggregateCounts, scoreProfile } from "../evals/profile/metrics";
+import { extractProfile } from "../lib/profile/extract";
+
+const MODEL_ARGS = ["--llm", "--models", "google:mock-model", "--no-dotenv"];
+
+test("--llm together with --ci exits 2 without constructing a model or reading .env", async () => {
+  const err = console.error;
+  const seen: string[] = [];
+  console.error = (m?: unknown) => void seen.push(String(m));
+  try {
+    assert.equal(await profileMain(["--llm", "--ci"]), 2);
+  } finally {
+    console.error = err;
+  }
+  assert.ok(seen.some((m) => m.includes("The CI gate is deterministic only.")));
+});
+
+test("--llm refuses to spend requests without --yes, and runs with it", async () => {
+  const ds = dataset();
+  const dir = tmp();
+  const s = scripted(ds);
+  const base = { env: ENV, cacheDir: dir, dataset: ds, sleep: noSleep, log: () => {} };
+  const err = console.error;
+  console.error = () => {};
+  try {
+    const refused = await runLlmCommand(MODEL_ARGS, {
+      ...base,
+      baseFactory: () => {
+        throw new Error("must not be constructed without --yes");
+      },
+    });
+    assert.equal(refused.code, 2);
+    assert.equal(refused.section, undefined);
+  } finally {
+    console.error = err;
+  }
+  const ran = await runLlmCommand([...MODEL_ARGS, "--yes", "--rpm", "600"], { ...base, baseFactory: s.factory });
+  assert.equal(ran.code, 0);
+  assert.equal(ran.section?.status, "measured");
+  assert.equal(s.calls(), 4);
+  // Fully cached now: no --yes needed and no model call.
+  const cached = await runLlmCommand(MODEL_ARGS, { ...base, baseFactory: () => { throw new Error("cached run builds no model"); } });
+  assert.equal(cached.code, 0);
+});
+
+test("a missing key or missing models is a clean exit 2", async () => {
+  const err = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await runLlmCommand(["--llm", "--no-dotenv"], { env: {}, log: () => {} })).code, 2);
+    assert.equal((await runLlmCommand(MODEL_ARGS, { env: {}, log: () => {} })).code, 2);
+  } finally {
+    console.error = err;
+  }
+});
+
+test("report renders a measured LLM section with deltas, and the pending text otherwise", async () => {
+  const ds = dataset();
+  const out = await runProfileLlm({ dataset: ds, models: [SPEC], baseFactory: scripted(ds).factory, cacheDir: tmp(), rpm: 600, env: ENV, sleep: noSleep });
+  const per = ds.map((d) => ({ id: d.id, source: d.source, styleId: d.styleId, counts: scoreProfile(extractProfile(d.text).profile, d.gold) }));
+  const base: ProfileRunResult = {
+    generatedAt: "2026-11-01T00:00:00.000Z", command: "", gitSha: "abc1234", node: "v22", platform: "linux x64",
+    datasetFingerprint: "fp", extractorVersion: "det-1", taxonomyVersion: "skills-1", resumes: per,
+    overall: aggregateCounts(per.map((p) => p.counts)),
+    bySource: { rendered: aggregateCounts(per.map((p) => p.counts)), synthetic: aggregateCounts([]) },
+    llm: { status: "pending" },
+  };
+  const pending = renderProfileReport(base);
+  assert.ok(pending.includes("Pending: run after Phase 3 completes"));
+  const measured = renderProfileReport({ ...base, llm: out });
+  assert.ok(!measured.includes("Pending: run after Phase 3 completes"));
+  assert.ok(measured.includes("### google:mock-model"));
+  assert.ok(measured.includes("Resumes done: 4/4"));
+  assert.ok(measured.includes("LLM only:"));
+  assert.ok(measured.includes("F1 change"));
+  const partial = renderProfileReport({ ...base, llm: { ...out, status: "partial", models: [{ ...out.models[0], resumesDone: 2, stoppedByQuota: true }] } });
+  assert.ok(partial.includes("Stopped early: daily quota exhausted"));
+});

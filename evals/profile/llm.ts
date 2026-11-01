@@ -3,11 +3,13 @@
 // disk cache, throttle, retry and recording wrapper. Case ids are
 // profile-extract--<resumeId> so they can never collide with a Phase 3 case.
 // Nothing here is run against a real model by the test suite or CI.
+import path from "node:path";
 import type { LanguageModelV1 } from "ai";
 import { createDiskCache } from "../llm/cache";
-import { resolveKey, type ModelSpec } from "../llm/env";
+import { defaultModelSpecs, loadDotEnv, parseModelList, resolveKey, type ModelSpec } from "../llm/env";
 import { recordingModel, type CallRecord, type RecordingContext } from "../llm/recordingModel";
 import { QuotaExhaustedError, createThrottle, type RetryOptions } from "../llm/throttle";
+import { createModel } from "../../lib/ai";
 import { runPreset, setModelFactory } from "../../lib/engine/run";
 import type { RunMeta } from "../../lib/engine/types";
 import { getPresetById } from "../../lib/presets";
@@ -15,6 +17,7 @@ import { extractProfile } from "../../lib/profile/extract";
 import { mergeExtractions } from "../../lib/profile/refine";
 import type { ExtractionResult } from "../../lib/profile/schema";
 import type { AiRequestConfig } from "../../lib/types";
+import { loadProfileDataset } from "./dataset/load";
 import type { GoldResume } from "./dataset/types";
 import { aggregateCounts, scoreProfile, type FieldCounts } from "./metrics";
 import type { LlmProfileModelResult, LlmProfileSection } from "./report";
@@ -152,4 +155,77 @@ export async function runProfileLlm(opts: RunProfileLlmOptions): Promise<LlmProf
 
   const complete = models.length > 0 && models.every((m) => m.resumesDone === m.resumesTotal);
   return { status: complete ? "measured" : "partial", models };
+}
+
+// ─── Command wrapper for `npm run eval:profile -- --llm` ─────────────────────
+
+const DEFAULT_RPM = 5; // the Phase 3 default
+
+function flagValue(args: string[], flag: string): string | undefined {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+
+export interface LlmCommandDeps {
+  baseFactory?: (c: AiRequestConfig) => LanguageModelV1;
+  env?: Env;
+  cacheDir?: string;
+  dataset?: GoldResume[];
+  sleep?: (ms: number) => Promise<void>;
+  log?: (line: string) => void;
+}
+
+/**
+ * Human-run entry. Prints the request estimate and refuses to spend a single
+ * request without --yes. Never invoked by CI; tests pass a scripted factory.
+ */
+export async function runLlmCommand(argv: string[], deps: LlmCommandDeps = {}): Promise<{ code: number; section?: LlmProfileSection }> {
+  const log = deps.log ?? ((l: string) => console.log(l));
+  const env = deps.env ?? process.env;
+  if (!argv.includes("--no-dotenv") && !deps.env) {
+    const names = loadDotEnv(".env");
+    if (names.length) log(`Loaded ${names.length} variable(s) from .env`);
+  }
+  let models: ModelSpec[];
+  try {
+    const csv = flagValue(argv, "--models");
+    models = csv ? parseModelList(csv) : defaultModelSpecs(env);
+  } catch (err) {
+    console.error((err as Error).message);
+    return { code: 2 };
+  }
+  if (!models.length) {
+    console.error("pass --models provider:model[,provider:model] (or set EVAL_MODELS / FREE_TIER_*)");
+    return { code: 2 };
+  }
+  const usable = models.filter((m) => resolveKey(m.provider, env));
+  if (!usable.length) {
+    console.error(`No API key for ${models.map((m) => m.provider).join(", ")}. Set EVAL_<PROVIDER>_API_KEY (or EVAL_API_KEY / FREE_TIER_API_KEY).`);
+    return { code: 2 };
+  }
+  const dataset = deps.dataset ?? loadProfileDataset();
+  const cacheDir = deps.cacheDir ?? path.join("evals", "results", "llm-cache");
+  const cache = createDiskCache(cacheDir);
+  const uncached = usable.reduce((n, m) => n + dataset.filter((d) => !cache.caseDone(profileCaseId(d.id), m.key)).length, 0);
+  log(usable.map((m) => `${m.key} (key: set)`).join(", "));
+  log(`Requests: ${dataset.length} resumes x ${usable.length} model(s); ${uncached} not cached (about ${uncached} request(s), more if a call is retried).`);
+  if (uncached > 0 && !argv.includes("--yes")) {
+    console.error("This would spend model requests (shared free-tier quota). Re-run with --yes to proceed.");
+    return { code: 2 };
+  }
+  const rpmArg = Number(flagValue(argv, "--rpm"));
+  const rpm = rpmArg > 0 ? rpmArg : Number(env.EVAL_RPM) > 0 ? Number(env.EVAL_RPM) : DEFAULT_RPM;
+  const section = await runProfileLlm({
+    dataset,
+    models: usable,
+    baseFactory: deps.baseFactory ?? createModel,
+    cacheDir,
+    rpm,
+    env,
+    sleep: deps.sleep,
+    log,
+  });
+  const quota = section.models.some((m) => m.stoppedByQuota);
+  if (quota) console.error("Daily quota exhausted. Finished resumes are cached; re-run after the quota resets to resume.");
+  return { code: quota ? 2 : 0, section };
 }

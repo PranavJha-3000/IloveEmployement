@@ -1,6 +1,6 @@
-// Profile extraction eval runner (deterministic extractor, offline).
-// Flags: --ci, --update-baseline, --dataset-changed, --report <path>, --llm (reserved).
-// Never constructs a model and never reads credentials.
+// Profile extraction eval runner.
+// Flags: --ci, --update-baseline, --dataset-changed, --report <path>, --llm (see llm.ts: needs --yes
+// when it would spend requests; never combined with --ci). The deterministic paths never construct a model.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -8,10 +8,12 @@ import { extractProfile, EXTRACTOR_VERSION } from "../../lib/profile/extract";
 import { TAXONOMY_VERSION } from "../../lib/skills/taxonomy";
 import { compareProfileBaseline, validateProfileBaseline, type ProfileBaseline } from "./baseline";
 import { loadProfileDataset, profileDatasetFingerprint } from "./dataset/load";
+import { runLlmCommand } from "./llm";
 import { FIELD_KEYS, aggregateCounts, prf, scoreProfile, type FieldCounts } from "./metrics";
-import { renderProfileReport, type ProfileRunResult } from "./report";
+import { renderProfileReport, type LlmProfileSection, type ProfileRunResult } from "./report";
 
 const BASELINE_PATH = path.join("evals", "profile", "baseline.json");
+const LLM_LATEST_PATH = path.join("evals", "results", "profile-llm-latest.json");
 const UPDATE_CMD = "npm run eval:profile -- --update-baseline --dataset-changed";
 
 function argValue(args: string[], flag: string): string | undefined {
@@ -37,15 +39,46 @@ function toBaselineBody(r: ProfileRunResult): Omit<ProfileBaseline, "recordedAt"
   };
 }
 
-function main(argv: string[]): number {
+/** The measured LLM section from the last --llm run, only when it describes this exact dataset and extractor. */
+function loadMeasuredLlm(fingerprint: string): LlmProfileSection | null {
+  try {
+    if (!fs.existsSync(LLM_LATEST_PATH)) return null;
+    const j = JSON.parse(fs.readFileSync(LLM_LATEST_PATH, "utf8")) as {
+      datasetFingerprint?: string;
+      extractorVersion?: string;
+      taxonomyVersion?: string;
+      section?: LlmProfileSection;
+    };
+    if (j.datasetFingerprint !== fingerprint || j.extractorVersion !== EXTRACTOR_VERSION || j.taxonomyVersion !== TAXONOMY_VERSION) return null;
+    return j.section && Array.isArray(j.section.models) ? j.section : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function main(argv: string[]): Promise<number> {
   const ci = argv.includes("--ci");
   const update = argv.includes("--update-baseline");
   const datasetChanged = argv.includes("--dataset-changed");
+  const llm = argv.includes("--llm");
   const reportPath = argValue(argv, "--report") ?? path.join("evals", "PROFILE.md");
 
-  if (argv.includes("--llm")) {
-    console.error("LLM-refined measurement is added in Plan 11");
+  if (llm && ci) {
+    console.error("The CI gate is deterministic only.");
     return 2;
+  }
+  if (llm && update) {
+    console.error("--llm cannot be combined with --update-baseline.");
+    return 2;
+  }
+
+  let measured: LlmProfileSection | null = null;
+  let llmExit = 0;
+  if (llm) {
+    const out = await runLlmCommand(argv);
+    if (!out.section) return out.code;
+    measured = out.section;
+    llmExit = out.code;
   }
 
   const dataset = loadProfileDataset();
@@ -79,6 +112,26 @@ function main(argv: string[]): number {
     llm: { status: "pending" },
   };
 
+  if (measured) {
+    fs.mkdirSync(path.join("evals", "results"), { recursive: true });
+    fs.writeFileSync(
+      LLM_LATEST_PATH,
+      JSON.stringify(
+        {
+          datasetFingerprint: result.datasetFingerprint,
+          extractorVersion: result.extractorVersion,
+          taxonomyVersion: result.taxonomyVersion,
+          generatedAt: result.generatedAt,
+          section: measured,
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  const section = measured ?? (ci || update ? null : loadMeasuredLlm(result.datasetFingerprint));
+  if (section) result.llm = section;
+
   console.log(["field", "precision", "recall", "f1", "support"].join("\t"));
   for (const k of FIELD_KEYS) {
     const m = prf(result.overall[k]);
@@ -101,14 +154,19 @@ function main(argv: string[]): number {
           valid.baseline.fingerprint !== next.fingerprint ||
           valid.baseline.extractorVersion !== next.extractorVersion ||
           valid.baseline.taxonomyVersion !== next.taxonomyVersion;
-        const cmp = compareProfileBaseline(valid.baseline, { ...toBaselineBody(result), fingerprint: valid.baseline.fingerprint, extractorVersion: valid.baseline.extractorVersion, taxonomyVersion: valid.baseline.taxonomyVersion });
+        const cmp = compareProfileBaseline(valid.baseline, {
+          ...toBaselineBody(result),
+          fingerprint: valid.baseline.fingerprint,
+          extractorVersion: valid.baseline.extractorVersion,
+          taxonomyVersion: valid.baseline.taxonomyVersion,
+        });
         for (const r of cmp.regressions) console.log(`WARNING baseline would drop: ${r}`);
         if (changed && !datasetChanged) {
-          console.error(`Refusing to re-record the baseline: dataset fingerprint or version changed. Pass --dataset-changed to confirm, and commit baseline.json with the change.`);
+          console.error("Refusing to re-record the baseline: dataset fingerprint or version changed. Pass --dataset-changed to confirm, and commit baseline.json with the change.");
           return 1;
         }
       } else {
-        console.error(`previous baseline.json is invalid: ${valid.ok ? "" : valid.problems.join("; ")}. Restore it from git or pass --dataset-changed to re-record.`);
+        console.error(`previous baseline.json is invalid: ${valid.problems.join("; ")}. Restore it from git or pass --dataset-changed to re-record.`);
         if (!datasetChanged) return 1;
       }
     }
@@ -148,7 +206,17 @@ function main(argv: string[]): number {
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   fs.writeFileSync(reportPath, renderProfileReport(result));
   console.log(`Report written to ${reportPath}`);
-  return 0;
+  return llmExit;
 }
 
-process.exitCode = main(process.argv.slice(2));
+if (require.main === module) {
+  main(process.argv.slice(2)).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err) => {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    },
+  );
+}

@@ -20,6 +20,7 @@ import {
 } from "../lib/agent/client";
 import { AGENT_MAX_BUDGET_RESETS, AGENT_STEP_BUDGET, AGENT_TOKEN_BUDGET } from "../lib/agent/config";
 import { createRunRecord } from "../lib/agent/record";
+import { withRunLock, type RunLockManager } from "../lib/agent/runLock";
 import type { AgentBudgetView, AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "../lib/agent/types";
 import type { RunMeta, VaultChunk } from "../lib/engine/types";
 import { AGENT_VAULT } from "./agentScript";
@@ -251,4 +252,40 @@ test("rebaseStepResponse: switched run or user stop ends the loop without losing
   assert.strictEqual(markRunError(stopped, own, 5).status, "stopped");
   assert.strictEqual(markRunError({ ...own, pauseAfterStep: true }, own, 5).pauseAfterStep, true);
   assert.strictEqual(markRunError({ ...own, pauseAfterStep: true }, own, 5).status, "error");
+});
+
+test("withRunLock: a second loop on the same run refuses while the first holds it (CR-03)", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const first = withRunLock("run-lock-a", async () => {
+    await gate;
+    return "first";
+  }, null);
+  assert.deepStrictEqual(await withRunLock("run-lock-a", async () => "second", null), { ok: false });
+  assert.deepStrictEqual(await withRunLock("run-lock-b", async () => "other run", null), { ok: true, value: "other run" });
+  release();
+  assert.deepStrictEqual(await first, { ok: true, value: "first" });
+  assert.deepStrictEqual(await withRunLock("run-lock-a", async () => "again", null), { ok: true, value: "again" });
+});
+
+test("withRunLock: a lock held in another tab refuses; a broken lock manager falls back (CR-03)", async () => {
+  const otherTab = new Set<string>(["iloveemployement-agent-run-run-lock-c"]);
+  const fake: RunLockManager = {
+    request: async (name, _opts, cb) => {
+      if (otherTab.has(name)) return cb(null);
+      otherTab.add(name);
+      try {
+        return await cb({ name });
+      } finally {
+        otherTab.delete(name);
+      }
+    },
+  };
+  let ran = 0;
+  assert.deepStrictEqual(await withRunLock("run-lock-c", async () => ++ran, fake), { ok: false });
+  assert.strictEqual(ran, 0);
+  assert.deepStrictEqual(await withRunLock("run-lock-d", async () => ++ran, fake), { ok: true, value: 1 });
+  const broken: RunLockManager = { request: async () => { throw new Error("SecurityError"); } };
+  assert.deepStrictEqual(await withRunLock("run-lock-e", async () => "fallback", broken), { ok: true, value: "fallback" });
+  await assert.rejects(withRunLock("run-lock-f", async () => { throw new Error("boom"); }, fake), /boom/);
 });

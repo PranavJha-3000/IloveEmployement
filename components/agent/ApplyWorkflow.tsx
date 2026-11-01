@@ -30,6 +30,7 @@ import {
   stopRun,
 } from "@/lib/agent/client";
 import { createRunRecord, isAgentRunRecord, jobLabel, normalizeForResume } from "@/lib/agent/record";
+import { withRunLock } from "@/lib/agent/runLock";
 import type { AgentJob, AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "@/lib/agent/types";
 import type { MessageResult } from "@/lib/engine/schemas";
 import { getPresetById } from "@/lib/presets";
@@ -46,6 +47,7 @@ import { StepTimeline } from "./StepTimeline";
 
 const EMPTY_JOB: AgentJob = { description: "", company: "", role: "", url: "", notes: "" };
 const MAX_STEPS_PER_ADVANCE = 8;
+const RUN_ELSEWHERE = "This application is already running in another tab or window. Let it finish there, then reload this page.";
 const FREE_NOTE = "Each step uses one of today's free runs. A full application usually takes 4 to 6.";
 
 /** A run the user stopped can be reopened; it comes back paused so the policy decides what is next. */
@@ -174,6 +176,9 @@ export function ApplyWorkflow() {
       });
   }, []);
 
+  // Leaving the page stops the loop: no steps run (or get billed) with nobody watching.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   // Mobile: hide the sticky action bar while a text field outside it has focus.
   useEffect(() => {
     const isField = (t: EventTarget | null) =>
@@ -223,69 +228,78 @@ export function ApplyWorkflow() {
       setFetchError("");
       const controller = new AbortController();
       abortRef.current = controller;
-      let rec: AgentRunRecord = { ...start, status: "running" };
-      commit(rec);
-      // Persist a record without taking over the UI when it has switched to another run.
-      const settle = (r: AgentRunRecord) => {
-        if (recordRef.current?.id === r.id) commit(r);
-        else void saveAgentRun(r).then(announceVaultChange, () => {});
-      };
       try {
-        for (let i = 0; i < MAX_STEPS_PER_ADVANCE; i++) {
-          // Edits and pause toggles made while the last step ran live in recordRef, not in `rec`.
-          const base = loopBase(recordRef.current, rec);
-          if (!base.current) break;
-          rec = base.record;
-          const next = localNextAction(rec);
-          if (next.kind !== "step") break;
-          const retrieved = retrieveForTools(chunks, rec.job, next.allowed, semanticOrder ?? undefined);
-          const profileForRun = Object.fromEntries(Object.entries(profile).filter(([, v]) => v));
-          const body = buildStepRequest(rec, {
-            vault: retrieved.vault,
-            retrieval: retrieved.retrieval,
-            ...(Object.keys(profileForRun).length ? { profile: profileForRun } : {}),
-            ...(access.requestConfig ? { config: access.requestConfig } : {}),
-          });
-          setLiveMessage(`${AGENT_TOOL_LABELS[next.allowed[0]]} running`);
-          const res = await fetch("/api/agent/step", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          });
-          const json = (await res.json()) as AgentStepResponse | { error: string };
-          if (!res.ok || "error" in json) {
-            const message = "error" in json ? json.error : "Something went wrong.";
-            settle(markRunError(recordRef.current, rec, Date.now()));
-            setFetchError(message);
-            setLiveMessage("The step didn't finish. Your earlier steps are saved.");
-            return;
-          }
-          const rebased = rebaseStepResponse(recordRef.current, rec, json, Date.now());
-          rec = rebased.record;
-          settle(rec);
-          if (!rebased.current || json.kind === "blocked") break;
-          if (json.remaining !== null) setRemaining(json.remaining);
-          setLiveMessage(liveStep(json.step.tool === "finish" ? next.allowed[0] : (json.step.tool as AgentWorkTool), json.step, json.next));
+        // One loop per run across remounts and tabs; a second one refuses to start.
+        const locked = await withRunLock(start.id, async () => {
+          let rec: AgentRunRecord = { ...start, status: "running" };
+          commit(rec);
+          // Persist a record without taking over the UI when it has switched to another run.
+          const settle = (r: AgentRunRecord) => {
+            if (recordRef.current?.id === r.id) commit(r);
+            else void saveAgentRun(r).then(announceVaultChange, () => {});
+          };
+          try {
+            for (let i = 0; i < MAX_STEPS_PER_ADVANCE; i++) {
+              // Edits and pause toggles made while the last step ran live in recordRef, not in `rec`.
+              const base = loopBase(recordRef.current, rec);
+              if (controller.signal.aborted || !base.current) break;
+              rec = base.record;
+              const next = localNextAction(rec);
+              if (next.kind !== "step") break;
+              const retrieved = retrieveForTools(chunks, rec.job, next.allowed, semanticOrder ?? undefined);
+              const profileForRun = Object.fromEntries(Object.entries(profile).filter(([, v]) => v));
+              const body = buildStepRequest(rec, {
+                vault: retrieved.vault,
+                retrieval: retrieved.retrieval,
+                ...(Object.keys(profileForRun).length ? { profile: profileForRun } : {}),
+                ...(access.requestConfig ? { config: access.requestConfig } : {}),
+              });
+              setLiveMessage(`${AGENT_TOOL_LABELS[next.allowed[0]]} running`);
+              const res = await fetch("/api/agent/step", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+              });
+              const json = (await res.json()) as AgentStepResponse | { error: string };
+              if (!res.ok || "error" in json) {
+                const message = "error" in json ? json.error : "Something went wrong.";
+                settle(markRunError(recordRef.current, rec, Date.now()));
+                setFetchError(message);
+                setLiveMessage("The step didn't finish. Your earlier steps are saved.");
+                return;
+              }
+              const rebased = rebaseStepResponse(recordRef.current, rec, json, Date.now());
+              rec = rebased.record;
+              settle(rec);
+              if (!rebased.current || json.kind === "blocked") break;
+              if (json.remaining !== null) setRemaining(json.remaining);
+              setLiveMessage(liveStep(json.step.tool === "finish" ? next.allowed[0] : (json.step.tool as AgentWorkTool), json.step, json.next));
 
-          const pct = Math.max(json.budget.stepsUsed / json.budget.stepBudget, json.budget.tokensUsed / json.budget.tokenBudget);
-          const key = `${rec.id}-${json.budget.stepBudget}`;
-          if (pct >= 0.8 && pct < 1 && announced80.current !== key) {
-            announced80.current = key;
-            setLiveMessage((m) => `${m} You have used 80 percent of this run's budget.`);
+              const pct = Math.max(json.budget.stepsUsed / json.budget.stepBudget, json.budget.tokensUsed / json.budget.tokenBudget);
+              const key = `${rec.id}-${json.budget.stepBudget}`;
+              if (pct >= 0.8 && pct < 1 && announced80.current !== key) {
+                announced80.current = key;
+                setLiveMessage((m) => `${m} You have used 80 percent of this run's budget.`);
+              }
+              if (json.next.kind === "gate") {
+                const tool: AgentWorkTool = json.next.gate === "A" ? "fit_check" : "outreach_message";
+                focusSoon(() => headingRefs[tool].current);
+              }
+              if (json.step.status === "error" || rec.status === "paused" || json.next.kind !== "step") break;
+            }
+          } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") {
+              setLiveMessage("Run stopped. Your finished steps are saved.");
+            } else {
+              settle(markRunError(recordRef.current, rec, Date.now()));
+              setFetchError(err instanceof Error ? err.message : "Something went wrong.");
+            }
           }
-          if (json.next.kind === "gate") {
-            const tool: AgentWorkTool = json.next.gate === "A" ? "fit_check" : "outreach_message";
-            focusSoon(() => headingRefs[tool].current);
-          }
-          if (json.step.status === "error" || rec.status === "paused" || json.next.kind !== "step") break;
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          setLiveMessage("Run stopped. Your finished steps are saved.");
-        } else {
-          settle(markRunError(recordRef.current, rec, Date.now()));
-          setFetchError(err instanceof Error ? err.message : "Something went wrong.");
+        });
+        if (!locked.ok) {
+          setFetchError(RUN_ELSEWHERE);
+          setLiveMessage(RUN_ELSEWHERE);
         }
       } finally {
         inFlight.current = false;

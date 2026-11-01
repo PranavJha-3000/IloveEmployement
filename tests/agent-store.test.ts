@@ -10,6 +10,7 @@ import {
   toStorable,
 } from "../lib/agent/record";
 import type { AgentRunRecord, AgentStepRecord } from "../lib/agent/types";
+import { buildVaultExport, parseVaultImport, upgradeVaultDb } from "../lib/vault/store";
 
 const job = { description: "Build APIs", company: "Razorpay", role: "Backend Engineer" };
 
@@ -97,4 +98,92 @@ test("runBadge", () => {
   assert.equal(runBadge("stopped"), "Stopped");
   assert.equal(runBadge("error"), "Stopped");
   assert.equal(runBadge("completed"), "Completed");
+});
+
+// Vault store: v2 -> v3 upgrade and export/import
+
+interface FakeStore {
+  keyPath?: string;
+  data: Map<string, unknown>;
+}
+
+function fakeDb(initial: Record<string, FakeStore> = {}) {
+  const stores = new Map<string, FakeStore>(Object.entries(initial));
+  const calls: string[] = [];
+  return {
+    stores,
+    calls,
+    db: {
+      objectStoreNames: { contains: (n: string) => stores.has(n) },
+      createObjectStore(name: string, options?: { keyPath?: string | string[] }) {
+        calls.push(`create:${name}`);
+        if (stores.has(name)) throw new Error("ConstraintError");
+        stores.set(name, { keyPath: options?.keyPath as string | undefined, data: new Map() });
+        return {};
+      },
+      deleteObjectStore(name: string) {
+        calls.push(`delete:${name}`);
+      },
+    },
+  };
+}
+
+test("upgradeVaultDb v2 -> v3 adds only agentRuns and keeps data", () => {
+  const f = fakeDb({
+    chunks: { keyPath: "id", data: new Map([["c1", { id: "c1", text: "hello" }]]) },
+    meta: { data: new Map([["profile", { name: "A" }]]) },
+    vectors: { keyPath: "id", data: new Map([["c1", { id: "c1", hash: "h", vector: [1] }]]) },
+  });
+  const snapshot = () =>
+    JSON.stringify([...f.stores].filter(([k]) => k !== "agentRuns").map(([k, v]) => [k, [...v.data]]));
+  const before = snapshot();
+  upgradeVaultDb(f.db, 2);
+  assert.deepEqual(f.calls, ["create:agentRuns"]);
+  assert.equal(f.stores.get("agentRuns")?.keyPath, "id");
+  assert.equal(snapshot(), before);
+});
+
+test("upgradeVaultDb on a fresh install creates all four stores", () => {
+  const f = fakeDb();
+  upgradeVaultDb(f.db, 0);
+  assert.deepEqual([...f.stores.keys()].sort(), ["agentRuns", "chunks", "meta", "vectors"]);
+  assert.ok(!f.calls.some((c) => c.startsWith("delete:")));
+});
+
+test("upgradeVaultDb is idempotent", () => {
+  const f = fakeDb();
+  upgradeVaultDb(f.db, 0);
+  assert.doesNotThrow(() => upgradeVaultDb(f.db, 3));
+  assert.equal(f.calls.length, 4);
+});
+
+test("vault export and import round-trip includes agent runs", () => {
+  const run = createRunRecord(job, { id: "r1", now: 5 });
+  const chunk = { id: "c1", text: "hi", createdAt: 1 } as never;
+  const profile = { name: "A", headline: "", location: "", targetRole: "", links: "" };
+  const json = buildVaultExport({ profile, chunks: [chunk], agentRuns: [run] }, "2026-01-01T00:00:00.000Z");
+  const parsed = JSON.parse(json);
+  assert.equal(parsed.format, "iloveemployement-vault@1");
+  assert.equal(parsed.agentRuns.length, 1);
+  const back = parseVaultImport(json);
+  assert.deepEqual(back.chunks, [chunk]);
+  assert.deepEqual(back.agentRuns, [run]);
+});
+
+test("parseVaultImport handles old exports, invalid runs and wrong format", () => {
+  const old = JSON.stringify({ format: "iloveemployement-vault@1", chunks: [] });
+  assert.deepEqual(parseVaultImport(old).agentRuns, []);
+  const run = createRunRecord(job, { id: "r1", now: 5 });
+  const mixed = JSON.stringify({
+    format: "iloveemployement-vault@1",
+    chunks: [],
+    agentRuns: [run, { id: "bad" }, null, { ...run, config: { apiKey: "sk-z" } }],
+  });
+  const out = parseVaultImport(mixed);
+  assert.equal(out.agentRuns.length, 2);
+  assert.ok(!JSON.stringify(out.agentRuns).includes("sk-z"));
+  assert.throws(
+    () => parseVaultImport(JSON.stringify({ format: "nope", chunks: [] })),
+    /isn't an IloveEmployement vault export/,
+  );
 });

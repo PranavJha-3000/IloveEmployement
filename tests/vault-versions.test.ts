@@ -67,3 +67,48 @@ test("newVersionId is unique, prefixed and within the id cap", () => {
   assert.ok(a.startsWith("rv-") && b.startsWith("tl-"));
   assert.ok(a.length <= 80);
 });
+
+// Export / import payloads (pure helpers in store.ts)
+import { buildVaultExport, parseVaultImport } from "../lib/vault/store";
+import type { ConfirmedProfile } from "../lib/profile/schema";
+import { emptyProfile } from "../lib/profile/schema";
+
+const emptyVaultProfile = { name: "", headline: "", location: "", targetRole: "", links: "" };
+
+test("export then import round-trips versions and the structured profile", () => {
+  const sp: ConfirmedProfile = { profile: emptyProfile(), confirmedAt: 5, sourceHash: "abc", method: "deterministic" };
+  const v = version({ id: "a" });
+  const json = buildVaultExport(
+    { profile: emptyVaultProfile, chunks: [], agentRuns: [], structuredProfile: sp, resumeVersions: [v] },
+    "2026-01-01T00:00:00.000Z",
+  );
+  const back = parseVaultImport(json);
+  assert.deepEqual(back.versions, [v]);
+  assert.deepEqual(back.structuredProfile, sp);
+  assert.equal(back.versionsDropped, 0);
+});
+
+test("import drops a javascript: URL version and an oversized one and reports 2", () => {
+  const good = version({ id: "good" });
+  const json = JSON.stringify({
+    format: "iloveemployement-vault@1",
+    chunks: [],
+    resumeVersions: [
+      good,
+      version({ id: "x1", job: { title: "t", company: "c", url: "javascript:alert(1)" } }),
+      { ...version({ id: "x2" }), text: "y".repeat(50000) },
+    ],
+    structuredProfile: { profile: { nope: true } },
+  });
+  const out = parseVaultImport(json);
+  assert.deepEqual(out.versions, [good]);
+  assert.equal(out.versionsDropped, 2);
+  assert.equal(out.structuredProfile, null);
+});
+
+test("an export from before Phase 5 imports with no versions", () => {
+  const out = parseVaultImport(JSON.stringify({ format: "iloveemployement-vault@1", chunks: [] }));
+  assert.deepEqual(out.versions, []);
+  assert.equal(out.versionsDropped, 0);
+  assert.equal(out.structuredProfile, null);
+});

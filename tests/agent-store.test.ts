@@ -136,25 +136,25 @@ function fakeDb(initial: Record<string, FakeStore> = {}) {
   };
 }
 
-test("upgradeVaultDb v2 -> v3 adds only agentRuns and keeps data", () => {
+test("upgradeVaultDb v2 -> v4 adds agentRuns and the v4 versions store and keeps data", () => {
   const f = fakeDb({
     chunks: { keyPath: "id", data: new Map([["c1", { id: "c1", text: "hello" }]]) },
     meta: { data: new Map([["profile", { name: "A" }]]) },
     vectors: { keyPath: "id", data: new Map([["c1", { id: "c1", hash: "h", vector: [1] }]]) },
   });
   const snapshot = () =>
-    JSON.stringify([...f.stores].filter(([k]) => k !== "agentRuns").map(([k, v]) => [k, [...v.data]]));
+    JSON.stringify([...f.stores].filter(([k]) => k !== "agentRuns" && k !== "resumeVersions").map(([k, v]) => [k, [...v.data]]));
   const before = snapshot();
   upgradeVaultDb(f.db, 2);
-  assert.deepEqual(f.calls, ["create:agentRuns"]);
+  assert.deepEqual(f.calls, ["create:agentRuns", "create:resumeVersions"]);
   assert.equal(f.stores.get("agentRuns")?.keyPath, "id");
   assert.equal(snapshot(), before);
 });
 
-test("upgradeVaultDb on a fresh install creates all four stores", () => {
+test("upgradeVaultDb on a fresh install creates all five stores", () => {
   const f = fakeDb();
   upgradeVaultDb(f.db, 0);
-  assert.deepEqual([...f.stores.keys()].sort(), ["agentRuns", "chunks", "meta", "vectors"]);
+  assert.deepEqual([...f.stores.keys()].sort(), ["agentRuns", "chunks", "meta", "resumeVersions", "vectors"]);
   assert.ok(!f.calls.some((c) => c.startsWith("delete:")));
 });
 
@@ -162,7 +162,7 @@ test("upgradeVaultDb is idempotent", () => {
   const f = fakeDb();
   upgradeVaultDb(f.db, 0);
   assert.doesNotThrow(() => upgradeVaultDb(f.db, 3));
-  assert.equal(f.calls.length, 4);
+  assert.equal(f.calls.length, 5);
 });
 
 test("vault export and import round-trip includes agent runs", () => {

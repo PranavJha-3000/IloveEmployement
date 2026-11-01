@@ -7,34 +7,23 @@
 import type { VaultChunk, VaultProfile } from "../engine/types";
 import { isAgentRunRecord, toStorable } from "../agent/record";
 import type { AgentRunRecord } from "../agent/types";
+import { ConfirmedProfileSchema, type ConfirmedProfile } from "../profile/schema";
+import { DB_NAME, DB_VERSION, STORES, upgradeVaultSchema, type SchemaHost } from "./schema";
+import { ResumeVersionSchema, sanitizeImportedVersions, type ResumeVersion } from "./versions";
 
-const DB_NAME = "iloveemployement";
-const DB_VERSION = 3;
-const CHUNKS = "chunks";
-const META = "meta";
-const VECTORS = "vectors";
-const AGENT_RUNS = "agentRuns";
+const CHUNKS = STORES.chunks;
+const META = STORES.meta;
+const VECTORS = STORES.vectors;
+const AGENT_RUNS = STORES.agentRuns;
+const RESUME_VERSIONS = STORES.resumeVersions;
+const STRUCTURED_PROFILE_KEY = "structuredProfile";
 const EXPORT_FORMAT = "iloveemployement-vault@1";
 
 export const EMPTY_PROFILE: VaultProfile = { name: "", headline: "", location: "", targetRole: "", links: "" };
 
-/** Minimal surface of IDBDatabase used by the upgrade, so it can be tested with a fake. */
-export interface VaultUpgradeTarget {
-  objectStoreNames: { contains(name: string): boolean };
-  createObjectStore(name: string, options?: IDBObjectStoreParameters): unknown;
-}
-
-/** Creates any missing store. Never deletes or recreates an existing one. */
-export function upgradeVaultDb(db: VaultUpgradeTarget, oldVersion: number): void {
-  void oldVersion;
-  if (!db.objectStoreNames.contains(CHUNKS)) db.createObjectStore(CHUNKS, { keyPath: "id" });
-  if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
-  // v2: semantic index, one embedding per chunk (keyed by chunk id, with a content hash).
-  if (!db.objectStoreNames.contains(VECTORS)) db.createObjectStore(VECTORS, { keyPath: "id" });
-  // v3: agent workflow runs (Phase 4)
-  if (!db.objectStoreNames.contains(AGENT_RUNS)) db.createObjectStore(AGENT_RUNS, { keyPath: "id" });
-  // Phase 5 adds its v4 store after this block.
-}
+/** Phase 4's names for the upgrade; the logic lives in schema.ts so every path reaches v4. */
+export type VaultUpgradeTarget = SchemaHost;
+export const upgradeVaultDb = upgradeVaultSchema;
 
 export const VAULT_BLOCKED_MESSAGE = "Close other IloveEmployement tabs to finish the update, then reload.";
 
@@ -43,7 +32,7 @@ function openDb(): Promise<IDBDatabase> {
     if (typeof indexedDB === "undefined") return reject(new Error("IndexedDB unavailable"));
     let settled = false;
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (event) => upgradeVaultDb(req.result, event.oldVersion);
+    req.onupgradeneeded = (event) => upgradeVaultSchema(req.result, event.oldVersion);
     req.onsuccess = () => {
       const db = req.result;
       // Let another tab's upgrade proceed instead of blocking on this connection.
@@ -127,6 +116,51 @@ export async function clearVault(): Promise<void> {
   await tx(META, "readwrite", (s) => s.clear());
   await tx(VECTORS, "readwrite", (s) => s.clear());
   await tx(AGENT_RUNS, "readwrite", (s) => s.clear());
+  await tx(RESUME_VERSIONS, "readwrite", (s) => s.clear());
+}
+
+// ─── Structured profile (Phase 5) ────────────────────────────────────────────
+
+export async function loadStructuredProfile(): Promise<ConfirmedProfile | null> {
+  try {
+    const raw = await tx<unknown>(META, "readonly", (s) => s.get(STRUCTURED_PROFILE_KEY));
+    const parsed = ConfirmedProfileSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveStructuredProfile(p: ConfirmedProfile): Promise<void> {
+  const valid = ConfirmedProfileSchema.parse(p);
+  await tx(META, "readwrite", (s) => s.put(valid, STRUCTURED_PROFILE_KEY));
+}
+
+// ─── Resume versions (Phase 5) ───────────────────────────────────────────────
+
+/** Newest first; entries that no longer validate are skipped. */
+export async function loadResumeVersions(): Promise<ResumeVersion[]> {
+  try {
+    const all = (await tx<unknown[]>(RESUME_VERSIONS, "readonly", (s) => s.getAll())) ?? [];
+    const out: ResumeVersion[] = [];
+    for (const item of all) {
+      const r = ResumeVersionSchema.safeParse(item);
+      if (r.success) out.push(r.data);
+    }
+    return out.sort((a, b) => b.createdAt - a.createdAt);
+  } catch {
+    return [];
+  }
+}
+
+/** Put by id: saving the same id overwrites it. */
+export async function saveResumeVersion(v: ResumeVersion): Promise<void> {
+  const valid = ResumeVersionSchema.parse(v);
+  await tx(RESUME_VERSIONS, "readwrite", (s) => s.put(valid));
+}
+
+export async function deleteResumeVersion(id: string): Promise<void> {
+  await tx(RESUME_VERSIONS, "readwrite", (s) => s.delete(id));
 }
 
 // ─── Agent runs ──────────────────────────────────────────────────────────────
@@ -186,6 +220,9 @@ export interface VaultExportParts {
   profile: VaultProfile;
   chunks: VaultChunk[];
   agentRuns: AgentRunRecord[];
+  /** Phase 5; optional so callers that predate it still compile. */
+  structuredProfile?: ConfirmedProfile | null;
+  resumeVersions?: ResumeVersion[];
 }
 
 export function buildVaultExport(parts: VaultExportParts, exportedAt: string): string {
@@ -196,6 +233,8 @@ export function buildVaultExport(parts: VaultExportParts, exportedAt: string): s
       profile: parts.profile,
       chunks: parts.chunks,
       agentRuns: parts.agentRuns.map(toStorable),
+      structuredProfile: parts.structuredProfile ?? null,
+      resumeVersions: parts.resumeVersions ?? [],
     },
     null,
     2,
@@ -206,12 +245,17 @@ export function parseVaultImport(json: string): {
   profile?: VaultProfile;
   chunks: VaultChunk[];
   agentRuns: AgentRunRecord[];
+  structuredProfile: ConfirmedProfile | null;
+  versions: ResumeVersion[];
+  versionsDropped: number;
 } {
   const data = JSON.parse(json) as {
     format?: string;
     profile?: VaultProfile;
     chunks?: VaultChunk[];
     agentRuns?: unknown;
+    structuredProfile?: unknown;
+    resumeVersions?: unknown;
   };
   if (data.format !== EXPORT_FORMAT || !Array.isArray(data.chunks)) {
     throw new Error("That file isn't an IloveEmployement vault export.");
@@ -219,12 +263,28 @@ export function parseVaultImport(json: string): {
   const chunks = data.chunks.filter((c) => typeof c?.id === "string" && typeof c?.text === "string");
   // Older exports have no agentRuns; every imported run is validated and rebuilt by whitelist.
   const agentRuns = Array.isArray(data.agentRuns) ? data.agentRuns.filter(isAgentRunRecord).map(toStorable) : [];
-  return { profile: data.profile, chunks, agentRuns };
+  // Phase 5 keys are optional; every version and the profile are validated, invalid ones are dropped.
+  const { versions, dropped } = sanitizeImportedVersions(data.resumeVersions);
+  const sp = ConfirmedProfileSchema.safeParse(data.structuredProfile);
+  return {
+    profile: data.profile,
+    chunks,
+    agentRuns,
+    structuredProfile: sp.success ? sp.data : null,
+    versions,
+    versionsDropped: dropped,
+  };
 }
 
 export async function exportVault(): Promise<string> {
-  const [chunks, profile, agentRuns] = await Promise.all([loadChunks(), loadProfile(), listAgentRuns()]);
-  return buildVaultExport({ profile, chunks, agentRuns }, new Date().toISOString());
+  const [chunks, profile, agentRuns, structuredProfile, resumeVersions] = await Promise.all([
+    loadChunks(),
+    loadProfile(),
+    listAgentRuns(),
+    loadStructuredProfile(),
+    loadResumeVersions(),
+  ]);
+  return buildVaultExport({ profile, chunks, agentRuns, structuredProfile, resumeVersions }, new Date().toISOString());
 }
 
 /** An imported run only replaces a local copy that is older; a backup never rolls back newer work. */
@@ -232,8 +292,10 @@ export function shouldImportRun(existing: Pick<AgentRunRecord, "updatedAt"> | un
   return !existing || incoming.updatedAt > existing.updatedAt;
 }
 
-export async function importVault(json: string): Promise<{ chunks: number; agentRuns: number; keptNewer: number }> {
-  const { profile, chunks, agentRuns } = parseVaultImport(json);
+export async function importVault(
+  json: string,
+): Promise<{ chunks: number; agentRuns: number; keptNewer: number; versions: number; versionsDropped: number }> {
+  const { profile, chunks, agentRuns, structuredProfile, versions, versionsDropped } = parseVaultImport(json);
   await saveChunks(chunks);
   if (profile) await saveProfile({ ...EMPTY_PROFILE, ...profile });
   let imported = 0;
@@ -242,7 +304,9 @@ export async function importVault(json: string): Promise<{ chunks: number; agent
     await saveAgentRun(r);
     imported += 1;
   }
-  return { chunks: chunks.length, agentRuns: imported, keptNewer: agentRuns.length - imported };
+  for (const v of versions) await saveResumeVersion(v);
+  if (structuredProfile) await saveStructuredProfile(structuredProfile);
+  return { chunks: chunks.length, agentRuns: imported, keptNewer: agentRuns.length - imported, versions: versions.length, versionsDropped };
 }
 
 /** Notifies open tool pages that the vault changed in another tab or component. */

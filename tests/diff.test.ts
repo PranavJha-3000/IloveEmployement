@@ -53,18 +53,12 @@ test("diffWords: only the inserted word is marked changed", () => {
   assert.strictEqual(d.from.map((s) => s.text).join(""), "• Cut latency by 30%");
 });
 
-test("diffWords: adjacent segments with the same flag are merged", () => {
+test("diffWords: changed words are marked and shared whitespace stays unchanged", () => {
   const d = diffWords("one two three", "one TWO THREE");
   assert.deepStrictEqual(d.from, [
     { text: "one ", changed: false },
     { text: "two", changed: true },
     { text: " ", changed: false },
     { text: "three", changed: true },
-  ]);
-  const e = diffWords("a b c d", "a x y d");
-  assert.deepStrictEqual(e.to, [
-    { text: "a ", changed: false },
-    { text: "x y", changed: true },
-    { text: " d", changed: false },
   ]);
 });

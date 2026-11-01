@@ -382,3 +382,24 @@ test("17. a record already saved with null usage recovers: charged the estimate,
   assert.deepStrictEqual(localNextAction(broken), { kind: "step", allowed: ["tailor_resume", "cover_letter"] });
   assert.strictEqual(countUsage(broken.steps).tokensUsed, AGENT_NULL_USAGE_ESTIMATE);
 });
+
+test("18. after two rejected choices in a row the policy runs the first allowed tool without the planner (WR-01)", async () => {
+  const s = scriptAgentModel({ plan: ["outreach_message"] });
+  let rec = fresh();
+  for (let i = 0; i < 2; i++) {
+    const out = await go(rec);
+    assert.strictEqual(out.res.kind, "rejected");
+    rec = out.rec;
+  }
+  const third = await go(rec);
+  assert.strictEqual(third.res.kind, "step");
+  if (third.res.kind !== "step") return;
+  assert.strictEqual(third.res.step.tool, "fit_check");
+  assert.strictEqual(third.res.step.plannedBy, "policy-fallback");
+  assert.strictEqual(third.res.step.usage.planner, 0);
+  assert.strictEqual(s.plannerCalls(), 2);
+  // The streak resets once a step ran: the planner is asked again next time.
+  const fourth = await go(approveGateA(third.rec, 5000));
+  assert.strictEqual(fourth.res.kind, "rejected");
+  assert.strictEqual(s.plannerCalls(), 3);
+});

@@ -8,14 +8,15 @@ import { runPreset } from "../engine/run";
 import { classifyAIError } from "../pipeline";
 import { getPresetById } from "../presets";
 import {
+  AGENT_MAX_CONSECUTIVE_REJECTIONS,
   AGENT_TOOLS,
   AGENT_TOOL_PRESETS,
   AGENT_WORK_TOOLS,
   type AgentToolName,
   type AgentWorkTool,
 } from "./config";
-import { planNextTool } from "./planner";
-import { budgetLimits, countUsage, nextAction, usageTokens, validateChoice } from "./policy";
+import { planNextTool, type PlannedTool } from "./planner";
+import { budgetLimits, countUsage, nextAction, trailingRejections, usageTokens, validateChoice } from "./policy";
 import { parseAgentStepRequest } from "./schema";
 import type {
   AgentApprovals,
@@ -127,14 +128,21 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
   // 5. Plan.
   const startedAt = now();
   const screened = screenUntrusted(req.job.description);
-  let planned;
-  try {
-    planned = await planNextTool(access.config, req, screened.text, action.allowed);
-  } catch (err) {
-    const info = classifyAIError(err);
-    return { status: info.status, body: { error: info.message } };
+  // A planner that keeps picking disallowed tools (for example steered by an injected JD) cannot
+  // burn the budget: after the cap, the policy picks the first allowed tool without a planner call.
+  const capped = trailingRejections(req.steps) >= AGENT_MAX_CONSECUTIVE_REJECTIONS;
+  let planned: PlannedTool;
+  if (capped) {
+    planned = { toolName: action.allowed[0], args: {}, usage: null, plannedBy: "policy-fallback" };
+  } else {
+    try {
+      planned = await planNextTool(access.config, req, screened.text, action.allowed);
+    } catch (err) {
+      const info = classifyAIError(err);
+      return { status: info.status, body: { error: info.message } };
+    }
   }
-  const plannerTokens = usageTokens(planned.usage);
+  const plannerTokens = capped ? 0 : usageTokens(planned.usage);
 
   const after = (step: AgentStepRecord) => {
     const steps = [...req.steps, step];

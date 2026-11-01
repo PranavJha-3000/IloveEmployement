@@ -67,6 +67,18 @@ export function countUsage(steps: AgentStepSummary[]): {
   return { stepsUsed, tokensUsed, rejectedChoices };
 }
 
+/** Rejected planner choices since the last step that ran (invalidated steps are skipped). */
+export function trailingRejections(steps: AgentStepSummary[]): number {
+  let n = 0;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i];
+    if (s.invalidated) continue;
+    if (s.status !== "rejected") break;
+    n += 1;
+  }
+  return n;
+}
+
 export function budgetLimits(resets: number): { stepBudget: number; tokenBudget: number } {
   const n = Number.isFinite(resets) ? Math.trunc(resets) : 0;
   const r = Math.min(AGENT_MAX_BUDGET_RESETS, Math.max(0, n));

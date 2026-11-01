@@ -9,6 +9,8 @@ export const AGENT_MAX_BUDGET_RESETS = 2;
 /** Tokens charged when a provider returns null usage, so null cannot evade the budget. */
 export const AGENT_NULL_USAGE_ESTIMATE = 4_000;
 export const AGENT_PLANNER_TIMEOUT_MS = 20_000;
+/** After this many rejected planner choices in a row, the policy picks the tool (no planner call). */
+export const AGENT_MAX_CONSECUTIVE_REJECTIONS = 2;
 export const AGENT_MAX_STEP_RECORDS = 40;
 export const AGENT_JD_MAX = 10_000;
 /** Smaller of whyThem (800) and hook (600), so both presets accept it. */

@@ -4,6 +4,8 @@
 // writes evals/results/llm-<stamp>.json plus the generated report. Every model
 // call goes through the disk-cached, throttled recording wrapper, so an
 // interrupted run resumes without repeating finished calls.
+// npm run eval -- --agent [--dry|--estimate|--cases id[,id]|--models ...]
+// Runs the agent workflow cases (evals/agentCases.ts) instead; the default run is unchanged.
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -15,6 +17,7 @@ import { runPreset, setModelFactory } from "../../lib/engine/run";
 import type { RunMeta } from "../../lib/engine/types";
 import type { AiRequestConfig } from "../../lib/types";
 import { CASES, type EvalCase } from "../cases";
+import { mainAgent } from "./agentRun";
 import { computeAgreement, type AgreementBlock, type AgreementPair, type Rating } from "./agreement";
 import { createDiskCache, HARNESS_VERSION, type DiskCache } from "./cache";
 import { prepareCase } from "./caseRun";
@@ -432,6 +435,8 @@ export interface EvalArgs {
   probe: boolean;
   noDotenv: boolean;
   noJudge: boolean;
+  /** Run the agent workflow cases (evals/agentCases.ts) instead of the Phase 3 cases. */
+  agent: boolean;
   labelsSheet: boolean;
   agreement: boolean;
   cases: string[] | null;
@@ -445,7 +450,7 @@ export interface EvalArgs {
 
 export function parseArgs(argv: string[]): EvalArgs {
   const a: EvalArgs = {
-    dry: false, estimate: false, listModels: false, probe: false, noDotenv: false, noJudge: false,
+    dry: false, estimate: false, listModels: false, probe: false, noDotenv: false, noJudge: false, agent: false,
     labelsSheet: false, agreement: false, cases: null, limit: null, models: null, judge: null, rpm: null, maxRequests: 300, report: null,
   };
   const value = (i: number, flag: string): string => {
@@ -467,6 +472,7 @@ export function parseArgs(argv: string[]): EvalArgs {
       case "--probe": a.probe = true; break;
       case "--no-dotenv": a.noDotenv = true; break;
       case "--no-judge": a.noJudge = true; break;
+      case "--agent": a.agent = true; break;
       case "--labels-sheet": a.labelsSheet = true; break;
       case "--agreement": a.agreement = true; break;
       case "--cases": a.cases = value(i++, f).split(",").map((s) => s.trim()).filter(Boolean); break;
@@ -585,7 +591,7 @@ export function applyAgreement(paths: LabelPaths = DEFAULT_LABEL_PATHS): StepRes
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
-function selectCases(args: EvalArgs): EvalCase[] {
+export function selectCases(args: EvalArgs): EvalCase[] {
   let cases = CASES;
   if (args.cases) {
     const unknown = args.cases.filter((id) => !CASES.some((c) => c.id === id));
@@ -625,6 +631,10 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (!args.noDotenv) {
     const names = loadDotEnv(".env");
     if (names.length) console.log(`Loaded ${names.length} variable(s) from .env`);
+  }
+  if (args.agent) {
+    await mainAgent(args, argv);
+    return;
   }
   const env = process.env;
   const cases = selectCases(args);

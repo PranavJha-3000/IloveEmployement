@@ -8,6 +8,9 @@ import { BACKEND_RESUME, CASES } from "../evals/cases";
 import { agentCaseFingerprint, estimateAgentRequests, runAgentCase, runAgentEval } from "../evals/llm/agentRun";
 import { stableChunks } from "../evals/llm/caseRun";
 import { parseModelSpec } from "../evals/llm/env";
+import { estimateRequests } from "../evals/llm/estimate";
+import { caseFingerprint } from "../evals/llm/fingerprint";
+import { parseArgs, selectCases } from "../evals/llm/run";
 import { createRunRecord } from "../lib/agent/record";
 import type { AgentRunRecord, AgentStepRecord } from "../lib/agent/types";
 import { modelFor, setModelFactory } from "../lib/engine/run";
@@ -136,4 +139,30 @@ test("runAgentEval runs agent cases through the recording model, caches them and
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ─── Phase 3 default run is unchanged ────────────────────────────────────────
+
+test("default case set is pinned: 28 cases, fingerprint 1ht349n", () => {
+  assert.strictEqual(CASES.length, 28);
+  assert.strictEqual(caseFingerprint(CASES), "1ht349n");
+});
+
+test("parseArgs: --agent defaults off and composes with --cases", () => {
+  assert.strictEqual(parseArgs([]).agent, false);
+  assert.strictEqual(parseArgs(["--agent"]).agent, true);
+  assert.deepStrictEqual(parseArgs(["--agent", "--cases", "agent-skip-stops"]).cases, ["agent-skip-stops"]);
+});
+
+test("selectCases: default selection is exactly CASES and explicit ids still work", () => {
+  assert.deepStrictEqual(selectCases(parseArgs([])), CASES);
+  assert.deepStrictEqual(selectCases(parseArgs(["--cases", "fit-strong-match"])).map((c) => c.id), ["fit-strong-match"]);
+  assert.throws(() => selectCases(parseArgs(["--cases", "agent-skip-stops"])), /Unknown case id/);
+});
+
+test("estimateRequests over the default selection ignores agent cases", () => {
+  const model = parseModelSpec("google:gemini-2.5-flash");
+  const viaSelect = estimateRequests({ cases: selectCases(parseArgs([])), models: [model], judge: null, cache: null });
+  const direct = estimateRequests({ cases: CASES, models: [model], judge: null, cache: null });
+  assert.deepStrictEqual(viaSelect, direct);
 });

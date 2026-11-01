@@ -17,9 +17,9 @@ const SECTION_PATTERNS: { kind: VaultChunkKind | "skip"; re: RegExp }[] = [
   { kind: "skip", re: /^(references|contact|interests|hobbies|languages)$/i },
 ];
 
-const BULLET = /^\s*([•●▪◦‣∙·\-–—*]|\d+[.)])\s+/;
+export const BULLET = /^\s*([•●▪◦‣∙·\-–—*]|\d+[.)])\s+/;
 
-function sectionKind(line: string): VaultChunkKind | "skip" | null {
+export function sectionKind(line: string): VaultChunkKind | "skip" | null {
   const clean = line.replace(/[:|_=\-–—]+$/g, "").trim();
   if (!clean || clean.length > 40) return null;
   for (const { kind, re } of SECTION_PATTERNS) if (re.test(clean)) return kind;
@@ -36,7 +36,7 @@ function chunk(kind: VaultChunkKind, title: string, text: string, now: number): 
 }
 
 /** Heading lines in a role block look like "Senior Engineer, Acme · 2022 – Present". */
-function looksLikeRoleHeader(line: string): boolean {
+export function looksLikeRoleHeader(line: string): boolean {
   return !BULLET.test(line) && line.length <= 140 && (/(19|20)\d{2}|present|current/i.test(line) || /\s(@|at|\||,|–|—)\s/.test(line));
 }
 

@@ -51,6 +51,13 @@ export function VersionDiff({ from, to, onClose }: { from: ResumeVersion; to: Re
 
   const diff = small ?? deferred;
 
+  // Move focus to the diff header when a comparison opens, so keyboard and screen-reader users land on it.
+  const headingRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+    headingRef.current?.scrollIntoView({ block: "nearest" });
+  }, [from.id, to.id]);
+
   function go(step: 1 | -1) {
     if (!diff || diff.changeCount === 0) return;
     const next = (cursor + step + diff.changeCount) % diff.changeCount;
@@ -123,7 +130,7 @@ export function VersionDiff({ from, to, onClose }: { from: ResumeVersion; to: Re
     <section className="rounded-xl border border-[var(--rule)]" aria-label="Version comparison">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rule)] bg-[var(--mist)] px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[15px] font-semibold text-zinc-900">
+          <p ref={headingRef} tabIndex={-1} className="text-[15px] font-semibold text-zinc-900 outline-none focus-visible:outline-2">
             Comparing {from.label} → {to.label}
           </p>
           {diff && (

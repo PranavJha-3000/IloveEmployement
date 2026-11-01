@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { TOOLS, searchTools, type CategoryId } from "@/lib/tools";
+import { APPLY_TOOL, TOOLS, searchTools, type CategoryId } from "@/lib/tools";
 import { CategoryTabs } from "./CategoryTabs";
 import { ToolCard } from "./ToolCard";
 
@@ -122,6 +122,7 @@ export function ToolGrid({ hero }: { hero: ReactNode }) {
         {results.length > 0 ? (
           <section aria-label="Matching tools">
             <div key={`${active}:${searching}`} className="tool-grid tool-grid-enter">
+              {!searching && (active === "all" || active === "target") && <ToolCard tool={APPLY_TOOL} tag="Agent workflow" top={false} />}
               {results.map((tool) => (
                 <ToolCard key={tool.id} tool={tool} showCategory={searching} top={tool === top} />
               ))}

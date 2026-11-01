@@ -34,9 +34,12 @@ interface Props {
   showCategory?: boolean;
   /** the result Enter will open */
   top?: boolean;
+  /** custom tag text; takes precedence over the category label */
+  tag?: string;
 }
 
-export function ToolCard({ tool, showCategory = false, top = false }: Props) {
+export function ToolCard({ tool, showCategory = false, top = false, tag }: Props) {
+  const tagText = tag ?? (showCategory ? CATEGORIES.find((c) => c.id === tool.category)?.label : undefined);
   return (
     <Link href={tool.target} className={`tool-card${top ? " is-top" : ""}`} style={{ "--accent": tool.accent } as CSSProperties}>
       <ToolIcon tool={tool} />
@@ -44,7 +47,7 @@ export function ToolCard({ tool, showCategory = false, top = false }: Props) {
         <h3 className="tool-card-name">{tool.name}</h3>
         <p className="tool-card-desc">{tool.description}</p>
       </span>
-      {showCategory && <span className="tool-card-tag">{CATEGORIES.find((c) => c.id === tool.category)?.label}</span>}
+      {tagText && <span className="tool-card-tag">{tagText}</span>}
     </Link>
   );
 }

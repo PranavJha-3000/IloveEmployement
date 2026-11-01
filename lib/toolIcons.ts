@@ -152,3 +152,6 @@ export const TOOL_ICONS: Record<string, ToolIconSpec> = {
 };
 
 export const FALLBACK_ICON: ToolIconSpec = { glyph: G.bubble };
+
+/** The Apply to this job workflow is not a preset, so its icon lives outside TOOL_ICONS. */
+export const APPLY_ICON: ToolIconSpec = { glyph: G.fileText, badge: B.check };

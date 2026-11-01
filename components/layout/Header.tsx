@@ -110,6 +110,13 @@ export function Header() {
               </Link>
           ))}
 
+          <Link
+            href="/apply"
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-[14px] font-medium text-zinc-700 transition-colors hover:bg-[#f3f4f7] hover:text-zinc-950"
+          >
+            Apply to a job
+          </Link>
+
           {menus.map((menu) => (
             <NavDropdown
               key={menu.id}
@@ -216,6 +223,13 @@ export function Header() {
           </p>
           <div className="mt-1 space-y-0.5">
             {heroTools.map((tool) => renderMobileTool(tool))}
+            <Link
+              href="/apply"
+              onClick={() => setMobileOpen(false)}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left text-[15px] font-medium text-zinc-800 transition-colors hover:bg-[#f3f4f7]"
+            >
+              Apply to a job
+            </Link>
           </div>
 
           {menus.map((menu) => (

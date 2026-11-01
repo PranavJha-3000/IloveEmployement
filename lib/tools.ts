@@ -5,7 +5,7 @@
 
 import type { PresetCategory } from "./engine/types";
 import { PRESET_CATEGORY_LABELS, PUBLIC_PRESETS } from "./presets";
-import { FALLBACK_ICON, TOOL_ICONS, type ToolIconSpec } from "./toolIcons";
+import { APPLY_ICON, FALLBACK_ICON, TOOL_ICONS, type ToolIconSpec } from "./toolIcons";
 
 export type CategoryId = "all" | PresetCategory;
 
@@ -75,6 +75,20 @@ export const TOOLS: Tool[] = PUBLIC_PRESETS.map((preset) => ({
   ...CATEGORY_COLORS[preset.category],
   target: `/tools/${preset.slug}` as const,
 })).sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
+
+/**
+ * The agent workflow card. Deliberately NOT part of TOOLS: it is not a preset,
+ * so it must not show up in search, header menus or /tools/[slug] static params.
+ */
+export const APPLY_TOOL: Tool = {
+  id: "apply-to-this-job",
+  name: "Apply to this job",
+  description: "Fit check, tailored resume, cover letter and outreach in one guided run.",
+  category: "target",
+  icon: APPLY_ICON,
+  ...CATEGORY_COLORS.target,
+  target: "/apply",
+};
 
 // ─── Search ──────────────────────────────────────────────────────────────────
 // Plain words people type mapped to the words the tools actually use, so

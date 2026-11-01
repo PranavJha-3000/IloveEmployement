@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { ApplyWorkflow } from "@/components/agent/ApplyWorkflow";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { ToolIcon } from "@/components/tools/ToolCard";
+import { APPLY_TOOL } from "@/lib/tools";
 
 export const metadata: Metadata = {
   title: "Apply to this job | iloveemployment",
@@ -27,6 +29,7 @@ export default function ApplyPage() {
               <span aria-current="page">Apply to this job</span>
             </nav>
             <div className="tool-title">
+              <ToolIcon tool={APPLY_TOOL} />
               <h1>Apply to this job</h1>
             </div>
             <p className="tool-lede">

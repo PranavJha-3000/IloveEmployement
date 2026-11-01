@@ -24,6 +24,7 @@ import {
   loopBase,
   markRunError,
   overrideSkip,
+  readStepResponse,
   rebaseStepResponse,
   rerunFitCheck,
   retrieveForTools,
@@ -266,14 +267,14 @@ export function ApplyWorkflow() {
                 body: JSON.stringify(body),
                 signal: controller.signal,
               });
-              const json = (await res.json()) as AgentStepResponse | { error: string };
-              if (!res.ok || "error" in json) {
-                const message = "error" in json ? json.error : "Something went wrong.";
-                settle(markRunError(recordRef.current, rec, Date.now()));
-                setFetchError(message);
+              const read = await readStepResponse(res);
+              if (!read.ok) {
+                settle(markRunError(recordRef.current, rec, Date.now(), { interrupted: read.interrupted }));
+                setFetchError(read.message);
                 setLiveMessage("The step didn't finish. Your earlier steps are saved.");
                 return;
               }
+              const json = read.json;
               const rebased = rebaseStepResponse(recordRef.current, rec, json, Date.now());
               rec = rebased.record;
               settle(rec);

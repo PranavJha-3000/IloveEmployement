@@ -7,7 +7,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { agentStep } from "@/lib/agent/step";
 import { clientIp } from "@/lib/engine/access";
 
-export const maxDuration = 60;
+// Worst case: planner (20s) plus draft, review and revise (55s each) = 185s. 60s cut steps off
+// after the free run was counted. A literal, as Next requires for segment config.
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   let json: unknown;

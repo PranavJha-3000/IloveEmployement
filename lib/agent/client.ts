@@ -219,6 +219,42 @@ export function rebaseStepResponse(
   return { record: applied, current: base.current };
 }
 
+export const STEP_TIMEOUT_MESSAGE =
+  "The step took too long and the server stopped it. It may still count toward your budget";
+
+/** The parts of a fetch Response the loop reads, so this can be tested without a server. */
+export interface StepHttpResponse {
+  ok: boolean;
+  headers: { get(name: string): string | null };
+  json(): Promise<unknown>;
+}
+
+/**
+ * Reads /api/agent/step. A platform timeout or proxy error is HTML or empty, not JSON: that
+ * becomes a fixed message (never the raw parser error) and counts as interrupted, since the
+ * server may have run the step before it was killed.
+ */
+export async function readStepResponse(
+  res: StepHttpResponse,
+): Promise<{ ok: true; json: AgentStepResponse } | { ok: false; message: string; interrupted: boolean }> {
+  const type = res.headers.get("content-type") ?? "";
+  let body: unknown;
+  if (/application\/json/i.test(type)) {
+    try {
+      body = await res.json();
+    } catch {
+      body = undefined;
+    }
+  }
+  if (typeof body !== "object" || body === null) return { ok: false, message: STEP_TIMEOUT_MESSAGE, interrupted: true };
+  const obj = body as Record<string, unknown>;
+  if (!res.ok || "error" in obj) {
+    const error = obj.error;
+    return { ok: false, message: typeof error === "string" && error ? error : "Something went wrong.", interrupted: false };
+  }
+  return { ok: true, json: body as AgentStepResponse };
+}
+
 /** Marks the latest committed record (not the loop's stale copy) as errored. A user stop wins. */
 export function markRunError(
   latest: AgentRunRecord | null,

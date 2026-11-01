@@ -1,4 +1,6 @@
 import assert from "node:assert";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
 import {
   applyStepResponse,
@@ -13,14 +15,18 @@ import {
   loopBase,
   markRunError,
   overrideSkip,
+  readStepResponse,
   rebaseStepResponse,
   rerunFitCheck,
   retrieveForTools,
   revertArtifactEdit,
   saveArtifactEdit,
+  STEP_TIMEOUT_MESSAGE,
   stopRun,
+  type StepHttpResponse,
 } from "../lib/agent/client";
-import { AGENT_MAX_BUDGET_RESETS, AGENT_STEP_BUDGET, AGENT_TOKEN_BUDGET } from "../lib/agent/config";
+import { AGENT_MAX_BUDGET_RESETS, AGENT_PLANNER_TIMEOUT_MS, AGENT_STEP_BUDGET, AGENT_TOKEN_BUDGET } from "../lib/agent/config";
+import { DEFAULT_TIMEOUT } from "../lib/pipeline";
 import { createRunRecord } from "../lib/agent/record";
 import { withRunLock, type RunLockManager } from "../lib/agent/runLock";
 import type { AgentBudgetView, AgentNextAction, AgentRunRecord, AgentStepRecord, AgentStepResponse } from "../lib/agent/types";
@@ -313,4 +319,28 @@ test("beginStep placeholder: replaced by the server step, interrupted on abort, 
 
   assert.ok(!markRunError(inFlight, own, 5).steps.some((x) => x.id === "ph1"));
   assert.strictEqual(markRunError(inFlight, own, 5, { interrupted: true }).steps.at(-1)?.status, "interrupted");
+});
+
+test("readStepResponse: HTML timeouts get a fixed message and count as interrupted (WR-04)", async () => {
+  const fake = (ok: boolean, type: string | null, body: () => Promise<unknown>): StepHttpResponse => ({
+    ok,
+    headers: { get: (n: string) => (n.toLowerCase() === "content-type" ? type : null) },
+    json: body,
+  });
+  const html = await readStepResponse(fake(false, "text/html", async () => { throw new SyntaxError("Unexpected token '<'"); }));
+  assert.deepStrictEqual(html, { ok: false, message: STEP_TIMEOUT_MESSAGE, interrupted: true });
+  const empty = await readStepResponse(fake(false, null, async () => { throw new SyntaxError("Unexpected end of JSON input"); }));
+  assert.ok(!empty.ok && empty.interrupted && !empty.message.includes("Unexpected"));
+  const err = await readStepResponse(fake(false, "application/json", async () => ({ error: "Invalid agent step request." })));
+  assert.deepStrictEqual(err, { ok: false, message: "Invalid agent step request.", interrupted: false });
+  const body = { kind: "blocked", budget: view(fresh()), next: { kind: "gate", gate: "A" } };
+  const good = await readStepResponse(fake(true, "application/json; charset=utf-8", async () => body));
+  assert.deepStrictEqual(good, { ok: true, json: body });
+});
+
+test("the agent route's maxDuration covers the planner plus three generations (WR-04)", () => {
+  const src = readFileSync(path.join(process.cwd(), "app", "api", "agent", "step", "route.ts"), "utf-8");
+  const m = /export const maxDuration = (\d+);/.exec(src);
+  assert.ok(m, "route exports a literal maxDuration");
+  assert.ok(Number(m[1]) * 1000 >= AGENT_PLANNER_TIMEOUT_MS + 3 * DEFAULT_TIMEOUT, `maxDuration ${m[1]}s is too short`);
 });

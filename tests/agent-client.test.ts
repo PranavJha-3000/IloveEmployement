@@ -4,9 +4,11 @@ import {
   applyStepResponse,
   approveGateA,
   approveGateB,
+  beginStep,
   buildStepRequest,
   continueWithNewBudget,
   declineOutreach,
+  interruptRunning,
   localNextAction,
   loopBase,
   markRunError,
@@ -288,4 +290,27 @@ test("withRunLock: a lock held in another tab refuses; a broken lock manager fal
   const broken: RunLockManager = { request: async () => { throw new Error("SecurityError"); } };
   assert.deepStrictEqual(await withRunLock("run-lock-e", async () => "fallback", broken), { ok: true, value: "fallback" });
   await assert.rejects(withRunLock("run-lock-f", async () => { throw new Error("boom"); }, fake), /boom/);
+});
+
+test("beginStep placeholder: replaced by the server step, interrupted on abort, dropped on a clean error (WR-03)", () => {
+  const own = approveGateA(atGateA(), 3000);
+  const req = buildStepRequest(own, { vault: { tailor_resume: AGENT_VAULT } });
+  const inFlight = beginStep(own, "tailor_resume", "ph1", 3100);
+  assert.strictEqual(inFlight.steps.at(-1)?.status, "running");
+  // The in-flight step does not change what the policy allows.
+  assert.deepStrictEqual(localNextAction(inFlight), localNextAction(own));
+  assert.ok(!req.steps.some((s) => s.id === "ph1"));
+
+  const s = step({ id: "t1", tool: "tailor_resume" });
+  const done = rebaseStepResponse(inFlight, own, resp(own, s, { kind: "step", allowed: ["cover_letter"] }), 4000).record;
+  assert.deepStrictEqual(done.steps.map((x) => x.id), ["f1", "t1"]);
+
+  const stopped = interruptRunning(stopRun(inFlight, 3200), 3300);
+  assert.strictEqual(stopped.status, "stopped");
+  assert.strictEqual(stopped.steps.at(-1)?.status, "interrupted");
+  const charged = buildStepRequest(stopped, { vault: {} });
+  assert.strictEqual(charged.steps.at(-1)?.status, "interrupted");
+
+  assert.ok(!markRunError(inFlight, own, 5).steps.some((x) => x.id === "ph1"));
+  assert.strictEqual(markRunError(inFlight, own, 5, { interrupted: true }).steps.at(-1)?.status, "interrupted");
 });

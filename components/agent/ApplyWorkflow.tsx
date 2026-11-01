@@ -15,9 +15,11 @@ import {
 import {
   approveGateA,
   approveGateB,
+  beginStep,
   buildStepRequest,
   continueWithNewBudget,
   declineOutreach,
+  interruptRunning,
   localNextAction,
   loopBase,
   markRunError,
@@ -254,6 +256,9 @@ export function ApplyWorkflow() {
                 ...(Object.keys(profileForRun).length ? { profile: profileForRun } : {}),
                 ...(access.requestConfig ? { config: access.requestConfig } : {}),
               });
+              // Saved before sending: a response that never arrives still counts, as an interrupted step.
+              rec = beginStep(rec, next.allowed[0], crypto.randomUUID(), Date.now());
+              settle(rec);
               setLiveMessage(`${AGENT_TOOL_LABELS[next.allowed[0]]} running`);
               const res = await fetch("/api/agent/step", {
                 method: "POST",
@@ -290,9 +295,10 @@ export function ApplyWorkflow() {
             }
           } catch (err) {
             if (err instanceof DOMException && err.name === "AbortError") {
+              settle(interruptRunning(loopBase(recordRef.current, rec).record, Date.now()));
               setLiveMessage("Run stopped. Your finished steps are saved.");
             } else {
-              settle(markRunError(recordRef.current, rec, Date.now()));
+              settle(markRunError(recordRef.current, rec, Date.now(), { interrupted: true }));
               setFetchError(err instanceof Error ? err.message : "Something went wrong.");
             }
           }

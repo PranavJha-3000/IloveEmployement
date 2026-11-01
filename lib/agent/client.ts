@@ -10,6 +10,7 @@ import type { AiRequestConfig } from "../types";
 import { retrieveVault, WHOLE_RESUME_LIMIT } from "../vault/retrieve";
 import {
   AGENT_MAX_BUDGET_RESETS,
+  AGENT_NULL_USAGE_ESTIMATE,
   AGENT_TOOL_PRESETS,
   type AgentWorkTool,
 } from "./config";
@@ -84,7 +85,8 @@ export function summarizeStep(s: AgentStepRecord): AgentStepSummary {
 }
 
 export function localNextAction(record: AgentRunRecord): AgentNextAction {
-  const steps = record.steps.map(summarizeStep);
+  // An in-flight placeholder (beginStep) is the step being decided now, not a finished one.
+  const steps = record.steps.filter((s) => s.status !== "running").map(summarizeStep);
   const usage = countUsage(steps);
   return nextAction(
     { steps, approvals: record.approvals },
@@ -157,7 +159,9 @@ export function applyStepResponse(record: AgentRunRecord, res: AgentStepResponse
     tokenBudget: res.budget.tokenBudget,
     rejectedChoices: res.budget.rejectedChoices,
   };
-  const steps = res.kind === "blocked" ? record.steps : [...record.steps, res.step];
+  // The server's step replaces the in-flight placeholder (beginStep).
+  const settled = record.steps.filter((s) => s.status !== "running");
+  const steps = res.kind === "blocked" ? settled : [...settled, res.step];
   const out: AgentRunRecord = { ...record, steps, budget, updatedAt: now };
   const next = res.next;
   delete out.stopReason;
@@ -216,10 +220,47 @@ export function rebaseStepResponse(
 }
 
 /** Marks the latest committed record (not the loop's stale copy) as errored. A user stop wins. */
-export function markRunError(latest: AgentRunRecord | null, own: AgentRunRecord, now: number): AgentRunRecord {
+export function markRunError(
+  latest: AgentRunRecord | null,
+  own: AgentRunRecord,
+  now: number,
+  opts: { interrupted?: boolean } = {},
+): AgentRunRecord {
   const base = loopBase(latest, own).record;
-  if (base.status === "stopped") return base;
-  return { ...base, status: "error", updatedAt: now };
+  // A clean server error ran nothing: drop the placeholder. A lost response may have run: keep it, charged.
+  const steps = opts.interrupted
+    ? base.steps.map((s) => (s.status === "running" ? { ...s, status: "interrupted" as const } : s))
+    : base.steps.filter((s) => s.status !== "running");
+  if (base.status === "stopped") return { ...base, steps };
+  return { ...base, steps, status: "error", updatedAt: now };
+}
+
+/**
+ * Saves an in-flight placeholder before the request is sent, so a step whose response never
+ * arrives (stop, closed tab, lost network) is still charged and shows as interrupted on resume.
+ * Build the request from the record before calling this: the server must not see the placeholder.
+ */
+export function beginStep(record: AgentRunRecord, tool: AgentWorkTool, id: string, now: number): AgentRunRecord {
+  const placeholder: AgentStepRecord = {
+    id,
+    tool,
+    status: "running",
+    plannedBy: "policy-fallback",
+    inputs: {},
+    usage: { planner: 0, tool: 0, total: AGENT_NULL_USAGE_ESTIMATE },
+    startedAt: now,
+  };
+  return { ...record, steps: [...record.steps, placeholder], updatedAt: now };
+}
+
+/** Turns in-flight placeholders into interrupted steps (the request was aborted). */
+export function interruptRunning(record: AgentRunRecord, now: number): AgentRunRecord {
+  if (!record.steps.some((s) => s.status === "running")) return record;
+  return {
+    ...record,
+    steps: record.steps.map((s) => (s.status === "running" ? { ...s, status: "interrupted" as const } : s)),
+    updatedAt: now,
+  };
 }
 
 /** Gate A "Edit": replace the job inputs, invalidate every later step, clear approvals. Usage keeps counting. */

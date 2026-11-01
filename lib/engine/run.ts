@@ -18,7 +18,7 @@ import {
 } from "../presets/types";
 import { fetchGitHubEvidence } from "../sources/github";
 import type { AiRequestConfig } from "../types";
-import { resolveAccess } from "./access";
+import { resolveAccess, type AccessResult } from "./access";
 import { assembleContext, type ContextBlock } from "./context";
 import { checkGrounding } from "./grounding";
 import { screenUntrusted } from "./injection";
@@ -29,7 +29,7 @@ import type { RunMeta, RunRequestBody, RunSuccess, VaultContextChunk, VaultProfi
 
 const MAX_CHUNK_CHARS = 1500;
 
-type RunOutcome = { ok: true; result: RunSuccess<unknown> } | { ok: false; status: number; message: string };
+export type RunOutcome = { ok: true; result: RunSuccess<unknown> } | { ok: false; status: number; message: string };
 type Usage = NonNullable<RunMeta["usage"]>;
 
 // ─── Input handling ──────────────────────────────────────────────────────────
@@ -168,6 +168,11 @@ export function setModelFactory(factory: ((config: AiRequestConfig) => LanguageM
   modelFactory = factory ?? createModel;
 }
 
+/** Resolves the model through the same seam as runPreset (used by the agent planner). */
+export function modelFor(config: AiRequestConfig): LanguageModelV1 {
+  return modelFactory(config);
+}
+
 function addUsage(a: Usage | null, b: Usage | null | undefined): Usage | null {
   if (!b) return a;
   return { promptTokens: (a?.promptTokens ?? 0) + b.promptTokens, completionTokens: (a?.completionTokens ?? 0) + b.completionTokens };
@@ -210,8 +215,13 @@ async function generateStructured<T extends z.ZodTypeAny>(
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
 
-export async function runPreset(preset: Preset, body: RunRequestBody, ip: string): Promise<RunOutcome> {
-  const access = await resolveAccess(body?.config, ip);
+export async function runPreset(
+  preset: Preset,
+  body: RunRequestBody,
+  ip: string,
+  opts?: { access?: Extract<AccessResult, { ok: true }> },
+): Promise<RunOutcome> {
+  const access = opts?.access ?? (await resolveAccess(body?.config, ip));
   if (!access.ok) return { ok: false, status: access.status, message: access.message };
 
   const cleaned = cleanInputs(preset, body?.inputs ?? {});

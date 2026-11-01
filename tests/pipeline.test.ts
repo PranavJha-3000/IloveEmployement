@@ -4,6 +4,7 @@
 import assert from "node:assert";
 import { afterEach, test } from "node:test";
 import { MockLanguageModelV1 } from "ai/test";
+import { resolveAccess } from "../lib/engine/access";
 import { runPreset, setModelFactory } from "../lib/engine/run";
 import type { RunMeta, VaultContextChunk } from "../lib/engine/types";
 import { getPresetById } from "../lib/presets";
@@ -146,6 +147,39 @@ test("free tier: off without a server key, then rate limited per IP", async () =
   } finally {
     for (const k of ["FREE_TIER_PROVIDER", "FREE_TIER_API_KEY", "FREE_TIER_MODEL", "FREE_TIER_DAILY_LIMIT"]) delete process.env[k];
   }
+});
+
+test("pre-resolved access skips the free-tier counter", async () => {
+  const keyless = { inputs: { draft: "Per my last email, send it." } };
+  Object.assign(process.env, { FREE_TIER_PROVIDER: "openai", FREE_TIER_API_KEY: "sk-server-test-0000000000", FREE_TIER_MODEL: "mock", FREE_TIER_DAILY_LIMIT: "1" });
+  try {
+    script({ subject: "", body: "b", variants: [], placeholders: [], notes: [], citations: [] });
+    const preset = getPresetById("email-tone-fixer")!;
+    const access = await resolveAccess(undefined, "198.51.100.1");
+    assert.ok(access.ok);
+    ok(await runPreset(preset, keyless, "198.51.100.1", { access }));
+    ok(await runPreset(preset, keyless, "198.51.100.1", { access }));
+    // Without pre-resolved access each run counts; the second one is over the limit of 1.
+    ok(await runPreset(preset, keyless, "198.51.100.2"));
+    const second = await runPreset(preset, keyless, "198.51.100.2");
+    assert.ok(!second.ok && second.status === 429);
+  } finally {
+    for (const k of ["FREE_TIER_PROVIDER", "FREE_TIER_API_KEY", "FREE_TIER_MODEL", "FREE_TIER_DAILY_LIMIT"]) delete process.env[k];
+  }
+});
+
+test("pre-resolved access does not change the prompt", async () => {
+  const response = { subject: "", body: "b", variants: [], placeholders: [], notes: [], citations: [] };
+  const body = { inputs: { draft: "Per my last email, send it." }, config: KEY };
+  const preset = getPresetById("email-tone-fixer")!;
+  const plain = script(response);
+  ok(await runPreset(preset, body, "t-prompt"));
+  const withAccess = script(response);
+  const access = await resolveAccess(KEY, "t-prompt");
+  assert.ok(access.ok);
+  ok(await runPreset(preset, body, "t-prompt", { access }));
+  assert.deepStrictEqual(withAccess.prompts, plain.prompts);
+  assert.ok(plain.prompts.length > 0);
 });
 
 test("provider errors are classified and never echo the key", async () => {

@@ -2,7 +2,9 @@
 // imports this and ships in many client chunks. Records never carry an API key or request config.
 
 import { AGENT_STEP_BUDGET, AGENT_TOKEN_BUDGET, AGENT_TOOLS } from "./config";
+import type { RunMeta } from "../engine/types";
 import type {
+  AgentApprovals,
   AgentJob,
   AgentRunRecord,
   AgentRunStatus,
@@ -122,30 +124,76 @@ export function isAgentRunRecord(v: unknown): v is AgentRunRecord {
   return true;
 }
 
+const SECRET_KEY = /api.?key|secret|token|password/i;
+
+/** Only string values, and never a key-like field name. */
+function storableInputs(inputs: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(inputs ?? {})) {
+    if (typeof v === "string" && !SECRET_KEY.test(k)) out[k] = v;
+  }
+  return out;
+}
+
+function storableOutput(o: NonNullable<AgentStepRecord["output"]>): NonNullable<AgentStepRecord["output"]> {
+  const meta = Object.fromEntries(
+    Object.entries(o.meta ?? {}).filter(([k]) => !SECRET_KEY.test(k)),
+  ) as unknown as RunMeta;
+  const sent = (Array.isArray(o.sent) ? o.sent : []).map((c) => ({ id: c.id, kind: c.kind, title: c.title, text: c.text }));
+  return { data: o.data, meta, sent };
+}
+
+function storableEdit(e: NonNullable<AgentStepRecord["edit"]>): NonNullable<AgentStepRecord["edit"]> {
+  const out: NonNullable<AgentStepRecord["edit"]> = { body: e.body, editedAt: e.editedAt, grounding: [...(e.grounding ?? [])] };
+  if (e.subject !== undefined) out.subject = e.subject;
+  return out;
+}
+
+function storableTarget(t: NonNullable<AgentStepRecord["target"]>): NonNullable<AgentStepRecord["target"]> {
+  return { jobTitle: t.jobTitle, company: t.company, ...(t.jobUrl !== undefined ? { jobUrl: t.jobUrl } : {}) };
+}
+
+function storableApprovals(a: AgentApprovals): AgentApprovals {
+  const out: AgentApprovals = {};
+  if (a.gateA) out.gateA = { fitStepId: a.gateA.fitStepId, approvedAt: a.gateA.approvedAt };
+  if (a.gateB) {
+    const b = a.gateB;
+    out.gateB = { decision: b.decision, approvedAt: b.approvedAt };
+    if (b.recipientName !== undefined) out.gateB.recipientName = b.recipientName;
+    if (b.recipientRole !== undefined) out.gateB.recipientRole = b.recipientRole;
+    if (b.channel !== undefined) out.gateB.channel = b.channel;
+  }
+  if (a.skipOverride) out.skipOverride = { fitStepId: a.skipOverride.fitStepId, confirmedAt: a.skipOverride.confirmedAt };
+  return out;
+}
+
 function storableStep(s: AgentStepRecord): AgentStepRecord {
   const out: AgentStepRecord = {
     id: s.id,
     tool: s.tool,
     status: s.status,
     plannedBy: s.plannedBy,
-    inputs: s.inputs,
-    usage: s.usage,
+    inputs: storableInputs(s.inputs),
+    usage: { planner: s.usage.planner, tool: s.usage.tool, total: s.usage.total },
     startedAt: s.startedAt,
   };
   if (s.requestedTool !== undefined) out.requestedTool = s.requestedTool;
   if (s.presetId !== undefined) out.presetId = s.presetId;
-  if (s.output !== undefined) out.output = s.output;
+  if (s.output !== undefined) out.output = storableOutput(s.output);
   if (s.verdict !== undefined) out.verdict = s.verdict;
-  if (s.edit !== undefined) out.edit = s.edit;
-  if (s.target !== undefined) out.target = s.target;
+  if (s.edit !== undefined) out.edit = storableEdit(s.edit);
+  if (s.target !== undefined) out.target = storableTarget(s.target);
   if (s.finishedAt !== undefined) out.finishedAt = s.finishedAt;
   if (s.durationMs !== undefined) out.durationMs = s.durationMs;
   if (s.error !== undefined) out.error = s.error;
-  if (s.invalidated !== undefined) out.invalidated = s.invalidated;
+  if (s.invalidated !== undefined) out.invalidated = { reason: s.invalidated.reason, at: s.invalidated.at };
   return out;
 }
 
-/** Whitelist rebuild: unknown keys (a stray config or apiKey) never reach storage or export. */
+/**
+ * Whitelist rebuild, nested objects included: unknown keys (a stray config or apiKey) never reach
+ * storage or export. Preset output `data` is kept as is; `meta` drops any key-like field.
+ */
 export function toStorable(r: AgentRunRecord): AgentRunRecord {
   const out: AgentRunRecord = {
     id: r.id,
@@ -161,7 +209,7 @@ export function toStorable(r: AgentRunRecord): AgentRunRecord {
       ...(r.job.notes !== undefined ? { notes: r.job.notes } : {}),
     },
     steps: r.steps.map(storableStep),
-    approvals: r.approvals,
+    approvals: storableApprovals(r.approvals),
     budget: {
       stepsUsed: r.budget.stepsUsed,
       tokensUsed: r.budget.tokensUsed,
@@ -172,7 +220,9 @@ export function toStorable(r: AgentRunRecord): AgentRunRecord {
     },
     pauseAfterStep: r.pauseAfterStep,
   };
-  if (r.stopReason !== undefined) out.stopReason = r.stopReason;
+  if (r.stopReason !== undefined) {
+    out.stopReason = { kind: r.stopReason.kind, message: r.stopReason.message, at: r.stopReason.at };
+  }
   return out;
 }
 

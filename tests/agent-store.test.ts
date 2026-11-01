@@ -253,3 +253,28 @@ test("shouldImportRun: an older backup never overwrites a newer local run (WR-07
   assert.strictEqual(shouldImportRun(newer, newer), false);
   assert.strictEqual(shouldImportRun(older, newer), true);
 });
+
+test("toStorable rebuilds nested objects: no smuggled keys in approvals, stopReason, steps or meta (WR-08)", () => {
+  const r = createRunRecord(job, { id: "r1", now: 5 });
+  const meta = { tier: "byok", model: "m", remaining: null, context: [], knowledge: [], usage: null, injection: [], grounding: [], apiKey: "sk-m" };
+  const dirty = {
+    ...r,
+    approvals: { gateA: { fitStepId: "s1", approvedAt: 1, apiKey: "sk-a" }, gateB: { decision: "draft", approvedAt: 2, secret: "sk-b" } },
+    stopReason: { kind: "user", message: "m", at: 3, token: "sk-c" },
+    steps: [
+      step({
+        inputs: { jobDescription: "jd", apiKey: "sk-d", n: 3 as never },
+        output: { data: { ok: true }, meta: meta as never, sent: [{ id: "c1", kind: "bullet", title: "t", text: "x", extra: "sk-e" } as never] },
+        edit: { body: "b", editedAt: 4, grounding: [], apiKey: "sk-f" } as never,
+        target: { jobTitle: "j", company: "c", secret: "sk-g" } as never,
+        usage: { planner: 1, tool: 2, total: 3, apiKey: "sk-h" } as never,
+      }),
+    ],
+  } as never;
+  const json = JSON.stringify(toStorable(dirty));
+  for (const k of ["sk-a", "sk-b", "sk-c", "sk-d", "sk-e", "sk-f", "sk-g", "sk-h", "sk-m"]) assert.ok(!json.includes(k), k);
+  const out = toStorable(dirty);
+  assert.deepEqual(out.steps[0].inputs, { jobDescription: "jd" });
+  assert.deepEqual(out.approvals.gateA, { fitStepId: "s1", approvedAt: 1 });
+  assert.deepEqual(out.steps[0].output?.data, { ok: true });
+});

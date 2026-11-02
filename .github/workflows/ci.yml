@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # Unit tests + full-pipeline tests against a scripted model. No API key needed.
+      - run: npm test
+      # Retrieval regression gate: keyword (BM25) metrics vs evals/retrieval/baseline.json. Offline, no API key.
+      - run: npm run eval:retrieval -- --ci
+      # Profile extraction accuracy gate: deterministic extractor vs evals/profile/baseline.json. Offline, no API key.
+      - run: npm run eval:profile -- --ci
+      - run: npm run build

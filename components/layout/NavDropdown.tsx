@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Tool } from "@/lib/tools";
+import { ToolIcon } from "@/components/tools/ToolCard";
 
 /**
  * Hover timings. The open delay is short enough to feel instant; the close
@@ -23,38 +24,10 @@ interface NavDropdownProps {
   /** Controlled expanded state. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** When provided, tools flagged `overlay` open that panel instead of navigating. */
-  onOpenTranslator?: () => void;
   /** Anchor the panel to the trigger's right edge. */
   alignRight?: boolean;
   /** Force a column count; otherwise it is derived from the tool count. */
   columns?: 1 | 2 | 3;
-}
-
-/** Small tinted icon tile, matching the marketplace tool cards. */
-function ToolIcon({ tool }: { tool: Tool }) {
-  return (
-    <span
-      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
-      style={{ backgroundColor: tool.tint }}
-      aria-hidden
-    >
-      <svg
-        width="17"
-        height="17"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={tool.accent}
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {tool.iconPaths.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
-      </svg>
-    </span>
-  );
 }
 
 export function NavDropdown({
@@ -63,7 +36,6 @@ export function NavDropdown({
   tools,
   open,
   onOpenChange,
-  onOpenTranslator,
   alignRight = false,
   columns,
 }: NavDropdownProps) {
@@ -131,7 +103,7 @@ export function NavDropdown({
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => onOpenChange(!open)}
-        className="flex items-center gap-1 rounded-md px-3 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+        className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-[14px] font-medium transition-colors hover:bg-[#f3f4f7] hover:text-zinc-950 ${open ? "bg-[#f3f4f7] text-zinc-950" : "text-zinc-700"}`}
       >
         {icon}
         {label}
@@ -157,7 +129,7 @@ export function NavDropdown({
 
       {open && (
         <div
-          className={`absolute top-full z-50 mt-1 w-max max-w-[min(92vw,720px)] rounded-xl border border-zinc-200 bg-white p-2 shadow-lg shadow-zinc-900/5 ${
+          className={`absolute top-full z-50 mt-1 w-max max-w-[min(92vw,720px)] rounded-2xl border border-[#e4e6eb] bg-white p-2.5 shadow-[0_18px_40px_-16px_rgba(21,23,28,0.25)] ${
             alignRight ? "right-0" : "left-0"
           }`}
         >
@@ -172,46 +144,24 @@ export function NavDropdown({
                   : "grid-cols-3"
             }`}
           >
-            {tools.map((tool) =>
-              tool.overlay && onOpenTranslator ? (
-                <button
-                  key={tool.id}
-                  type="button"
-                  onClick={() => {
-                    onOpenChange(false);
-                    onOpenTranslator();
-                  }}
-                  className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-zinc-50"
-                >
-                  <ToolIcon tool={tool} />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-medium text-zinc-900">
-                      {tool.name}
-                    </span>
-                    <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">
-                      {tool.description}
-                    </span>
-                  </span>
-                </button>
-              ) : (
+            {tools.map((tool) => (
                 <Link
                   key={tool.id}
                   href={tool.target}
                   onClick={() => onOpenChange(false)}
-                  className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-zinc-50"
+                  className="nav-item flex w-[300px] max-w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-[#f3f4f7]"
                 >
                   <ToolIcon tool={tool} />
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium text-zinc-900">
+                    <span className="block text-[14px] font-semibold text-zinc-950">
                       {tool.name}
                     </span>
-                    <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">
+                    <span className="mt-0.5 block truncate text-[12.5px] leading-snug text-zinc-500">
                       {tool.description}
                     </span>
                   </span>
                 </Link>
-              ),
-            )}
+            ))}
           </div>
         </div>
       )}

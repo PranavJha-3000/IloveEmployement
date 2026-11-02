@@ -1,0 +1,16 @@
+Phase 5 post-phase bundle (fresh `npm run build`, all plans 05-01..05-14 applied)
+date: 2026-11-01
+baseline: bundle-baseline.txt (Phase 4 numbers copied from 04-BASELINE.md)
+
++ First Load JS shared by all  103 kB   (baseline 103 kB, delta +0 kB, budget +3 kB: PASS)
+
+Route                First Load JS   baseline   delta
+/                    138 kB          138 kB     +0 kB
+/tools/[slug]        175 kB          157 kB     +18 kB
+/vault               194 kB          143 kB     +51 kB
+/apply               184 kB          164 kB     +20 kB
+
+Route page size: / 4.88 kB, /apply 15.2 kB, /tools/[slug] 6.59 kB, /vault 39.3 kB.
+Only the shared line is budgeted. Per-route growth comes from route-level code
+(skill taxonomy via lib/engine/scoring.ts on tool and apply pages; profile review,
+resume versions and diff on /vault).

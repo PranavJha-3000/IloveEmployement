@@ -3,25 +3,20 @@
 import Link from "next/link";
 import { TOOLS } from "@/lib/tools";
 
-interface FooterProps {
-  /** When provided, the JD Translator link opens the in-page overlay instead of navigating. */
-  onOpenTranslator?: () => void;
-}
-
-export function Footer({ onOpenTranslator }: FooterProps) {
-  const featured = ["resume-analyzer", "jd-translator"]
+export function Footer() {
+  const featured = ["tailor-resume", "job-fit-check", "cold-recruiter-message"]
     .map((id) => TOOLS.find((t) => t.id === id))
     .filter((t): t is NonNullable<typeof t> => Boolean(t));
 
   return (
-    <footer className="border-t border-zinc-200 bg-zinc-50 mt-20">
+    <footer className="mt-16 border-t border-[#e4e6eb] bg-white">
       <div className="max-w-[1180px] mx-auto px-6 py-10">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <p className="text-lg font-bold tracking-tight">
+            <p className="text-[20px] font-extrabold tracking-[-0.03em]">
               <span className="text-red-600">ilove</span>
-              <span className="text-zinc-900">employment</span>
+              <span className="text-[#15171c]">employment</span>
             </p>
             <p className="mt-2 text-sm text-zinc-500 leading-relaxed">
               Because apparently getting a job wasn&apos;t already hard enough.
@@ -30,7 +25,7 @@ export function Footer({ onOpenTranslator }: FooterProps) {
 
           {/* Product */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Product</p>
+            <p className="mb-3 text-[14px] font-semibold text-zinc-900">Product</p>
             <ul className="space-y-2">
               <li>
                 <Link
@@ -40,23 +35,16 @@ export function Footer({ onOpenTranslator }: FooterProps) {
                   All Tools
                 </Link>
               </li>
+              <li>
+                <Link href="/vault" className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors">
+                  Career Vault
+                </Link>
+              </li>
               {featured.map((tool) => (
                 <li key={tool.id}>
-                  {tool.overlay && onOpenTranslator ? (
-                    <button
-                      onClick={onOpenTranslator}
-                      className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                    >
-                      {tool.name}
-                    </button>
-                  ) : (
-                    <Link
-                      href={tool.target}
-                      className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
-                    >
-                      {tool.name}
-                    </Link>
-                  )}
+                  <Link href={tool.target} className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors">
+                    {tool.name}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -64,7 +52,7 @@ export function Footer({ onOpenTranslator }: FooterProps) {
 
           {/* Links */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Links</p>
+            <p className="mb-3 text-[14px] font-semibold text-zinc-900">Links</p>
             <ul className="space-y-2">
               <li>
                 <a href="#" className="text-sm text-zinc-600 hover:text-zinc-900 transition-colors">Privacy Policy</a>
@@ -88,7 +76,7 @@ export function Footer({ onOpenTranslator }: FooterProps) {
 
           {/* Security */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Security</p>
+            <p className="mb-3 text-[14px] font-semibold text-zinc-900">Security</p>
             <p className="text-xs text-zinc-500 leading-relaxed">
               Your API key is used per-request and never stored. Nothing about you is saved. Not affiliated with Ilovepdf &mdash; we just admire the naming strategy.
             </p>

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.test.json",
+  "compilerOptions": { "outDir": ".eval-build" },
+  "include": ["evals/**/*.ts"]
+}

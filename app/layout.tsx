@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 
+const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-ui", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "iloveemployment — Get hired. Or at least stop getting ignored.",
+  title: "iloveemployment: every tool for getting hired",
   description:
     "Brutally honest, actually useful resume analysis with a side of unhinged commentary. Bring your own AI key. No sign-up. No tracking.",
   metadataBase: new URL("https://iloveemployement.vercel.app"),
@@ -28,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={ui.variable}>
       <body>{children}</body>
     </html>
   );

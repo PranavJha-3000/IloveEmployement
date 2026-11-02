@@ -2,7 +2,7 @@
 
 **iLovePDF, but for your career.** 46 focused tools for every step of a job, from reading a posting to negotiating the offer to writing the resignation letter, built on one rule: **nothing about you gets invented.**
 
-**Live:** [iloveemployement.vercel.app](https://iloveemployement.vercel.app) · free daily runs, no sign-up · or bring your own key from 9 providers
+**Live:** [iloveemployement.vercel.app](https://iloveemployment.vercel.app) · free daily runs, no sign-up · or bring your own key from 9 providers
 
 ---
 

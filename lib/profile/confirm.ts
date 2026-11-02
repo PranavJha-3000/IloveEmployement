@@ -3,7 +3,7 @@
 import { normalizeResumeLines } from "../diff";
 import { contentHash } from "../retrieval/fusion";
 import type { VaultProfile } from "../engine/types";
-import { MAX_VERSION_TEXT, newVersionId, ResumeVersionSchema, type ResumeVersion } from "../vault/versions";
+import { MAX_VERSION_TEXT, ResumeVersionSchema, type ResumeVersion } from "../vault/versions";
 import { StructuredProfileSchema, type ConfirmedProfile, type StructuredProfile } from "./schema";
 import { toVaultProfile } from "./sync";
 
@@ -23,11 +23,12 @@ export interface ConfirmPlan {
   replaceChunks: boolean;
 }
 
-/** The base resume version: normalized lines, capped at the version text limit. Returns a schema-valid record. */
+/** The base resume version: normalized lines, capped at the version text limit. Returns a schema-valid record.
+ *  The id is derived from the text, so confirming the same resume again (or retrying) overwrites instead of duplicating. */
 export function baseVersionFrom(resumeText: string, now: number): ResumeVersion {
   const text = normalizeResumeLines(resumeText).join("\n").slice(0, MAX_VERSION_TEXT);
   return ResumeVersionSchema.parse({
-    id: newVersionId(),
+    id: `base-${contentHash(text)}`,
     kind: "base",
     label: "Base resume",
     text,

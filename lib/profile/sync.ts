@@ -24,9 +24,10 @@ export function applyQuickProfile(p: StructuredProfile, quick: VaultProfile): St
     ...p,
     contact: {
       ...p.contact,
-      name: quick.name.trim() || p.contact.name,
-      location: quick.location.trim() || p.contact.location,
-      links: links.length ? links : p.contact.links,
+      name: quick.name.trim().slice(0, 200) || p.contact.name,
+      // Name is required, so an empty quick name keeps the stored one. Clearing location or links clears them in both profiles.
+      location: quick.location.trim().slice(0, 200),
+      links,
     },
   };
 }

@@ -67,6 +67,94 @@ async function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectS
   });
 }
 
+/** One write in a batch. Applied together in a single transaction: all of them commit or none do. */
+export type VaultWrite =
+  | { store: string; op: "put"; value: unknown; key?: IDBValidKey }
+  | { store: string; op: "delete"; key: IDBValidKey };
+
+/** The minimum of IDBDatabase that applyWrites needs, so tests can supply a fake. */
+export interface WriteHost {
+  transaction(stores: string[], mode: "readwrite"): Pick<IDBTransaction, "objectStore" | "oncomplete" | "onerror" | "onabort" | "error">;
+}
+
+/** Applies every write in one multi-store transaction. A failure aborts the transaction, so IndexedDB rolls all of it back. */
+export function applyWrites(db: WriteHost, writes: VaultWrite[]): Promise<void> {
+  const stores = [...new Set(writes.map((w) => w.store))];
+  if (!stores.length) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(stores, "readwrite");
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error ?? new Error("Transaction aborted"));
+    try {
+      for (const w of writes) {
+        const s = t.objectStore(w.store);
+        if (w.op === "delete") s.delete(w.key);
+        else if (w.key !== undefined) s.put(w.value, w.key);
+        else s.put(w.value);
+      }
+    } catch (err) {
+      try {
+        (t as IDBTransaction).abort?.();
+      } catch {
+        // Already finished or aborted.
+      }
+      reject(err);
+    }
+  });
+}
+
+export interface ConfirmWriteInput {
+  confirmed: ConfirmedProfile;
+  vaultProfile: VaultProfile;
+  baseVersion: ResumeVersion | null;
+  /** null keeps the stored chunks; an array replaces every resume chunk (and its vector) with these. */
+  newChunks: VaultChunk[] | null;
+  existingChunks: VaultChunk[];
+}
+
+/** The writes for "Confirm profile". Validates first, so a bad record throws before anything is written. */
+export function confirmWrites(input: ConfirmWriteInput): VaultWrite[] {
+  const confirmed = ConfirmedProfileSchema.parse(input.confirmed);
+  const version = input.baseVersion ? ResumeVersionSchema.parse(input.baseVersion) : null;
+  const writes: VaultWrite[] = [];
+  if (input.newChunks) {
+    for (const c of input.existingChunks) {
+      if (c.source !== "resume") continue;
+      writes.push({ store: CHUNKS, op: "delete", key: c.id }, { store: VECTORS, op: "delete", key: c.id });
+    }
+    for (const c of input.newChunks) writes.push({ store: CHUNKS, op: "put", value: c });
+  }
+  writes.push({ store: META, op: "put", value: confirmed, key: STRUCTURED_PROFILE_KEY });
+  writes.push({ store: META, op: "put", value: input.vaultProfile, key: "profile" });
+  if (version) writes.push({ store: RESUME_VERSIONS, op: "put", value: version });
+  return writes;
+}
+
+/** Saves a confirmed profile, its quick profile, the base version and the new resume chunks atomically. */
+export async function commitConfirmedProfile(input: Omit<ConfirmWriteInput, "existingChunks">): Promise<void> {
+  const existingChunks = input.newChunks ? await loadChunks() : [];
+  const writes = confirmWrites({ ...input, existingChunks });
+  await applyWrites(await openDb(), writes);
+}
+
+/** Saves the quick profile and, when one exists, the structured profile it feeds, in one transaction. */
+export async function saveQuickProfile(quick: VaultProfile, structured: ConfirmedProfile | null): Promise<void> {
+  const writes: VaultWrite[] = [{ store: META, op: "put", value: quick, key: "profile" }];
+  if (structured) writes.push({ store: META, op: "put", value: ConfirmedProfileSchema.parse(structured), key: STRUCTURED_PROFILE_KEY });
+  await applyWrites(await openDb(), writes);
+}
+
+/** Replaces every resume chunk (and its vector) with these, in one transaction. */
+export async function replaceResumeChunks(newChunks: VaultChunk[]): Promise<void> {
+  const writes: VaultWrite[] = [];
+  for (const c of await loadChunks()) {
+    if (c.source === "resume") writes.push({ store: CHUNKS, op: "delete", key: c.id }, { store: VECTORS, op: "delete", key: c.id });
+  }
+  for (const c of newChunks) writes.push({ store: CHUNKS, op: "put", value: c });
+  await applyWrites(await openDb(), writes);
+}
+
 export async function loadChunks(): Promise<VaultChunk[]> {
   try {
     const all = (await tx<VaultChunk[]>(CHUNKS, "readonly", (s) => s.getAll())) ?? [];

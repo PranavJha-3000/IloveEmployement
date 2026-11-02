@@ -14,8 +14,8 @@ Milestone "AI engineering depth" takes the shipped six-engine, local-first platf
 - [x] **Phase 2: Reranking** - On-device cross-encoder reranker, evaluated through the retrieval harness and adopted only if it wins (completed 2026-10-31)
 - [ ] **Phase 3: LLM Evaluation** - Real-model eval runs with model comparison, cost, citation precision, fabrication rate and a calibrated LLM judge
 - [x] **Phase 4: Agent Workflow** - Bounded tool-calling "Apply to this job" workflow with budgets, resumable state and human approval checkpoints (completed 2026-11-01)
-- [ ] **Phase 5: Document Intelligence** - Typed profile extraction, skill normalization, measured extraction accuracy and resume versions
-- [ ] **Phase 6: Observability** - Structured per-run traces, opt-in export, and a timing waterfall in the "How this was generated" panel
+- [x] **Phase 5: Document Intelligence** - Typed profile extraction, skill normalization, measured extraction accuracy and resume versions
+- [x] **Phase 6: Observability** - Structured per-run traces, opt-in export, and a timing waterfall in the "How this was generated" panel
 
 ## Phase Details
 
@@ -98,5 +98,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Reranking | 9/9 | Complete    | 2026-10-31 |
 | 3. LLM Evaluation | 0/TBD | Not started | - |
 | 4. Agent Workflow | 10/10 | Complete    | 2026-11-01 |
-| 5. Document Intelligence | 0/TBD | Not started | - |
-| 6. Observability | 0/TBD | Not started | - |
+| 5. Document Intelligence | 15/15 | Complete | 2026-11-02 |
+| 6. Observability | 1/1 | Complete | 2026-11-02 |

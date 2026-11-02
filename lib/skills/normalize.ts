@@ -119,14 +119,25 @@ function buildPattern(tokens: string[]): string {
   return LEAD + tokens.map(escapeRegex).join("[^A-Za-z0-9+#.]+") + TRAIL;
 }
 
-let MATCHERS: FormMatcher[] | null = null;
+/**
+ * Aliases that are also everyday words, brands or ambiguous acronyms ("Next, I...",
+ * "Spring 2021", "American Express", "Keynote speaker", a "CV" heading, "opened a PR",
+ * "AP style", "Word of mouth"). Strict scanning, which scoring uses as evidence,
+ * ignores them; the skill still counts when written any other way ("Next.js", "Spring Boot").
+ */
+const AMBIGUOUS_ALIASES = new Set(["Next", "Node", "Express", "Spring", "Keynote", "Word", "CV", "PR", "AP"]);
 
-function matchers(): FormMatcher[] {
-  if (MATCHERS) return MATCHERS;
+const MATCHERS: Record<"loose" | "strict", FormMatcher[] | null> = { loose: null, strict: null };
+
+function matchers(strict = false): FormMatcher[] {
+  const mode = strict ? "strict" : "loose";
+  const cached = MATCHERS[mode];
+  if (cached) return cached;
   const list: FormMatcher[] = [];
   for (const entry of SKILL_TAXONOMY) {
     const seen = new Set<string>();
     for (const form of allForms(entry)) {
+      if (strict && form !== entry.name && AMBIGUOUS_ALIASES.has(form.trim())) continue;
       const sensitive = isCaseSensitiveForm(form, entry);
       if (sensitive) {
         const literal = form.trim();
@@ -138,7 +149,8 @@ function matchers(): FormMatcher[] {
         // A bare letter ("R", "C") must not be lifted out of "R&D" or "A/B".
         const single = literal.length === 1;
         const lead = single ? LEAD + "(?<![&/])" : LEAD;
-        const trail = single ? TRAIL + "(?![&/])" : TRAIL;
+        // Strict: a word-like form joined to a following word by a hyphen is part of another word ("Go-to-market").
+        const trail = (single ? TRAIL + "(?![&/])" : TRAIL) + (strict ? "(?!-[A-Za-z])" : "");
         list.push({ entry, form: literal, length: literal.length, regex: new RegExp(lead + tokens.join("\\s+") + trail, "g") });
         continue;
       }
@@ -157,7 +169,7 @@ function matchers(): FormMatcher[] {
     }
   }
   list.sort((a, b) => b.length - a.length);
-  MATCHERS = list;
+  MATCHERS[mode] = list;
   return list;
 }
 
@@ -165,14 +177,16 @@ function matchers(): FormMatcher[] {
  * Canonical skills mentioned in free text. Whole-term matches, longest form
  * first; a shorter match overlapping an accepted longer one is discarded
  * ("Go-to-market" is not Go, "Google" is not Go). Results are ordered by first
- * position in the text. Input is capped at 50,000 characters.
+ * position in the text. Input is capped at 50,000 characters. `strict` (used
+ * when a match counts as evidence) also ignores AMBIGUOUS_ALIASES and hyphenated
+ * compounds of case-sensitive forms.
  */
-export function skillsMentioned(text: string): { entry: SkillEntry; matched: string }[] {
+export function skillsMentioned(text: string, opts: { strict?: boolean } = {}): { entry: SkillEntry; matched: string }[] {
   const t = text.length > MAX_SCAN_CHARS ? text.slice(0, MAX_SCAN_CHARS) : text;
   if (!t.trim()) return [];
   const accepted: { start: number; end: number }[] = [];
   const found = new Map<string, { entry: SkillEntry; matched: string; at: number }>();
-  for (const m of matchers()) {
+  for (const m of matchers(opts.strict)) {
     m.regex.lastIndex = 0;
     let hit: RegExpExecArray | null;
     while ((hit = m.regex.exec(t)) !== null) {

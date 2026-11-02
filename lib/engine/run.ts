@@ -4,6 +4,7 @@
 // (reviewer pass → revision) → deterministic finalize → grounding check.
 // Server-only: it reads free-tier secrets and calls the provider.
 
+import { exportTrace, Tracer, type RunTrace } from "./trace";
 import { generateObject, generateText, type LanguageModelV1 } from "ai";
 import type { z } from "zod";
 import { createModel } from "../ai";
@@ -215,6 +216,15 @@ async function generateStructured<T extends z.ZodTypeAny>(
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
 
+type MaybeUsage = { promptTokens: number; completionTokens: number } | null | undefined;
+
+/** Ends the trace and exports it in the background (console in development, OTLP when configured). */
+function finishTrace(tracer: Tracer): RunTrace {
+  const trace = tracer.finish();
+  void exportTrace(trace, tracer.startedAt);
+  return trace;
+}
+
 export async function runPreset(
   preset: Preset,
   body: RunRequestBody,
@@ -224,6 +234,7 @@ export async function runPreset(
   const access = opts?.access ?? (await resolveAccess(body?.config, ip));
   if (!access.ok) return { ok: false, status: access.status, message: access.message };
 
+  const tracer = new Tracer(preset.id);
   const cleaned = cleanInputs(preset, body?.inputs ?? {});
   if ("error" in cleaned) return { ok: false, status: 400, message: cleaned.error };
   const { inputs } = cleaned;
@@ -239,28 +250,35 @@ export async function runPreset(
   // Injection gate on everything pasted from elsewhere.
   const injection: RunMeta["injection"] = [];
   const untrusted: Record<string, string> = {};
-  for (const field of preset.fields.filter((f) => f.untrusted && inputs[f.key])) {
-    const gate = screenUntrusted(inputs[field.key]);
-    untrusted[field.key] = gate.text;
-    inputs[field.key] = gate.text;
-    if (gate.findings.length) injection.push({ field: field.label, findings: gate.findings });
-  }
+  await tracer.span(
+    "injection-gate",
+    () => {
+      for (const field of preset.fields.filter((f) => f.untrusted && inputs[f.key])) {
+        const gate = screenUntrusted(inputs[field.key]);
+        untrusted[field.key] = gate.text;
+        inputs[field.key] = gate.text;
+        if (gate.findings.length) injection.push({ field: field.label, findings: gate.findings });
+      }
+    },
+    () => ({ fields: preset.fields.filter((f) => f.untrusted && inputs[f.key]).length, findings: injection.length }),
+  );
 
   // External evidence.
   const external: { id: string; title: string; text: string }[] = [];
   const sources: NonNullable<RunMeta["sources"]> = [];
   const externalRefs = new Set<string>();
   if (preset.engine !== "message" && preset.sources?.includes("github") && inputs.githubUrl) {
-    const gh = await fetchGitHubEvidence(inputs.githubUrl);
+    const gh = await tracer.span("source.github", () => fetchGitHubEvidence(inputs.githubUrl), (g) => ({ fetched: g.ok }));
     sources.push({ id: "github", title: "GitHub", ok: gh.ok, detail: gh.detail });
     if (gh.text) external.push({ id: "github", title: "GitHub public repositories (fetched)", text: gh.text });
     gh.refs.forEach((r) => externalRefs.add(r.toLowerCase()));
   }
 
-  const knowledge = retrieveKnowledge(preset.kbTags, `${preset.name} ${preset.task(inputs)}`, 5);
-  const { prompt, manifest } = assembleContext(
-    buildBlocks(preset, inputs, untrusted, vault, profile, knowledge, external, wholeResume),
-    wholeResume ? 14000 : 7000,
+  const knowledge = await tracer.span("retrieval.knowledge", () => retrieveKnowledge(preset.kbTags, `${preset.name} ${preset.task(inputs)}`, 5), (k) => ({ chunks: k.length }));
+  const { prompt, manifest } = await tracer.span(
+    "context.assemble",
+    () => assembleContext(buildBlocks(preset, inputs, untrusted, vault, profile, knowledge, external, wholeResume), wholeResume ? 14000 : 7000),
+    (c) => ({ blocks: c.manifest.length, vaultChunks: vault.length, promptChars: c.prompt.length }),
   );
 
   const isMessage = preset.engine === "message";
@@ -268,16 +286,17 @@ export async function runPreset(
   const system = isMessage ? MESSAGE_SYSTEM : preset.engine === "fun" ? REPORT_SYSTEM + FUN_RULES : REPORT_SYSTEM;
 
   try {
-    let { object, usage } = await generateStructured(access.config, schema, system, prompt, isMessage ? 0.6 : 0.3);
+    const tokens = (u: MaybeUsage) => ({ model: access.config.model, promptTokens: u?.promptTokens ?? 0, completionTokens: u?.completionTokens ?? 0 });
+    let { object, usage } = await tracer.span("model.draft", () => generateStructured(access.config, schema, system, prompt, isMessage ? 0.6 : 0.3), (r) => tokens(r.usage));
 
     // Drafter → reviewer → (revise once).
     let review: RunMeta["review"];
     if (preset.review) {
-      const critique = await generateStructured(access.config, reviewSchema, REVIEWER_SYSTEM, reviewPrompt(prompt, object), 0.2);
+      const critique = await tracer.span("model.review", () => generateStructured(access.config, reviewSchema, REVIEWER_SYSTEM, reviewPrompt(prompt, object), 0.2), (r) => ({ ...tokens(r.usage), issues: r.object.issues.length }));
       usage = addUsage(usage, critique.usage);
       const revised = needsRevision(critique.object);
       if (revised) {
-        const second = await generateStructured(access.config, schema, system, revisePrompt(prompt, object, critique.object), 0.4);
+        const second = await tracer.span("model.revise", () => generateStructured(access.config, schema, system, revisePrompt(prompt, object, critique.object), 0.4), (r) => tokens(r.usage));
         object = second.object;
         usage = addUsage(usage, second.usage);
       }
@@ -302,8 +321,9 @@ export async function runPreset(
     if (isMessage) {
       const msg = object as MessageResult;
       const outputText = [msg.subject, msg.body, ...msg.variants.map((v) => v.body)].join("\n");
-      const grounding = checkGrounding(outputText, msg.citations, vault, sourceText);
+      const grounding = await tracer.span("grounding", () => checkGrounding(outputText, msg.citations, vault, sourceText), (g) => ({ problems: g.problems.length }));
       meta.grounding = grounding.problems;
+      meta.trace = finishTrace(tracer);
       return { ok: true, result: { data: { ...msg, variants: msg.variants.slice(0, 2), citations: grounding.citations }, meta } };
     }
 
@@ -318,12 +338,14 @@ export async function runPreset(
       externalRefs,
     };
     const finalize = FINALIZERS[kind] as (o: unknown, c: FinalizeContext) => Record<string, unknown>;
-    const data = finalize(object, ctx);
+    const data = await tracer.span(`finalize.${kind}`, () => finalize(object, ctx));
 
-    const figures = checkGrounding(generatedText(kind, object as Record<string, unknown>), [], vault, ctx.sourceText);
+    const figures = await tracer.span("grounding", () => checkGrounding(generatedText(kind, object as Record<string, unknown>), [], vault, ctx.sourceText), (g) => ({ problems: g.problems.length }));
     meta.grounding = [...figures.problems, ...auditNotes(data)];
+    meta.trace = finishTrace(tracer);
     return { ok: true, result: { data, meta } };
   } catch (err) {
+    finishTrace(tracer);
     const info = classifyAIError(err);
     return { ok: false, status: info.status, message: info.message };
   }

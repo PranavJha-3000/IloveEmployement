@@ -3,7 +3,7 @@
 // verdicts. Same classifications in → same score out, every time, and the
 // formula is visible to the user instead of a vibe-based "73/100".
 
-import { canonicalizeSkill, skillsMentioned, surfaceForms } from "../skills/normalize";
+import { canonicalizeSkill, skillsMentioned } from "../skills/normalize";
 
 export type Evidence = "STRONG" | "PARTIAL" | "MISSING" | "UNVERIFIED";
 export type Importance = "must" | "nice";
@@ -74,39 +74,34 @@ export interface KeywordCoverage {
   evidenced: boolean;
 }
 
-const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** Forms the taxonomy lists as ordinary words ("Go", "Rust") only count when written with that exact capitalisation. */
-function caseSensitiveFormPresent(form: string, rawText: string): boolean {
-  return new RegExp(`(?<![A-Za-z0-9+#.])${escapeRe(form)}(?![A-Za-z0-9+#])`).test(rawText);
+/** Taxonomy skills found in the text by the strict scanner, keyed by entry id. Memoised for the last text. */
+let lastScan: { text: string; found: Map<string, string> } | null = null;
+function strictSkills(rawText: string): Map<string, string> {
+  if (lastScan?.text === rawText) return lastScan.found;
+  const found = new Map(skillsMentioned(rawText, { strict: true }).map(({ entry, matched }) => [entry.id, matched]));
+  lastScan = { text: rawText, found };
+  return found;
 }
 
 /**
- * Whether a skill appears in the text under its own name or any alias.
- * `term` itself keeps the legacy whole-term rule; aliases of a taxonomy skill
- * that are ordinary words need their exact capitalisation.
+ * How `term` appears in the text, or "" when it does not. A taxonomy skill uses
+ * the same strict matcher as skill extraction (longest match, overlap-suppressed,
+ * exact case for word-like and short all-caps forms, ambiguous aliases ignored),
+ * so "Go-to-market" is not Go and "American Express" is not Express.js. A term
+ * outside the taxonomy keeps the whole-term rule.
  */
-function skillFormFound(form: string, hs: Haystacks, rawText: string, entryCaseSensitive: readonly string[], isOriginal: boolean): boolean {
-  if (isOriginal) return containsTerm(hs.strict, form);
-  // Aliases also tolerate a sentence-final period ("...on k8s.") that the strict normaliser keeps attached.
-  if (!containsTerm(hs.strict, form) && !containsTerm(hs.loose, form)) return false;
-  return entryCaseSensitive.includes(form) ? caseSensitiveFormPresent(form, rawText) : true;
+function termFound(term: string, hs: Haystacks, rawText: string): string {
+  const entry = canonicalizeSkill(term).entry;
+  if (entry) return strictSkills(rawText).get(entry.id) ?? "";
+  return containsTerm(hs.strict, term) ? term : "";
 }
 
 interface Haystacks {
   strict: string;
-  loose: string;
 }
 
 function haystacks(rawText: string): Haystacks {
-  return { strict: normalize(rawText), loose: ` ${rawText.toLowerCase().replace(/[^a-z0-9+#]+/g, " ")} ` };
-}
-
-/** Candidates for one source term: the term as written first, then every taxonomy form of it. */
-function candidatesFor(source: string): { form: string; original: boolean; caseSensitive: readonly string[] }[] {
-  const entry = canonicalizeSkill(source).entry;
-  const cs = entry?.caseSensitive ?? [];
-  return [{ form: source, original: true, caseSensitive: cs }, ...surfaceForms(source).map((form) => ({ form, original: false, caseSensitive: cs }))];
+  return { strict: normalize(rawText) };
 }
 
 export function keywordCoverage(
@@ -117,16 +112,11 @@ export function keywordCoverage(
   let earned = 0;
   let possible = 0;
   const items = keywords.map((k) => {
-    const seen = new Set<string>();
-    const candidates = [k.term, ...k.synonyms]
-      .flatMap(candidatesFor)
-      .filter((c) => {
-        const key = c.form.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    const hit = candidates.find((c) => skillFormFound(c.form, hay, resumeText, c.caseSensitive, c.original))?.form;
+    let hit = "";
+    for (const t of [k.term, ...k.synonyms]) {
+      hit = termFound(t, hay, resumeText);
+      if (hit) break;
+    }
     const w = IMPORTANCE_WEIGHT[k.importance];
     possible += w;
     if (hit) earned += w;
@@ -138,8 +128,7 @@ export function keywordCoverage(
 
 /** True when `skill` (or any alias of it) is in `rawText`. Used to decide which skills a tailored resume may keep. */
 export function skillInText(skill: string, rawText: string): boolean {
-  const hay = haystacks(rawText);
-  return candidatesFor(skill).some((c) => skillFormFound(c.form, hay, rawText, c.caseSensitive, c.original));
+  return termFound(skill, haystacks(rawText), rawText) !== "";
 }
 
 // ─── Canonical skill evidence for requirements ───────────────────────────────
@@ -158,12 +147,11 @@ export interface SkillMatch {
 export function canonicalSkillEvidence(requirement: string, resumeText: string): { skills: string[]; matchedAs: string[] } | null {
   const mentioned = skillsMentioned(requirement);
   if (!mentioned.length) return null;
-  const hay = haystacks(resumeText);
+  const inResume = strictSkills(resumeText);
   const skills: string[] = [];
   const matchedAs: string[] = [];
   for (const { entry } of mentioned) {
-    const cs = entry.caseSensitive ?? [];
-    const found = surfaceForms(entry.name).find((f) => skillFormFound(f, hay, resumeText, cs, false));
+    const found = inResume.get(entry.id);
     if (!found) return null;
     skills.push(entry.name);
     matchedAs.push(found);

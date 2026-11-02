@@ -10,7 +10,7 @@ import { safeExtractProfile } from "@/lib/profile/extract";
 import { mergeExtractions } from "@/lib/profile/refine";
 import type { ConfirmedProfile, ExtractionResult, StructuredProfile } from "@/lib/profile/schema";
 import { chunkResume } from "@/lib/vault/chunker";
-import { deleteChunksFromSource, saveChunks, saveProfile, saveResumeVersion, saveStructuredProfile } from "@/lib/vault/store";
+import { commitConfirmedProfile, replaceResumeChunks } from "@/lib/vault/store";
 import { focusProfileReview, ProfileReview } from "./ProfileReview";
 
 const KIND_LABEL: Record<VaultChunkKind, string> = {
@@ -159,8 +159,7 @@ export function ResumeImport({ chunks, profile, structuredProfile, onChanged, on
     if (!preview?.length) return;
     const hasResume = chunks.some((c) => c.source === "resume");
     if (hasResume && !window.confirm(REPLACE_PROMPT)) return;
-    await deleteChunksFromSource("resume");
-    await saveChunks(preview);
+    await replaceResumeChunks(preview);
     setPreview(null);
     setResumeText("");
     setFromUpload(false);
@@ -173,28 +172,31 @@ export function ResumeImport({ chunks, profile, structuredProfile, onChanged, on
     if (!result) return;
     setConfirming(true);
     setError("");
+    let saved = false;
     try {
       const plan = planConfirm({ profile: p, method: result.method, resumeText: extractedText, existingVaultProfile: profile, now: Date.now() });
       if (plan.replaceChunks && chunks.some((c) => c.source === "resume") && !window.confirm(REPLACE_PROMPT)) return;
-      if (plan.replaceChunks) {
-        await deleteChunksFromSource("resume");
-        await saveChunks(chunkResume(extractedText));
-      }
-      await saveStructuredProfile(plan.confirmed);
-      await saveProfile(plan.vaultProfile);
-      if (plan.baseVersion) await saveResumeVersion(plan.baseVersion);
-      setPreview(null);
-      setResumeText("");
-      setFromUpload(false);
-      setResult(null);
-      setPhase("confirmed");
-      await onChanged("Profile confirmed and saved to your vault.");
+      await commitConfirmedProfile({
+        confirmed: plan.confirmed,
+        vaultProfile: plan.vaultProfile,
+        baseVersion: plan.baseVersion,
+        newChunks: plan.replaceChunks ? chunkResume(extractedText) : null,
+      });
+      saved = true;
     } catch (err) {
       console.error("Confirm profile failed.", err instanceof Error ? err.name : "error");
-      setError("We couldn't save your profile. Nothing was lost; try Confirm profile again.");
+      // The save is one transaction, so a failure leaves the vault exactly as it was.
+      setError("We couldn't save your profile, and your vault was left as it was. Try Confirm profile again.");
     } finally {
       setConfirming(false);
     }
+    if (!saved) return;
+    setPreview(null);
+    setResumeText("");
+    setFromUpload(false);
+    setResult(null);
+    setPhase("confirmed");
+    await onChanged("Profile confirmed and saved to your vault.");
   }
 
   function discard() {

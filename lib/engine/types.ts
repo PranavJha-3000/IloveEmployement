@@ -123,6 +123,8 @@ export interface RunMeta {
   review?: { issues: ReviewIssue[]; revised: boolean };
   /** Outside evidence fetched for this run (e.g. GitHub repos). */
   sources?: { id: string; title: string; ok: boolean; detail: string }[];
+  /** Per-step timings and token counts for this run. Counts and names only, never user content. */
+  trace?: import("./trace").RunTrace;
 }
 
 export interface ReviewIssue {

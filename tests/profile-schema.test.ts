@@ -322,5 +322,7 @@ test("applyQuickProfile writes contact fields only", () => {
   assert.deepStrictEqual(out.skills, p.skills);
   assert.strictEqual(p.contact.name, "Jane Doe", "input not mutated");
   assert.strictEqual(applyQuickProfile(p, { ...quick, name: "", links: "" }).contact.name, "Jane Doe");
-  assert.deepStrictEqual(applyQuickProfile(p, { ...quick, links: "" }).contact.links, p.contact.links);
+  // Clearing a quick field clears it in the structured profile too, so the two never drift apart.
+  assert.deepStrictEqual(applyQuickProfile(p, { ...quick, links: "" }).contact.links, []);
+  assert.strictEqual(applyQuickProfile(p, { ...quick, location: "" }).contact.location, "");
 });

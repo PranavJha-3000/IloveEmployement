@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { contentHash } from "../retrieval/fusion";
 import { normalizeSkills } from "../skills/normalize";
-import { computeConfidence } from "./confidence";
+import { computeConfidence, groundingText, isGrounded } from "./confidence";
 import { parseYearMonth } from "./patterns";
 import { LOW_CONFIDENCE_THRESHOLD, StructuredProfileSchema, type ExtractionResult, type StructuredProfile } from "./schema";
 
@@ -57,6 +57,10 @@ const year = (s: string): number | null => {
   return y >= 1950 && y <= 2100 ? y : null;
 };
 
+/** The schema allows 20 matchedFrom entries of 200 characters; the model can return more casings than that. */
+const capMatchedFrom = <S extends { matchedFrom: string[] }>(skills: S[]): S[] =>
+  skills.map((s) => ({ ...s, matchedFrom: s.matchedFrom.slice(0, 20).map((m) => m.slice(0, 200)) }));
+
 export function fromModelProfile(o: ModelProfile): StructuredProfile {
   const profile: StructuredProfile = {
     contact: {
@@ -82,7 +86,7 @@ export function fromModelProfile(o: ModelProfile): StructuredProfile {
       startYear: year(e.startYear),
       endYear: year(e.endYear),
     })),
-    skills: normalizeSkills(o.skills.map((s) => clip(s, 200)).filter(Boolean)).slice(0, 150),
+    skills: capMatchedFrom(normalizeSkills(o.skills.map((s) => clip(s, 200)).filter(Boolean)).slice(0, 150)),
     projects: o.projects.slice(0, 30).map((p) => ({
       name: clip(p.name, 200),
       description: clip(p.description, 1000),
@@ -112,14 +116,20 @@ const CONTACT_SCALARS = ["name", "email", "phone", "location"] as const;
 const linkKey = (l: string) => l.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
 
 /**
- * Field-by-field merge of the deterministic and refined extractions. A value is
- * preferred when its code-computed confidence clears the threshold; an invented
- * (ungrounded) refined value therefore never displaces a grounded deterministic
- * one. Refined links and skills are only taken when grounded. Confidence of the
- * merged profile is recomputed from the source text.
+ * Field-by-field merge of the deterministic and refined extractions. A refined
+ * value enters only when its code-computed confidence clears the threshold, so
+ * an invented (ungrounded) refined value never reaches the profile:
+ * - contact fields fall back to the deterministic value, never to an ungrounded refined one;
+ * - roles, education and projects are merged item by item, keeping only refined
+ *   items whose identifying fields are grounded, and inside a kept item every
+ *   ungrounded detail (dates, location, bullets, links) is dropped;
+ * - refined links and skills are only taken when grounded.
+ * Confidence of the merged profile is recomputed from the source text.
  */
 export function mergeExtractions(det: ExtractionResult, refined: ExtractionResult, sourceText: string): ExtractionResult {
   const ok = (r: ExtractionResult, path: string) => (r.confidence[path] ?? 0) >= LOW_CONFIDENCE_THRESHOLD;
+  const rOk = (path: string) => ok(refined, path);
+  const norm = groundingText(sourceText);
 
   const dc = det.profile.contact;
   const rc = refined.profile.contact;
@@ -132,9 +142,8 @@ export function mergeExtractions(det: ExtractionResult, refined: ExtractionResul
   };
   for (const k of CONTACT_SCALARS) {
     const path = `contact.${k}`;
-    if (rc[k] && ok(refined, path)) merged.contact[k] = rc[k];
-    else if (dc[k] && ok(det, path)) merged.contact[k] = dc[k];
-    else merged.contact[k] = rc[k] || dc[k];
+    if (rc[k] && rOk(path)) merged.contact[k] = rc[k];
+    else merged.contact[k] = dc[k];
   }
 
   const links: string[] = [];
@@ -147,7 +156,7 @@ export function mergeExtractions(det: ExtractionResult, refined: ExtractionResul
   };
   dc.links.forEach(pushLink);
   rc.links.forEach((l, i) => {
-    if (ok(refined, `contact.links.${i}`)) pushLink(l);
+    if (rOk(`contact.links.${i}`)) pushLink(l);
   });
   merged.contact.links = links;
 
@@ -157,20 +166,57 @@ export function mergeExtractions(det: ExtractionResult, refined: ExtractionResul
     for (let i = 0; i < list.length; i++) if (keys.every((k) => ok(r, `${section}.${i}.${k}`))) n += 1;
     return n;
   };
-  const pick = <T,>(section: "roles" | "education" | "projects", keys: string[], d: T[], r: T[]): T[] => {
-    const rn = groundedCount(refined, section, keys);
-    const dn = groundedCount(det, section, keys);
-    return rn > 0 && rn >= dn ? r : d;
-  };
-  merged.roles = pick("roles", ["title", "company"], det.profile.roles, refined.profile.roles);
-  merged.education = pick("education", ["degree", "institution"], det.profile.education, refined.profile.education);
-  merged.projects = pick("projects", ["name"], det.profile.projects, refined.profile.projects);
+  // Refined items whose identifying fields are grounded, with ungrounded details removed.
+  const keptRoles = refined.profile.roles.flatMap((r, i) => {
+    const at = (k: string) => `roles.${i}.${k}`;
+    if (!rOk(at("title")) || !rOk(at("company"))) return [];
+    return [
+      {
+        ...r,
+        location: rOk(at("location")) ? r.location : "",
+        start: rOk(at("start")) ? r.start : null,
+        end: rOk(at("end")) ? r.end : null,
+        current: r.current && rOk(at("end")),
+        bullets: r.bullets.filter((b) => isGrounded(b, norm)),
+      },
+    ];
+  });
+  const keptEducation = refined.profile.education.flatMap((e, i) => {
+    const at = (k: string) => `education.${i}.${k}`;
+    if (!rOk(at("degree")) || !rOk(at("institution"))) return [];
+    return [
+      {
+        ...e,
+        detail: rOk(at("detail")) ? e.detail : "",
+        startYear: rOk(at("startYear")) ? e.startYear : null,
+        endYear: rOk(at("endYear")) ? e.endYear : null,
+      },
+    ];
+  });
+  const keptProjects = refined.profile.projects.flatMap((pr, i) => {
+    const at = (k: string) => `projects.${i}.${k}`;
+    if (!rOk(at("name"))) return [];
+    return [
+      {
+        ...pr,
+        description: rOk(at("description")) ? pr.description : "",
+        link: rOk(at("link")) ? pr.link : "",
+        skills: pr.skills.filter((sk) => isGrounded(sk, norm)),
+      },
+    ];
+  });
+  // The refined list wins only when it has at least as many grounded items as the deterministic one.
+  const pick = <T,>(section: "roles" | "education" | "projects", keys: string[], d: T[], kept: T[]): T[] =>
+    kept.length > 0 && kept.length >= groundedCount(det, section, keys) ? kept : d;
+  merged.roles = pick("roles", ["title", "company"], det.profile.roles, keptRoles);
+  merged.education = pick("education", ["degree", "institution"], det.profile.education, keptEducation);
+  merged.projects = pick("projects", ["name"], det.profile.projects, keptProjects);
 
   const rawSkills = det.profile.skills.flatMap((s) => (s.matchedFrom.length ? s.matchedFrom : [s.name]));
   refined.profile.skills.forEach((s, i) => {
     if (ok(refined, `skills.${i}`)) rawSkills.push(...(s.matchedFrom.length ? s.matchedFrom : [s.name]));
   });
-  merged.skills = normalizeSkills(rawSkills).slice(0, 150);
+  merged.skills = capMatchedFrom(normalizeSkills(rawSkills).slice(0, 150));
 
   const profile = StructuredProfileSchema.parse(merged);
   return {

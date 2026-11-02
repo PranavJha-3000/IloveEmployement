@@ -12,9 +12,9 @@ import {
   deleteChunk,
   exportVault,
   importVault,
+  commitConfirmedProfile,
   saveChunks,
-  saveProfile,
-  saveStructuredProfile,
+  saveQuickProfile,
 } from "@/lib/vault/store";
 import { useVault } from "@/lib/vault/useVault";
 import { ApplicationsList } from "@/components/agent/ApplicationsList";
@@ -47,6 +47,8 @@ const PROFILE_FIELDS: { key: keyof VaultProfile; label: string; placeholder: str
 
 export function VaultManager() {
   const { chunks, profile, structuredProfile, versions, loaded, reload } = useVault();
+  // Export and Clear cover everything stored, not just chunks.
+  const hasData = chunks.length > 0 || versions.length > 0 || structuredProfile !== null;
   const [draftProfile, setDraftProfile] = useState(profile);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [savedReviewOpen, setSavedReviewOpen] = useState(false);
@@ -73,16 +75,21 @@ export function VaultManager() {
     setSavedConfirming(true);
     try {
       const plan = planConfirm({ profile: p, method: structuredProfile.method, resumeText: null, existingVaultProfile: profile, now: Date.now() });
-      await saveStructuredProfile({ ...plan.confirmed, sourceHash: structuredProfile.sourceHash });
-      await saveProfile(plan.vaultProfile);
-      setSavedReviewOpen(false);
-      await changed("Profile confirmed and saved to your vault.");
+      await commitConfirmedProfile({
+        confirmed: { ...plan.confirmed, sourceHash: structuredProfile.sourceHash },
+        vaultProfile: plan.vaultProfile,
+        baseVersion: null,
+        newChunks: null,
+      });
     } catch (err) {
       console.error("Saving the structured profile failed.", err instanceof Error ? err.name : "error");
-      setError("We couldn't save your profile. Nothing was lost; try again.");
+      setError("We couldn't save your profile, and your vault was left as it was. Try again.");
+      return;
     } finally {
       setSavedConfirming(false);
     }
+    setSavedReviewOpen(false);
+    await changed("Profile confirmed and saved to your vault.");
   }
 
   async function addManual() {
@@ -181,6 +188,7 @@ export function VaultManager() {
                 id={`profile-${f.key}`}
                 className="field-control"
                 value={draftProfile[f.key]}
+                maxLength={f.key === "links" ? 1000 : 200}
                 placeholder={f.placeholder}
                 onChange={(e) => setDraftProfile({ ...draftProfile, [f.key]: e.target.value })}
               />
@@ -191,9 +199,13 @@ export function VaultManager() {
           type="button"
           className="cta-secondary mt-4"
           onClick={async () => {
-            await saveProfile(draftProfile);
-            if (structuredProfile) {
-              await saveStructuredProfile({ ...structuredProfile, profile: applyQuickProfile(structuredProfile.profile, draftProfile) });
+            try {
+              const structured = structuredProfile ? { ...structuredProfile, profile: applyQuickProfile(structuredProfile.profile, draftProfile) } : null;
+              await saveQuickProfile(draftProfile, structured);
+            } catch (err) {
+              console.error("Saving the quick profile failed.", err instanceof Error ? err.name : "error");
+              setError("We couldn't save your profile, and nothing was changed. Check the fields and try again.");
+              return;
             }
             await changed("Profile saved.");
           }}
@@ -271,14 +283,14 @@ export function VaultManager() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-bold text-zinc-900">In your vault {loaded && `(${chunks.length})`}</h2>
           <div className="flex gap-2">
-            <button type="button" className="cta-secondary" onClick={() => void handleExport()} disabled={!chunks.length}>
+            <button type="button" className="cta-secondary" onClick={() => void handleExport()} disabled={!hasData}>
               Export
             </button>
             <button type="button" className="cta-secondary" onClick={() => importRef.current?.click()}>
               Import
             </button>
             <input ref={importRef} type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && void handleImport(e.target.files[0])} />
-            <button type="button" className="cta-secondary" onClick={() => void handleClear()} disabled={!chunks.length}>
+            <button type="button" className="cta-secondary" onClick={() => void handleClear()} disabled={!hasData}>
               Clear
             </button>
           </div>

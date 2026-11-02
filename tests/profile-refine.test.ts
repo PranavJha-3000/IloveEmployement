@@ -214,3 +214,57 @@ test("refineProfile: throws the server message on a non-ok response", async () =
   globalThis.fetch = (async () => new Response(JSON.stringify({ error: "Daily free limit reached." }), { status: 429 })) as typeof fetch;
   await assert.rejects(() => refineProfile(SOURCE, undefined), /Daily free limit reached\./);
 });
+
+test("merge (CR-02): invented contact values and invented roles never enter, even when the quick read found nothing", () => {
+  const src = `Jane Doe
+
+EXPERIENCE
+Software Engineer, Acme | 2021 - 2023
+- Built the billing service
+Beta 2022`;
+  const det = extractProfile(src);
+  assert.equal(det.profile.contact.email, "");
+  const model: ModelProfile = {
+    contact: { name: "Jane Doe", email: "jane@attacker.example", phone: "+1 555 0100 2021", location: "", links: ["https://attacker.example"] },
+    roles: [
+      { title: "Software Engineer", company: "Acme", location: "Remote", start: "2021", end: "2023", current: false, bullets: ["Built the billing service", "Led 400 engineers"] },
+      { title: "Principal Architect", company: "Google", location: "", start: "2019", end: "2021", current: false, bullets: ["Led 400 engineers"] },
+    ],
+    education: [],
+    skills: [],
+    projects: [],
+  };
+  const merged = mergeExtractions(det, refinedResult(model, src), src);
+  assert.equal(merged.profile.contact.email, "", "invented email is not merged");
+  assert.equal(merged.profile.contact.phone, "", "invented phone is not merged");
+  assert.deepEqual(merged.profile.contact.links, []);
+  assert.ok(!merged.profile.roles.some((r) => r.company === "Google"), "invented role is dropped");
+  const acme = merged.profile.roles.find((r) => r.company === "Acme");
+  assert.ok(acme, "the grounded role is kept");
+  assert.ok(!acme.bullets.includes("Led 400 engineers"), "an invented bullet inside a kept role is dropped");
+  assert.notEqual(acme.location, "Remote", "an ungrounded location inside a kept role is dropped");
+});
+
+test("grounding (WR-03): fragments of an email, a run of years, or a link prefix are not grounded", () => {
+  const src = "Jon Smith\njon@acme.com\ngithub.com/abc\nAcme 2019 - 2021\nBeta 2022";
+  const det = extractProfile(src);
+  const p = structuredClone(det.profile);
+  p.contact.email = "n@acme.co";
+  p.contact.phone = "2019 2021 2022";
+  p.contact.links = ["github.com/a"];
+  const c = computeConfidence(p, src);
+  assert.ok(c["contact.email"] < LOW_CONFIDENCE_THRESHOLD);
+  assert.ok(c["contact.phone"] < LOW_CONFIDENCE_THRESHOLD);
+  assert.ok(c["contact.links.0"] < LOW_CONFIDENCE_THRESHOLD);
+  p.contact.email = "jon@acme.com";
+  p.contact.links = ["https://github.com/abc/"];
+  const ok = computeConfidence(p, src);
+  assert.ok(ok["contact.email"] >= LOW_CONFIDENCE_THRESHOLD);
+  assert.ok(ok["contact.links.0"] >= LOW_CONFIDENCE_THRESHOLD);
+});
+
+test("refine (IN-06): many casings of one skill are capped instead of failing the schema", () => {
+  const variants = Array.from({ length: 25 }, (_, i) => "JavaScript".split("").map((ch, k) => ((i >> k) & 1 ? ch.toUpperCase() : ch.toLowerCase())).join(""));
+  const r = refinedResult({ ...invented, skills: variants }, SOURCE);
+  assert.ok(r.profile.skills.every((s) => s.matchedFrom.length <= 20));
+});

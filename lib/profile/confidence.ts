@@ -10,6 +10,7 @@ import {
   type StructuredProfile,
   type YearMonth,
 } from "./schema";
+import { findEmails, findPhones, findUrls } from "./patterns";
 
 export const CONFIDENCE = { grounded: 1, ungrounded: 0.4, invalid: 0.3, missing: 0 } as const;
 
@@ -67,13 +68,15 @@ function linkForms(link: string): string[] {
 export function computeConfidence(p: StructuredProfile, sourceText: string): Record<FieldPath, number> {
   const src = sourceText.length > MAX_SOURCE_CHARS ? sourceText.slice(0, MAX_SOURCE_CHARS) : sourceText;
   const norm = groundingText(src);
-  const lower = src.toLowerCase();
-  const digits = src.replace(/\D/g, "");
+  // Exact matches against what the pattern finders see, so a fragment or a run of unrelated digits never counts as grounded.
+  const emails = new Set(findEmails(src).map((e) => e.toLowerCase()));
+  const phones = new Set(findPhones(src).map((ph) => ph.replace(/\D/g, "")));
+  const urls = new Set(findUrls(src).flatMap(linkForms));
   const lines = src.split(/\r?\n/);
   const errors = validateProfile(p);
 
   const text = (v: string) => (v.trim() === "" ? null : isGrounded(v, norm));
-  const link = (v: string) => (v.trim() === "" ? null : linkForms(v).some((f) => lower.includes(f)));
+  const link = (v: string) => (v.trim() === "" ? null : linkForms(v).some((f) => urls.has(f)));
   const year = (v: number | null) => (v === null ? null : isGrounded(String(v), norm));
   const yearMonth = (v: YearMonth | null) => (v === null ? null : dateGrounded(v, lines));
 
@@ -85,11 +88,11 @@ export function computeConfidence(p: StructuredProfile, sourceText: string): Rec
       case "contact": {
         const c = p.contact;
         if (a === "name") return text(c.name);
-        if (a === "email") return c.email.trim() === "" ? null : lower.includes(c.email.trim().toLowerCase());
+        if (a === "email") return c.email.trim() === "" ? null : emails.has(c.email.trim().toLowerCase());
         if (a === "phone") {
           const d = c.phone.replace(/\D/g, "");
           if (!d) return null;
-          return d.length >= 7 ? digits.includes(d) : text(c.phone);
+          return d.length >= 7 ? phones.has(d) : text(c.phone);
         }
         if (a === "location") return text(c.location);
         if (a === "links") return link(c.links[Number(b)] ?? "");

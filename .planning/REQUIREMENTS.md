@@ -38,16 +38,16 @@
 
 ### Document Intelligence
 
-- [ ] **DOC-01**: Uploading a resume produces a typed, validated profile (contact, roles with dates, education, skills, projects) shown for the user to confirm or correct
-- [ ] **DOC-02**: Extracted skills are normalized to a canonical taxonomy with aliases (e.g. "JS" → JavaScript), used by fit and ATS scoring
-- [ ] **DOC-03**: Profile extraction accuracy is measured against labelled resumes (field-level precision/recall)
-- [ ] **DOC-04**: The vault keeps resume versions (base and tailored) with a diff view and the job each version targeted
+- [x] **DOC-01**: Uploading a resume produces a typed, validated profile (contact, roles with dates, education, skills, projects) shown for the user to confirm or correct
+- [x] **DOC-02**: Extracted skills are normalized to a canonical taxonomy with aliases (e.g. "JS" → JavaScript), used by fit and ATS scoring
+- [x] **DOC-03**: Profile extraction accuracy is measured against labelled resumes (field-level precision/recall)
+- [x] **DOC-04**: The vault keeps resume versions (base and tailored) with a diff view and the job each version targeted
 
 ### Observability
 
-- [ ] **OBS-01**: Every run emits a structured trace: retrieval, context blocks, model calls, review pass, finalizers, with timings and token counts
-- [ ] **OBS-02**: Traces export to a standard backend (OpenTelemetry or Langfuse) when configured, and to the console in development; no user content is logged unless the user opts in
-- [ ] **OBS-03**: The "How this was generated" panel shows the per-step timing waterfall from the trace
+- [x] **OBS-01**: Every run emits a structured trace: retrieval, context blocks, model calls, review pass, finalizers, with timings and token counts
+- [x] **OBS-02**: Traces export to a standard backend (OpenTelemetry or Langfuse) when configured, and to the console in development; no user content is logged unless the user opts in
+- [x] **OBS-03**: The "How this was generated" panel shows the per-step timing waterfall from the trace
 
 ## v2 Requirements
 
@@ -89,13 +89,13 @@
 | AGENT-04 | Phase 4 | Complete |
 | AGENT-05 | Phase 4 | Complete |
 | AGENT-06 | Phase 4 | Complete |
-| DOC-01 | Phase 5 | Pending |
-| DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
-| DOC-04 | Phase 5 | Pending |
-| OBS-01 | Phase 6 | Pending |
-| OBS-02 | Phase 6 | Pending |
-| OBS-03 | Phase 6 | Pending |
+| DOC-01 | Phase 5 | Complete |
+| DOC-02 | Phase 5 | Complete |
+| DOC-03 | Phase 5 | Complete |
+| DOC-04 | Phase 5 | Complete |
+| OBS-01 | Phase 6 | Complete |
+| OBS-02 | Phase 6 | Complete |
+| OBS-03 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total

@@ -1,6 +1,7 @@
 "use client";
 
 import type { RunMeta, VaultContextChunk } from "@/lib/engine/types";
+import type { RunTrace } from "@/lib/engine/trace";
 
 /** Warnings the user must see before using the output. */
 export function RunWarnings({ meta }: { meta: RunMeta }) {
@@ -22,6 +23,36 @@ export function RunWarnings({ meta }: { meta: RunMeta }) {
   );
 }
 
+/** Per-step timing waterfall built from the run's trace. */
+function TraceWaterfall({ trace }: { trace: RunTrace }) {
+  const total = Math.max(trace.totalMs, 1);
+  const tokens = (a: RunTrace["spans"][number]["attrs"]) =>
+    typeof a.promptTokens === "number" ? ` · ${a.promptTokens.toLocaleString()} in / ${Number(a.completionTokens ?? 0).toLocaleString()} out` : "";
+  return (
+    <div>
+      <p className="font-semibold text-zinc-700">Steps · {(trace.totalMs / 1000).toFixed(2)} s total</p>
+      <ol className="mt-1 space-y-1" aria-label="Run steps with timings">
+        {trace.spans.map((s, i) => (
+          <li key={i} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-center gap-2">
+            <span className="truncate" title={s.name}>
+              {s.name}
+            </span>
+            <span className="relative block h-4 rounded bg-zinc-100" aria-label={`${s.durationMs} ms${tokens(s.attrs)}`}>
+              <span
+                className={`absolute inset-y-0 rounded ${s.attrs.ok === false ? "bg-red-400" : s.name.startsWith("model") ? "bg-[var(--brand,#e5322d)]" : "bg-zinc-400"}`}
+                style={{ left: `${(s.startMs / total) * 100}%`, width: `max(2px, ${(s.durationMs / total) * 100}%)` }}
+              />
+            </span>
+            <span className="col-start-2 -mt-1 text-[11.5px] text-zinc-500">
+              {s.durationMs < 1 ? "<1" : Math.round(s.durationMs)} ms{tokens(s.attrs)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 /** "How this was generated": the context-engineering trail behind a result. */
 export function RunDetails({ meta, sentChunks }: { meta: RunMeta; sentChunks: VaultContextChunk[] }) {
   return (
@@ -32,6 +63,8 @@ export function RunDetails({ meta, sentChunks }: { meta: RunMeta; sentChunks: Va
           {meta.tier === "free" ? "Free tier" : "Your key"} · {meta.model}
           {meta.usage && ` · ${meta.usage.promptTokens.toLocaleString()} in / ${meta.usage.completionTokens.toLocaleString()} out tokens`}
         </p>
+
+        {meta.trace && meta.trace.spans.length > 0 && <TraceWaterfall trace={meta.trace} />}
 
         {meta.review && (
           <div>

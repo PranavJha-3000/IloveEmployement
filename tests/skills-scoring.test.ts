@@ -4,7 +4,7 @@ import { afterEach, test } from "node:test";
 import { MockLanguageModelV1 } from "ai/test";
 import { runPreset, setModelFactory } from "../lib/engine/run";
 import { FINALIZERS, type FinalizeContext } from "../lib/engine/reports";
-import { applySkillEvidence, canonicalSkillEvidence, keywordCoverage } from "../lib/engine/scoring";
+import { applySkillEvidence, canonicalSkillEvidence, keywordCoverage, skillInText } from "../lib/engine/scoring";
 import type { RunMeta, VaultContextChunk } from "../lib/engine/types";
 import { getPresetById } from "../lib/presets";
 
@@ -168,4 +168,27 @@ test("ats pipeline: a scripted keyword 'JavaScript' is found through the alias '
   assert.strictEqual(coverage.items[0].found, true);
   assert.strictEqual(coverage.items[0].matchedAs, "JS");
   assert.strictEqual(coverage.items[0].canonical, "JavaScript");
+});
+
+test("CR-03: ordinary words and ambiguous acronyms are not skill evidence", () => {
+
+  const cases: [string, string][] = [
+    ["Golang", "Led the Go-to-market launch"],
+    ["Next.js", "Next, I rebuilt the onboarding flow."],
+    ["Spring Boot", "Spring 2021 intern at Acme."],
+    ["Express.js", "Partnered with American Express"],
+    ["PowerPoint", "Keynote speaker at a regional conference."],
+    ["Computer vision", "CV\nJane Doe"],
+    ["Public relations", "Opened a PR to fix the build."],
+    ["Accounts payable", "Worked on AP style guides."],
+    ["Microsoft Office", "Word of mouth campaign"],
+  ];
+  for (const [term, text] of cases) {
+    const cov = keywordCoverage(text, [{ term, importance: "must", synonyms: [], evidencedBy: [] }]);
+    assert.equal(cov.items[0].found, false, `${term} in "${text}"`);
+    assert.equal(skillInText(term, text), false, `${term} in "${text}"`);
+  }
+  for (const [term, text] of [["JavaScript", "Built tools in JS."], ["Kubernetes", "Ran k8s clusters."], ["React", "Shipped ReactJS apps"]] as const) {
+    assert.equal(skillInText(term, text), true, `${term} in "${text}"`);
+  }
 });

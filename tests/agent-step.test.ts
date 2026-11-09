@@ -299,42 +299,11 @@ test("14. grounding still applies inside a tool artifact", async () => {
   assert.ok(cover.output?.meta.grounding.some((g) => g.includes("Dropped 1 citation")));
 });
 
-test("15. free tier counts one run per executed step; blocked gate requests are free", async () => {
-  const saved = new Map(
-    ["FREE_TIER_PROVIDER", "FREE_TIER_API_KEY", "FREE_TIER_MODEL", "FREE_TIER_DAILY_LIMIT"].map((k) => [k, process.env[k]]),
-  );
-  Object.assign(process.env, {
-    FREE_TIER_PROVIDER: "openai",
-    FREE_TIER_API_KEY: "sk-server-test-0000000000",
-    FREE_TIER_MODEL: "mock",
-    FREE_TIER_DAILY_LIMIT: "2",
-  });
-  try {
-    const s = scriptAgentModel({ plan: ["fit_check"] });
-    const ip = "203.0.113.77";
-    const opts = { keyless: true, ip };
-    const first = await go(fresh(), opts);
-    assert.strictEqual(first.res.kind, "step");
-
-    // Blocked at gate A: must not consume a run.
-    const req = buildStepRequest(first.rec, { vault: VAULT });
-    const blocked = asResponse(await agentStep(req, ip));
-    assert.strictEqual(blocked.kind, "blocked");
-
-    const rerun = rerunFitCheck(first.rec, {}, 3000);
-    const second = await go(rerun, opts);
-    assert.strictEqual(second.res.kind, "step");
-
-    const again = rerunFitCheck(second.rec, {}, 4000);
-    const third = await agentStep(buildStepRequest(again, { vault: VAULT }), ip);
-    assert.strictEqual(third.status, 429);
-    assert.strictEqual(s.plannerCalls(), 2);
-  } finally {
-    for (const [k, v] of saved) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-  }
+test("15. the agent is BYOK-only: a keyless request is refused before any model call", async () => {
+  const s = scriptAgentModel({ plan: ["fit_check"] });
+  const res = await agentStep(buildStepRequest(fresh(), { vault: VAULT }), "203.0.113.77");
+  assert.strictEqual(res.status, 400);
+  assert.strictEqual(s.plannerCalls(), 0);
 });
 
 test("16. NaN provider usage charges the null-usage estimate and later requests stay schema-valid", async () => {

@@ -228,11 +228,18 @@ function finishTrace(tracer: Tracer): RunTrace {
 export async function runPreset(
   preset: Preset,
   body: RunRequestBody,
-  ip: string,
+  id: string | null,
   opts?: { access?: Extract<AccessResult, { ok: true }> },
 ): Promise<RunOutcome> {
-  const access = opts?.access ?? (await resolveAccess(body?.config, ip));
+  const access = opts?.access ?? (await resolveAccess(body?.config, id));
   if (!access.ok) return { ok: false, status: access.status, message: access.message };
+  const outcome = await runWithAccess(preset, body, access);
+  // A failed run (bad input, provider error) must not burn the day's free run.
+  if (!outcome.ok && access.tier === "free") await access.refund();
+  return outcome;
+}
+
+async function runWithAccess(preset: Preset, body: RunRequestBody, access: Extract<AccessResult, { ok: true }>): Promise<RunOutcome> {
 
   const tracer = new Tracer(preset.id);
   const cleaned = cleanInputs(preset, body?.inputs ?? {});

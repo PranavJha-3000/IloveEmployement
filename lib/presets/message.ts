@@ -194,7 +194,7 @@ export const MESSAGE_PRESETS: MessagePreset[] = [
         ["late", "Final rounds / offer stage"],
       ]),
     ],
-    kbTags: ["salary-expectations", "salary", "offer"],
+    kbTags: ["salary", "offer"],
     usesVault: false,
     vaultQuery: (i) => joinQuery(i.role),
     format: "script",

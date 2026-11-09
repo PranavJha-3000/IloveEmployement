@@ -1,11 +1,13 @@
 // ─── Access: free tier or bring-your-own-key ─────────────────────────────────
 // A request with an API key runs on that key (no limit, key never stored).
-// A request without one runs on the server's free-tier key, rate limited per
-// IP per day. The limiter uses Upstash Redis over REST when configured and an
-// in-memory map otherwise (fine for dev; per-instance only on serverless).
+// A request without one runs on the server's free-tier key, which needs a
+// signed-in user (Supabase) and is limited per user per UTC day. Without
+// Supabase configured it falls back to a per-IP counter (Upstash Redis over
+// REST when configured, an in-memory map otherwise: fine for dev only).
 
 import type { AiRequestConfig, ProviderId } from "../types";
 import { PROVIDERS } from "../providers";
+import { authConfigured, consumeRun, getUserId, refundRun } from "../auth/supabase";
 
 export interface FreeTierInfo {
   enabled: boolean;
@@ -21,16 +23,22 @@ export function freeTierInfo(): FreeTierInfo {
     enabled,
     provider: enabled ? provider! : null,
     model: enabled ? process.env.FREE_TIER_MODEL || PROVIDERS[provider!].defaultModel : null,
-    dailyLimit: Number(process.env.FREE_TIER_DAILY_LIMIT) || 15,
+    dailyLimit: Number(process.env.FREE_TIER_DAILY_LIMIT) || 1,
   };
 }
 
 export type AccessResult =
   | { ok: true; tier: "byok"; config: AiRequestConfig; remaining: null }
-  | { ok: true; tier: "free"; config: AiRequestConfig; remaining: number }
+  | { ok: true; tier: "free"; config: AiRequestConfig; remaining: number; refund: () => Promise<void> }
   | { ok: false; status: number; message: string };
 
-export async function resolveAccess(config: AiRequestConfig | undefined, ip: string): Promise<AccessResult> {
+/** Who is calling: the verified user id when accounts are on (null = not signed in), else the client IP. */
+export async function identify(headers: Headers): Promise<string | null> {
+  return authConfigured() ? getUserId(headers) : clientIp(headers);
+}
+
+/** `allowFree: false` makes the request BYOK-only (the agent makes many model calls per run). */
+export async function resolveAccess(config: AiRequestConfig | undefined, id: string | null, opts: { allowFree?: boolean } = {}): Promise<AccessResult> {
   if (config?.apiKey?.trim()) {
     if (!config.provider || !(config.provider in PROVIDERS)) {
       return { ok: false, status: 400, message: "Unknown AI provider." };
@@ -39,6 +47,9 @@ export async function resolveAccess(config: AiRequestConfig | undefined, ip: str
   }
 
   const free = freeTierInfo();
+  if (opts.allowFree === false) {
+    return { ok: false, status: 400, message: "The agent workflow needs your own API key. Add one to continue." };
+  }
   if (!free.enabled) {
     return {
       ok: false,
@@ -47,12 +58,26 @@ export async function resolveAccess(config: AiRequestConfig | undefined, ip: str
     };
   }
 
-  const used = await countToday(ip);
+  if (id === null) {
+    return { ok: false, status: 401, message: "Sign in to use your free daily run, or add your own API key." };
+  }
+
+  let used: number;
+  if (authConfigured()) {
+    try {
+      const taken = await consumeRun(id, free.dailyLimit);
+      used = taken.ok ? taken.used : free.dailyLimit + 1;
+    } catch {
+      return { ok: false, status: 503, message: "Couldn't check your free run just now. Try again in a moment." };
+    }
+  } else {
+    used = await countToday(id);
+  }
   if (used > free.dailyLimit) {
     return {
       ok: false,
       status: 429,
-      message: `You've used today's ${free.dailyLimit} free runs. Add your own API key for unlimited runs, or come back tomorrow.`,
+      message: `You've used today's ${free.dailyLimit} free run${free.dailyLimit === 1 ? "" : "s"}. Add your own API key for unlimited runs, or come back tomorrow.`,
     };
   }
 
@@ -60,6 +85,7 @@ export async function resolveAccess(config: AiRequestConfig | undefined, ip: str
     ok: true,
     tier: "free",
     remaining: Math.max(0, free.dailyLimit - used),
+    refund: () => (authConfigured() ? refundRun(id) : refundToday(id)),
     config: {
       provider: free.provider!,
       apiKey: process.env.FREE_TIER_API_KEY!,
@@ -104,6 +130,16 @@ async function countToday(ip: string): Promise<number> {
   const next = (memory.get(key) ?? 0) + 1;
   memory.set(key, next);
   return next;
+}
+
+async function refundToday(id: string): Promise<void> {
+  const key = dayKey(id);
+  memory.set(key, Math.max(0, (memory.get(key) ?? 0) - 1));
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (url && token) {
+    await fetch(`${url}/decr/${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }).catch(() => undefined);
+  }
 }
 
 /** Best-effort client IP from proxy headers. */

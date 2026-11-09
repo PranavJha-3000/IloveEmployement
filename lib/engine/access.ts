@@ -27,6 +27,14 @@ export function freeTierInfo(): FreeTierInfo {
   };
 }
 
+/** Second free-tier provider (e.g. Gemini) used when the first is out of quota. */
+function fallbackConfig(): AiRequestConfig | undefined {
+  const provider = process.env.FREE_TIER_FALLBACK_PROVIDER as ProviderId | undefined;
+  const apiKey = process.env.FREE_TIER_FALLBACK_API_KEY;
+  if (!apiKey || !provider || !(provider in PROVIDERS)) return undefined;
+  return { provider, apiKey, model: process.env.FREE_TIER_FALLBACK_MODEL || PROVIDERS[provider].defaultModel };
+}
+
 export type AccessResult =
   | { ok: true; tier: "byok"; config: AiRequestConfig; remaining: null }
   | { ok: true; tier: "free"; config: AiRequestConfig; remaining: number; refund: () => Promise<void> }
@@ -43,7 +51,7 @@ export async function resolveAccess(config: AiRequestConfig | undefined, id: str
     if (!config.provider || !(config.provider in PROVIDERS)) {
       return { ok: false, status: 400, message: "Unknown AI provider." };
     }
-    return { ok: true, tier: "byok", config, remaining: null };
+    return { ok: true, tier: "byok", config: { ...config, fallback: undefined }, remaining: null };
   }
 
   const free = freeTierInfo();
@@ -91,6 +99,7 @@ export async function resolveAccess(config: AiRequestConfig | undefined, id: str
       apiKey: process.env.FREE_TIER_API_KEY!,
       model: free.model!,
       baseUrl: process.env.FREE_TIER_BASE_URL || PROVIDERS[free.provider!].baseUrl,
+      fallback: fallbackConfig(),
     },
   };
 }

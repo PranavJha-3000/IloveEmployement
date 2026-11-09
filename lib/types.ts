@@ -26,4 +26,6 @@ export interface AiRequestConfig {
   apiKey: string;
   model: string;
   baseUrl?: string;
+  /** Server-set only (free tier): tried when this provider is out of quota. Stripped from client input. */
+  fallback?: AiRequestConfig;
 }

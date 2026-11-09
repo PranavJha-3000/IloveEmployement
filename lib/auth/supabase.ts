@@ -3,8 +3,11 @@
 
 const url = () => process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 
+// New projects have a publishable key; older ones an anon key.
+const publicKey = () => process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 export function authConfigured(): boolean {
-  return Boolean(url() && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(url() && publicKey() && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 /** User id for a valid `Authorization: Bearer <access_token>`, else null. */
@@ -13,7 +16,7 @@ export async function getUserId(headers: Headers, fetchImpl: typeof fetch = fetc
   if (!token || !authConfigured()) return null;
   try {
     const res = await fetchImpl(`${url()}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+      headers: { Authorization: `Bearer ${token}`, apikey: publicKey()! },
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -28,7 +31,8 @@ async function rpc<T>(name: string, args: object, fetchImpl: typeof fetch): Prom
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const res = await fetchImpl(`${url()}/rest/v1/rpc/${name}`, {
     method: "POST",
-    headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    // sb_secret_ keys are not JWTs: send them as apikey only.
+    headers: { apikey: key, ...(key.startsWith("sb_") ? {} : { Authorization: `Bearer ${key}` }), "Content-Type": "application/json" },
     body: JSON.stringify(args),
     cache: "no-store",
   });

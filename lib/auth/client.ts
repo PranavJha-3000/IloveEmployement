@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 
 const KEY = "ile:session";
 const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 interface Session {
   email: string;

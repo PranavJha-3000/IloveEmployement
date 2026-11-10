@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import { authHeaders } from "@/lib/auth/client";
 import { AccessPanel, useAccess } from "@/components/engine/AccessPanel";
 import { CopyButton } from "@/components/shared/CopyButton";
 import {
@@ -289,7 +290,7 @@ export function ApplyWorkflow() {
               setLiveMessage(`${AGENT_TOOL_LABELS[next.allowed[0]]} running`);
               const res = await fetch("/api/agent/step", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...(await authHeaders()) },
                 body: JSON.stringify(body),
                 signal: controller.signal,
               });

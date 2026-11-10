@@ -1,0 +1,29 @@
+<!-- Supabase email template for both "Confirm signup" and "Magic Link".
+     Subject: {{ .Token }} is your iloveemployment code
+     Paste into Authentication > Email Templates. Inline styles and tables only: email clients ignore the rest. -->
+<!DOCTYPE html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f3f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="display:none;max-height:0;overflow:hidden;">Your sign-in code is {{ .Token }}. It expires in one hour.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f7;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;">
+        <tr><td style="padding:28px 32px 0;font-size:16px;font-weight:700;letter-spacing:-0.01em;">iloveemployment</td></tr>
+        <tr><td style="padding:20px 32px 0;font-size:22px;font-weight:700;line-height:1.3;">Your sign-in code</td></tr>
+        <tr><td style="padding:8px 32px 0;font-size:15px;line-height:1.6;color:#52525b;">
+          Enter this code on the page where you asked for it to use your free daily run.
+        </td></tr>
+        <tr><td align="center" style="padding:24px 32px;">
+          <div style="background:#f3f4f7;border-radius:12px;padding:18px 12px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:0.28em;color:#18181b;">{{ .Token }}</div>
+        </td></tr>
+        <tr><td style="padding:0 32px;font-size:13.5px;line-height:1.6;color:#71717a;">
+          The code works once and expires in one hour. If you didn't ask for it, ignore this email and nothing happens.
+        </td></tr>
+        <tr><td style="padding:24px 32px 28px;font-size:12.5px;line-height:1.6;color:#a1a1aa;border-top:1px solid #f4f4f5;">
+          <span style="display:block;margin-top:16px;">Your resume and vault stay in your browser. We only keep your email address and today's run count.</span>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

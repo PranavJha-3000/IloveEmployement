@@ -5,7 +5,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { clientIp } from "@/lib/engine/access";
+import { identify } from "@/lib/engine/access";
 import { runPreset } from "@/lib/engine/run";
 import type { RunRequestBody } from "@/lib/engine/types";
 import { getPresetById } from "@/lib/presets";
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pre
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const outcome = await runPreset(preset, body, clientIp(req.headers));
+  const outcome = await runPreset(preset, body, await identify(req.headers));
   if (!outcome.ok) return NextResponse.json({ error: outcome.message }, { status: outcome.status });
   return NextResponse.json(outcome.result);
 }

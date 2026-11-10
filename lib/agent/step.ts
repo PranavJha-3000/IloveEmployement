@@ -99,7 +99,7 @@ function view(
   };
 }
 
-export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions = {}): Promise<AgentStepResult> {
+export async function agentStep(raw: unknown, id: string | null, opts: AgentStepOptions = {}): Promise<AgentStepResult> {
   // 1. Validate.
   const parsed = parseAgentStepRequest(raw);
   if (!parsed.ok) return { status: 400, body: { error: parsed.message } };
@@ -123,7 +123,7 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
   }
 
   // 4. Access, once per step, so a step counts exactly one free run.
-  const access = await resolveAccess(req.config, ip);
+  const access = await resolveAccess(req.config, id, { allowFree: false });
   if (!access.ok) return { status: access.status, body: { error: access.message } };
 
   // 5. Plan.
@@ -213,7 +213,7 @@ export async function agentStep(raw: unknown, ip: string, opts: AgentStepOptions
   const outcome = await runPreset(
     preset,
     { inputs, vault: sent, profile: req.profile, config: req.config, retrieval: req.retrieval?.[tool] },
-    ip,
+    id,
     { access },
   );
 

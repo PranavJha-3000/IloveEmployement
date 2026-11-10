@@ -17,3 +17,5 @@ graphify-out/
 .eval-build/
 evals/results/
 .env
+# Brag video output
+brag-output/

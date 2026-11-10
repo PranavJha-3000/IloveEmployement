@@ -179,7 +179,25 @@ function addUsage(a: Usage | null, b: Usage | null | undefined): Usage | null {
   return { promptTokens: (a?.promptTokens ?? 0) + b.promptTokens, completionTokens: (a?.completionTokens ?? 0) + b.completionTokens };
 }
 
+/** Quota exhausted or provider overloaded: worth trying the other free provider. */
+const EXHAUSTED = /rate limit|429|too many requests|quota|exhausted|resource_exhausted|overloaded|capacity|503/i;
+
 async function generateStructured<T extends z.ZodTypeAny>(
+  config: AiRequestConfig,
+  schema: T,
+  system: string,
+  prompt: string,
+  temperature = 0.5,
+): Promise<{ object: z.infer<T>; usage: Usage | null }> {
+  try {
+    return await generateOnce(config, schema, system, prompt, temperature);
+  } catch (err) {
+    if (!config.fallback || !EXHAUSTED.test((err as Error)?.message ?? "")) throw err;
+    return generateOnce(config.fallback, schema, system, prompt, temperature);
+  }
+}
+
+async function generateOnce<T extends z.ZodTypeAny>(
   config: AiRequestConfig,
   schema: T,
   system: string,
@@ -228,11 +246,18 @@ function finishTrace(tracer: Tracer): RunTrace {
 export async function runPreset(
   preset: Preset,
   body: RunRequestBody,
-  ip: string,
+  id: string | null,
   opts?: { access?: Extract<AccessResult, { ok: true }> },
 ): Promise<RunOutcome> {
-  const access = opts?.access ?? (await resolveAccess(body?.config, ip));
+  const access = opts?.access ?? (await resolveAccess(body?.config, id));
   if (!access.ok) return { ok: false, status: access.status, message: access.message };
+  const outcome = await runWithAccess(preset, body, access);
+  // A failed run (bad input, provider error) must not burn the day's free run.
+  if (!outcome.ok && access.tier === "free") await access.refund();
+  return outcome;
+}
+
+async function runWithAccess(preset: Preset, body: RunRequestBody, access: Extract<AccessResult, { ok: true }>): Promise<RunOutcome> {
 
   const tracer = new Tracer(preset.id);
   const cleaned = cleanInputs(preset, body?.inputs ?? {});

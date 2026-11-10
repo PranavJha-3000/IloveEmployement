@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
+import { authHeaders } from "@/lib/auth/client";
 import type { FieldSpec, RunMeta, RunSuccess, VaultChunk, VaultContextChunk } from "@/lib/engine/types";
 import type { MessageResult } from "@/lib/engine/schemas";
 import { getPresetById } from "@/lib/presets";
@@ -212,7 +213,7 @@ export function PresetRunner({ presetId }: { presetId: string }) {
       const profileForRun = Object.fromEntries(Object.entries(profile).filter(([, v]) => v));
       const res = await fetch(`/api/run/${preset.id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ inputs, vault: retrieved, profile: profileForRun, config: access.requestConfig, retrieval: retrievalMode }),
       });
       const json = (await res.json()) as RunSuccess<unknown> | { error: string };

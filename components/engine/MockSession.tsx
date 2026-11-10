@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { authHeaders } from "@/lib/auth/client";
 import type { ReportResult } from "@/lib/engine/reports";
 import type { RunMeta, RunSuccess, VaultChunk, VaultContextChunk, VaultProfile } from "@/lib/engine/types";
 import type { AiRequestConfig } from "@/lib/types";
@@ -68,7 +69,7 @@ export function MockSession({
     try {
       const res = await fetch("/api/run/mock-answer", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           inputs: { question: question.question, answer, jobDescription: inputs.jobDescription ?? "", style: inputs.style ?? "" },
           vault,

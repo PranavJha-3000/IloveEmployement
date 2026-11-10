@@ -11,7 +11,7 @@ Add your resume once and it becomes a Career Vault in your browser. Every tool t
 
 It's for people who want to move fast without sounding like a template. A free account gets one run a day on a hosted model, and you can bring your own key from nine providers for unlimited runs. Your resume and vault stay in your browser either way. [Privacy](#privacy) says what goes where.
 
-**Get started:** use the [live site](https://iloveemployement.vercel.app), or [run it locally](#run-it-locally) in a few minutes. To host your own copy with accounts and the free tier, see [Deploying](#deploying).
+**Get started:** use the [live site](https://iloveemployment.vercel.app), or [run it locally](#run-it-locally) in a few minutes. To host your own copy with accounts and the free tier, see [Deploying](#deploying).
 
 ## Demo
 

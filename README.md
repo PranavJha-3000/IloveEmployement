@@ -120,7 +120,7 @@ Without the Supabase variables, sign-in is off and the free tier falls back to a
 
 Everything runs on free tiers: Vercel (hobby), Groq, Gemini and Supabase.
 
-1. **Supabase:** create a project, then run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. Under Authentication, enable the Email provider and add `{{ .Token }}` to the Magic Link and Confirm signup templates so emails contain a code. Set the Site URL to your deployed address.
+1. **Supabase:** create a project, then run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. Under Authentication, enable the Email provider and paste [`supabase/email-templates/sign-in-code.html`](supabase/email-templates/sign-in-code.html) into both the Magic Link and Confirm signup templates so emails contain a code (its first line gives the subject). Set the Site URL to your deployed address.
 2. **Vercel:** import the repo and add the environment variables from the table above. The secret key and the Groq and Gemini keys go in as server-side variables only.
 3. **Email sending:** Supabase's built-in sender allows only a few emails an hour. Before real traffic, add a free SMTP service such as Resend under Authentication, SMTP settings.
 

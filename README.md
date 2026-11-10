@@ -13,6 +13,12 @@ It's for people who want to move fast without sounding like a template. A free a
 
 **Get started:** use the [live site](https://iloveemployement.vercel.app), or [run it locally](#run-it-locally) in a few minutes. To host your own copy with accounts and the free tier, see [Deploying](#deploying).
 
+## Demo
+
+[![iloveemployment in use: picking Tailor My Resume, pasting a job, and a rewrite where every bullet cites its source and an invented skill is removed](.github/images/demo.gif)](.github/images/demo.gif)
+
+The tool grid, the Tailor My Resume form, and a live rewrite where each new bullet carries a citation chip and a skill that appears nowhere in the source is removed. The resume content is fictional.
+
 ## Features
 
 - **Career Vault:** your resume, projects and wins, chunked by role and bullet and stored in IndexedDB. Import a PDF, Word or text resume, review the extracted profile, and confirm it. Export, import or delete everything at any time.
@@ -23,6 +29,18 @@ It's for people who want to move fast without sounding like a template. A free a
 - **Free trial, then your key:** sign in with an email code for one free run a day on Groq, with Gemini as an automatic fallback when a quota runs out. Bring your own key for unlimited runs. A paid plan is planned, see [Roadmap](#roadmap).
 - **Apply to this job:** an agent runs fit check, tailor, cover letter and outreach as a policy-driven loop. A SKIP verdict stops it, step budgets are enforced, and runs can be resumed. It needs your own key.
 - **Shows its work:** every result has a "How this was generated" panel with the context blocks sent, the playbooks used, the review verdict and the run trace.
+
+## Screenshots
+
+| Tailor My Resume | A cited rewrite |
+|---|---|
+| ![The Tailor My Resume form: job description, resume, and how much change](.github/images/tailor-form.png) | ![Weak bullets rewritten with citation chips, a removed skill note, and a Career Vault check](.github/images/tailor-result.jpg) |
+
+| Career Vault |
+|---|
+| ![The Career Vault: log a win and a profile, stored only in your browser](.github/images/vault.png) |
+
+The result image is a recreation of the result view with fictional resume content, not a live capture.
 
 ## The tools
 

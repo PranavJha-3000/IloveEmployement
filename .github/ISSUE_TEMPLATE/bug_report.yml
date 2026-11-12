@@ -1,0 +1,27 @@
+name: Bug report
+description: Something broke or gave a wrong result
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Which tool, what you did, what you expected.
+    validations:
+      required: true
+  - type: dropdown
+    id: key
+    attributes:
+      label: How were you running it?
+      options: [Free tier, My own API key, Local dev, Not sure]
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and model (if you used your own key)
+  - type: textarea
+    id: extra
+    attributes:
+      label: Error text or screenshot
+      description: Do not paste API keys or personal resume details.

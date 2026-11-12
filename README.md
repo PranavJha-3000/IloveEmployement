@@ -87,7 +87,7 @@ flowchart LR
 | Request | What happens |
 |---|---|
 | Your own API key | Runs on your key, unlimited. The key is used for that call only and is never stored. No sign-in needed. |
-| No key, signed in | Runs on the server's Groq key (`llama-3.3-70b-versatile`). One run per user per UTC day. If Groq is rate limited or out of quota, the same request retries on Gemini. |
+| No key, signed in | Runs on the server's Groq key (`openai/gpt-oss-120b`). One run per user per UTC day. If Groq is rate limited or out of quota, the same request retries on Gemini. |
 | No key, signed out | Refused with a prompt to sign in. No model call is made. |
 | A run that fails | Refunded. Bad input or a provider error doesn't use up your daily run. |
 
@@ -114,10 +114,7 @@ Sign-in is an emailed code through Supabase Auth. The daily counter is one atomi
 ## Run it locally
 
 ```bash
-git clone https://github.com/PranavJha-3000/IloveEmployement.git
-cd IloveEmployement
-npm install
-npm run dev
+git clone https://github.com/PranavJha-3000/IloveEmployement.git && cd IloveEmployement && npm install && npm run dev
 ```
 
 Open [localhost:3000](http://localhost:3000). With no environment variables, every tool works with your own API key. To offer the free trial, copy `.env.example` to `.env.local` and fill in what you need:
@@ -222,4 +219,4 @@ Next.js 15 (App Router) · React 19 · TypeScript · Tailwind v4 · Vercel AI SD
 
 ## License
 
-No license file has been added yet, so all rights are reserved until one is.
+[MIT](LICENSE). Contributions welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).

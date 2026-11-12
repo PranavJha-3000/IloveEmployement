@@ -31,10 +31,10 @@ function enableSupabase(rpc: (name: string, body: Record<string, unknown>) => un
   }) as typeof fetch;
 }
 
-test("free tier defaults to Groq llama-3.3-70b with 1 run a day", () => {
+test("free tier defaults to Groq gpt-oss-120b with 1 run a day", () => {
   assert.deepEqual(
     { ...freeTierInfo() },
-    { enabled: true, provider: "groq", model: "llama-3.3-70b-versatile", dailyLimit: 1 },
+    { enabled: true, provider: "groq", model: "openai/gpt-oss-120b", dailyLimit: 1 },
   );
 });
 

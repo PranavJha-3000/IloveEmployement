@@ -8,11 +8,11 @@ export const metadata: Metadata = {
   title: "iloveemployment: every tool for getting hired",
   description:
     "Brutally honest, actually useful resume analysis with a side of unhinged commentary. Bring your own AI key. No sign-up. No tracking.",
-  metadataBase: new URL("https://iloveemployement.vercel.app"),
+  metadataBase: new URL("https://iloveemployment.vercel.app"),
   openGraph: {
     title: "iloveemployment",
     description: "Ilovepdf but for getting a job. Brutal resume analysis. Bring your own AI key.",
-    url: "https://iloveemployement.vercel.app",
+    url: "https://iloveemployment.vercel.app",
     siteName: "iloveemployment",
     type: "website",
   },

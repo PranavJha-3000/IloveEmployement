@@ -1,3 +1,5 @@
+<p align="center"><img src="public/logo.png" alt="iloveemployment logo" width="110"></p>
+
 # iloveemployment
 
 iLovePDF, but for your career: 46 focused tools for every step of a job search, and one rule behind all of them. Nothing about you gets invented.

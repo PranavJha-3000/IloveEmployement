@@ -15,6 +15,7 @@ export function Footer() {
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <p className="text-[20px] font-extrabold tracking-[-0.03em]">
+              <img src="/logo-mark.png" alt="" width={24} height={24} className="mr-2 inline-block align-[-0.2em]" />
               <span className="text-red-600">ilove</span>
               <span className="text-[#15171c]">employment</span>
             </p>

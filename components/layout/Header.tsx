@@ -95,6 +95,7 @@ export function Header() {
           href="/"
           className="mr-5 flex-shrink-0 text-[21px] font-extrabold tracking-[-0.03em]"
         >
+          <img src="/logo-mark.png" alt="" width={26} height={26} className="mr-2 inline-block align-[-0.2em]" />
           <span className="text-red-600">ilove</span>
           <span className="text-[#15171c]">employment</span>
         </Link>
@@ -157,6 +158,7 @@ export function Header() {
           href="/"
           className="flex-shrink-0 text-[20px] font-extrabold tracking-[-0.03em]"
         >
+          <img src="/logo-mark.png" alt="" width={24} height={24} className="mr-2 inline-block align-[-0.2em]" />
           <span className="text-red-600">ilove</span>
           <span className="text-[#15171c]">employment</span>
         </Link>

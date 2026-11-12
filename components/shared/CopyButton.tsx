@@ -16,7 +16,7 @@ export function CopyButton({ text, label = "Copy", className = "" }: Props) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // silently fail — user can manually copy
     }
@@ -30,7 +30,7 @@ export function CopyButton({ text, label = "Copy", className = "" }: Props) {
       aria-label={copied ? "Copied" : label}
       className={`text-[11px] font-semibold text-zinc-600 hover:text-red-600 border border-zinc-200 hover:border-red-300 rounded-md px-2.5 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
     >
-      {copied ? "Copied ✓" : label}
+      {copied ? "Copied" : label}
     </button>
   );
 }

@@ -179,8 +179,8 @@ function addUsage(a: Usage | null, b: Usage | null | undefined): Usage | null {
   return { promptTokens: (a?.promptTokens ?? 0) + b.promptTokens, completionTokens: (a?.completionTokens ?? 0) + b.completionTokens };
 }
 
-/** Quota exhausted or provider overloaded: worth trying the other free provider. */
-const EXHAUSTED = /rate limit|429|too many requests|quota|exhausted|resource_exhausted|overloaded|capacity|503/i;
+/** Quota exhausted, provider overloaded or model retired: worth trying the next model in the chain. */
+const EXHAUSTED = /rate limit|429|too many requests|quota|exhausted|resource_exhausted|overloaded|capacity|503|model.{0,20}not found|decommission|no longer supported/i;
 
 async function generateStructured<T extends z.ZodTypeAny>(
   config: AiRequestConfig,
@@ -189,11 +189,12 @@ async function generateStructured<T extends z.ZodTypeAny>(
   prompt: string,
   temperature = 0.5,
 ): Promise<{ object: z.infer<T>; usage: Usage | null }> {
-  try {
-    return await generateOnce(config, schema, system, prompt, temperature);
-  } catch (err) {
-    if (!config.fallback || !EXHAUSTED.test((err as Error)?.message ?? "")) throw err;
-    return generateOnce(config.fallback, schema, system, prompt, temperature);
+  for (let c: AiRequestConfig = config; ; c = c.fallback!) {
+    try {
+      return await generateOnce(c, schema, system, prompt, temperature);
+    } catch (err) {
+      if (!c.fallback || !EXHAUSTED.test((err as Error)?.message ?? "")) throw err;
+    }
   }
 }
 

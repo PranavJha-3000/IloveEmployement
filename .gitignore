@@ -19,3 +19,6 @@ evals/results/
 .env
 # Brag video output
 brag-output/
+
+# Archify diagrams
+.archify/

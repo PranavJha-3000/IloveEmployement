@@ -27,12 +27,22 @@ export function freeTierInfo(): FreeTierInfo {
   };
 }
 
-/** Second free-tier provider (e.g. Gemini) used when the first is out of quota. */
+/** The preferred model first, then the provider's other models in list order, each falling back to the next. */
+function modelChain(provider: ProviderId, apiKey: string, preferred?: string, baseUrl?: string, tail?: AiRequestConfig): AiRequestConfig {
+  const { defaultModel, models } = PROVIDERS[provider];
+  const first = preferred || defaultModel;
+  return [first, ...models.filter((m) => m !== first)].reduceRight<AiRequestConfig | undefined>(
+    (next, model) => ({ provider, apiKey, model, baseUrl, fallback: next }),
+    tail,
+  )!;
+}
+
+/** Second free-tier provider (e.g. Gemini) tried, model by model, when the first is out of quota. */
 function fallbackConfig(): AiRequestConfig | undefined {
   const provider = process.env.FREE_TIER_FALLBACK_PROVIDER as ProviderId | undefined;
   const apiKey = process.env.FREE_TIER_FALLBACK_API_KEY;
   if (!apiKey || !provider || !(provider in PROVIDERS)) return undefined;
-  return { provider, apiKey, model: process.env.FREE_TIER_FALLBACK_MODEL || PROVIDERS[provider].defaultModel };
+  return modelChain(provider, apiKey, process.env.FREE_TIER_FALLBACK_MODEL);
 }
 
 export type AccessResult =
@@ -94,13 +104,7 @@ export async function resolveAccess(config: AiRequestConfig | undefined, id: str
     tier: "free",
     remaining: Math.max(0, free.dailyLimit - used),
     refund: () => (authConfigured() ? refundRun(id) : refundToday(id)),
-    config: {
-      provider: free.provider!,
-      apiKey: process.env.FREE_TIER_API_KEY!,
-      model: free.model!,
-      baseUrl: process.env.FREE_TIER_BASE_URL || PROVIDERS[free.provider!].baseUrl,
-      fallback: fallbackConfig(),
-    },
+    config: modelChain(free.provider!, process.env.FREE_TIER_API_KEY!, free.model!, process.env.FREE_TIER_BASE_URL || PROVIDERS[free.provider!].baseUrl, fallbackConfig()),
   };
 }
 
